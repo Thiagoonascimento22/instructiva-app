@@ -41,6 +41,11 @@ export const api = {
   listRecords: () => req("GET", "/records"),
   createRecord: (payload) => req("POST", "/records", payload),
   deleteRecord: (id) => req("DELETE", "/records/" + id),
+  // tasks
+  listTasks: () => req("GET", "/tasks"),
+  createTask: (payload) => req("POST", "/tasks", payload),
+  updateTask: (id, payload) => req("PUT", "/tasks/" + id, payload),
+  deleteTask: (id) => req("DELETE", "/tasks/" + id),
   // ia
-  analise: () => req("POST", "/analise"),
+  analise: (colaboradoraId) => req("POST", "/analise", colaboradoraId ? { colaboradoraId } : {}),
 };

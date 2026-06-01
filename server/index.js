@@ -46,16 +46,24 @@ async function aguardarVolume(maxTentativas = 30) {
 
 function loadDB() {
   try {
-    if (fs.existsSync(DB_PATH)) return JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
+    if (fs.existsSync(DB_PATH)) {
+      const d = JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
+      // garante que todos os campos existam (migração de bancos antigos)
+      if (!d.users) d.users = [];
+      if (!d.records) d.records = [];
+      if (!d.tasks) d.tasks = [];
+      if (!d.sessions) d.sessions = {};
+      return d;
+    }
   } catch (e) { console.error("Erro ao ler banco:", e.message); }
-  return { users: [], records: [], sessions: {} };
+  return { users: [], records: [], tasks: [], sessions: {} };
 }
 function saveDB(database) {
   try { fs.writeFileSync(DB_PATH, JSON.stringify(database, null, 2)); }
   catch (e) { console.error("Erro ao salvar banco:", e.message); }
 }
 
-let db = { users: [], records: [], sessions: {} };
+let db = { users: [], records: [], tasks: [], sessions: {} };
 
 // Inicialização assíncrona: espera o volume, carrega o banco, cria admin,
 // e SÓ ENTÃO sobe o servidor.
@@ -243,6 +251,74 @@ app.delete("/api/records/:id", requireAuth, (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// TASKS (tarefas com prazo) — a gerente atribui, a colaboradora vê as dela
+// ---------------------------------------------------------------------------
+app.get("/api/tasks", requireAuth, (req, res) => {
+  // admin/quem vê todos: todas as tarefas; colaboradora: só as atribuídas a ela
+  let rows = can(req, "ver_todos") ? db.tasks : db.tasks.filter((t) => t.responsavelId === req.user.id);
+  rows = [...rows].sort((a, b) => {
+    // não concluídas primeiro, depois por prazo
+    if (a.concluida !== b.concluida) return a.concluida ? 1 : -1;
+    return (a.prazo || "9999").localeCompare(b.prazo || "9999");
+  });
+  res.json({ tasks: rows });
+});
+
+app.post("/api/tasks", requireAuth, (req, res) => {
+  // só admin (ou quem gerencia usuários) pode criar/atribuir tarefas
+  if (!req.isAdmin && !can(req, "gerir_usuarios")) return res.status(403).json({ error: "sem permissão para atribuir tarefas" });
+  const b = req.body;
+  if (!b.titulo?.trim() || !b.responsavelId) return res.status(400).json({ error: "título e responsável são obrigatórios" });
+  const task = {
+    id: "t" + Date.now() + crypto.randomBytes(2).toString("hex"),
+    titulo: b.titulo.trim(),
+    descricao: b.descricao?.trim() || "",
+    responsavelId: b.responsavelId,
+    prazo: b.prazo || "",
+    prioridade: b.prioridade || "media", // baixa | media | alta
+    concluida: false,
+    criadaPor: req.user.id,
+    criadaEm: new Date().toISOString(),
+    concluidaEm: null,
+  };
+  db.tasks.unshift(task);
+  saveDB(db);
+  res.json({ task });
+});
+
+app.put("/api/tasks/:id", requireAuth, (req, res) => {
+  const t = db.tasks.find((x) => x.id === req.params.id);
+  if (!t) return res.status(404).json({ error: "não encontrada" });
+  const b = req.body;
+  const ehDono = req.isAdmin || can(req, "gerir_usuarios");
+  const ehResponsavel = t.responsavelId === req.user.id;
+  // a colaboradora responsável pode marcar concluída/desmarcar; o dono pode editar tudo
+  if (b.concluida !== undefined && (ehResponsavel || ehDono)) {
+    t.concluida = !!b.concluida;
+    t.concluidaEm = b.concluida ? new Date().toISOString() : null;
+  }
+  if (ehDono) {
+    if (b.titulo !== undefined) t.titulo = b.titulo.trim() || t.titulo;
+    if (b.descricao !== undefined) t.descricao = b.descricao.trim();
+    if (b.responsavelId !== undefined) t.responsavelId = b.responsavelId;
+    if (b.prazo !== undefined) t.prazo = b.prazo;
+    if (b.prioridade !== undefined) t.prioridade = b.prioridade;
+  }
+  if (!ehResponsavel && !ehDono) return res.status(403).json({ error: "sem permissão" });
+  saveDB(db);
+  res.json({ task: t });
+});
+
+app.delete("/api/tasks/:id", requireAuth, (req, res) => {
+  if (!req.isAdmin && !can(req, "gerir_usuarios")) return res.status(403).json({ error: "sem permissão" });
+  const t = db.tasks.find((x) => x.id === req.params.id);
+  if (!t) return res.status(404).json({ error: "não encontrada" });
+  db.tasks = db.tasks.filter((x) => x.id !== req.params.id);
+  saveDB(db);
+  res.json({ ok: true });
+});
+
+// ---------------------------------------------------------------------------
 // IA — análise de desempenho (chave protegida no servidor)
 // ---------------------------------------------------------------------------
 app.post("/api/analise", requireAuth, async (req, res) => {
@@ -252,9 +328,35 @@ app.post("/api/analise", requireAuth, async (req, res) => {
 
   const users = db.users.filter((u) => u.ativo);
   const records = db.records;
-  const resumo = buildAIPayload(records, users);
+  const colaboradoraId = req.body?.colaboradoraId || null;
 
-  const prompt = `Você é um especialista em gestão de equipes de atendimento ao cliente / suporte ao aluno. Analise os dados de desempenho da equipe abaixo e produza um relatório gerencial em português do Brasil.
+  let prompt;
+  if (colaboradoraId) {
+    // ---- ANÁLISE INDIVIDUAL ----
+    const alvo = db.users.find((u) => u.id === colaboradoraId);
+    if (!alvo) return res.status(404).json({ error: "colaboradora não encontrada" });
+    const resumoInd = buildIndividualPayload(records, db.tasks, alvo);
+    prompt = `Você é um especialista em gestão de equipes de atendimento ao cliente / suporte ao aluno. Analise o desempenho INDIVIDUAL da colaboradora abaixo e produza um parecer em português do Brasil.
+
+DADOS DA COLABORADORA:
+${resumoInd}
+
+Retorne SOMENTE um JSON válido (sem markdown, sem crases) com esta estrutura exata:
+{
+  "individual": true,
+  "nome": "nome exato da colaboradora",
+  "avaliacao": "Excelente" | "Bom" | "Regular" | "Precisa atenção",
+  "resumo": "2-3 frases sobre o desempenho geral dela, baseado nos números",
+  "pontos_fortes": ["ponto forte 1", "ponto forte 2"],
+  "pontos_melhoria": ["ponto a melhorar 1", "ponto a melhorar 2"],
+  "sugestoes": ["sugestão prática e acionável 1", "sugestão 2", "sugestão 3"],
+  "feedback_sugerido": "um parágrafo curto de feedback que a gerente poderia dar diretamente a ela, em tom construtivo"
+}
+Seja específico usando os números reais. Tom profissional, construtivo e acionável.`;
+  } else {
+    // ---- ANÁLISE DA EQUIPE (padrão) ----
+    const resumo = buildAIPayload(records, users);
+    prompt = `Você é um especialista em gestão de equipes de atendimento ao cliente / suporte ao aluno. Analise os dados de desempenho da equipe abaixo e produza um relatório gerencial em português do Brasil.
 
 DADOS DA EQUIPE (período completo registrado):
 ${resumo}
@@ -270,6 +372,7 @@ Retorne SOMENTE um JSON válido (sem markdown, sem crases) com esta estrutura ex
   "acoes_setor": ["ação recomendada para o setor 1", "ação 2", "ação 3"]
 }
 Seja específico usando os números reais. Tom profissional, construtivo e acionável.`;
+  }
 
   try {
     const r = await fetch("https://api.anthropic.com/v1/messages", {
@@ -304,6 +407,40 @@ function buildAIPayload(records, users) {
   const total = records.length;
   const totalRes = records.filter((r) => r.status === "resolvido").length;
   return `Total geral: ${total} atendimentos | Taxa de resolução do setor: ${total ? Math.round((totalRes / total) * 100) : 0}%\n\nPor colaboradora:\n${lines.join("\n")}`;
+}
+
+function buildIndividualPayload(records, tasks, alvo) {
+  const rs = records.filter((r) => r.colaboradoraId === alvo.id);
+  const resolv = rs.filter((r) => r.status === "resolvido").length;
+  const and = rs.filter((r) => r.status === "andamento").length;
+  const pen = rs.filter((r) => r.status === "pendente").length;
+  const taxa = rs.length ? Math.round((resolv / rs.length) * 100) : 0;
+  const assuntos = {};
+  rs.forEach((r) => { const k = r.assunto || "outros"; assuntos[k] = (assuntos[k] || 0) + 1; });
+  const topA = Object.entries(assuntos).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([a, n]) => `${a} (${n})`).join(", ") || "nenhum";
+
+  // tarefas atribuídas a ela
+  const ts = (tasks || []).filter((t) => t.responsavelId === alvo.id);
+  const tConcl = ts.filter((t) => t.concluida).length;
+  const hoje = new Date().toISOString().slice(0, 10);
+  const tAtrasadas = ts.filter((t) => !t.concluida && t.prazo && t.prazo < hoje).length;
+
+  // média geral do setor para comparação
+  const totalSetor = records.length;
+  const resSetor = records.filter((r) => r.status === "resolvido").length;
+  const taxaSetor = totalSetor ? Math.round((resSetor / totalSetor) * 100) : 0;
+
+  return `Nome: ${alvo.nome || alvo.login}
+Atendimentos: ${rs.length} no total
+- Resolvidos: ${resolv}
+- Em andamento: ${and}
+- Pendentes: ${pen}
+- Taxa de resolução individual: ${taxa}%
+Principais assuntos que ela atende: ${topA}
+
+Tarefas atribuídas: ${ts.length} (${tConcl} concluídas, ${tAtrasadas} atrasadas)
+
+Comparação com o setor: a taxa de resolução média do setor é ${taxaSetor}%. A dela é ${taxa}%.`;
 }
 
 // ---------------------------------------------------------------------------

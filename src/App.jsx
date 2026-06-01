@@ -8,6 +8,7 @@ import {
   Users, CheckCircle2, Clock, AlertCircle, X, Filter, Sparkles, LogOut,
   Shield, UserPlus, Lock, Eye, EyeOff, Settings, TrendingUp, Award,
   Crown, ChevronRight, Activity, Zap, Target, Brain, Star, AlertTriangle,
+  Sun, Moon, ListTodo, CalendarClock, Flag, Circle, ArrowLeft, UserCircle,
 } from "lucide-react";
 import { LOGO_FULL, LOGO_CLARO, LOGO_ICONE } from "./logos";
 import { api } from "./api";
@@ -39,9 +40,13 @@ export default function App() {
   const [users, setUsers] = useState([]);      // lista de nomes (para tabelas) ou completa (admin)
   const [records, setRecords] = useState([]);
   const [view, setView] = useState("dashboard");
+  const [theme, setTheme] = useState(() => localStorage.getItem("instructiva_theme") || "light");
 
   const isAdmin = me?.role === "admin";
   const can = (p) => isAdmin || me?.perms?.[p];
+
+  useEffect(() => { localStorage.setItem("instructiva_theme", theme); }, [theme]);
+  const toggleTheme = () => setTheme((t) => (t === "light" ? "dark" : "light"));
 
   // ao carregar: se tem token salvo, busca o usuário
   useEffect(() => {
@@ -97,16 +102,17 @@ export default function App() {
   nav.push(["dashboard", "Dashboard", LayoutDashboard]);
   nav.push(["lista", "Atendimentos", ClipboardList]);
   if (can("registrar")) nav.push(["novo", "Novo Registro", PlusCircle]);
+  nav.push(["tarefas", "Tarefas", ListTodo]);
   if (can("ia")) nav.push(["ia", "Análise IA", Sparkles, true]);
   if (can("gerir_usuarios")) nav.push(["equipe", "Equipe & Acessos", Shield]);
   if (isAdmin) nav.push(["config", "Configurações", Settings]);
 
   return (
-    <div style={SX.app}>
+    <div style={SX.app} className={`app-root theme-${theme}`}>
       <style>{CSS}</style>
-      <div style={SX.bgGlow} />
+      <div style={SX.bgGlow} className="bg-glow" />
 
-      <aside style={SX.sidebar}>
+      <aside style={SX.sidebar} className="sidebar">
         <div style={SX.brand}>
           <img src={LOGO_CLARO} alt="Instructiva" style={SX.brandLogo} />
         </div>
@@ -124,10 +130,15 @@ export default function App() {
           ))}
         </nav>
 
-        <div style={SX.userCard}>
+        <button onClick={toggleTheme} className="theme-toggle" style={SX.themeToggle} title="Alternar tema">
+          {theme === "light" ? <Moon size={16} /> : <Sun size={16} />}
+          <span>{theme === "light" ? "Modo escuro" : "Modo claro"}</span>
+        </button>
+
+        <div style={SX.userCard} className="user-card">
           <div style={SX.avatar}>{initials(me.nome)}</div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={SX.userName}>{me.nome}</div>
+            <div style={SX.userName} className="user-name">{me.nome}</div>
             <div style={SX.userRole}>{isAdmin ? <><Crown size={11} /> Administradora</> : "Colaboradora"}</div>
           </div>
           <button onClick={logout} className="logout-btn" style={SX.logoutBtn} title="Sair"><LogOut size={16} /></button>
@@ -139,6 +150,7 @@ export default function App() {
           {view === "dashboard" && <Dashboard records={visibleRecords} users={users} me={me} isAdmin={isAdmin} />}
           {view === "lista" && <Lista records={visibleRecords} users={users} can={can} refresh={refreshData} goNew={() => setView("novo")} />}
           {view === "novo" && can("registrar") && <NovoRegistro me={me} isAdmin={isAdmin} users={users} refresh={refreshData} onDone={() => setView("lista")} />}
+          {view === "tarefas" && <Tarefas me={me} isAdmin={isAdmin} can={can} users={users} />}
           {view === "ia" && can("ia") && <AnaliseIA records={records} users={users} />}
           {view === "equipe" && can("gerir_usuarios") && <Equipe refresh={refreshData} />}
           {view === "config" && isAdmin && <Config me={me} onUpdated={setMe} />}
@@ -236,7 +248,7 @@ function Dashboard({ records, users, me, isAdmin }) {
         <Kpi i={isAdmin ? Users : Target} c="#6E7073" v={isAdmin ? stats.byColab.length : stats.byStatus.pendente} l={isAdmin ? "Colaboradoras ativas" : "Pendentes"} d={3} />
       </div>
 
-      <div style={SX.taxaCard} className="rise">
+      <div style={SX.taxaCard} className="rise panel">
         <div style={SX.taxaShine} />
         <div style={{ position: "relative" }}>
           <div style={SX.taxaLabel}><Award size={18} /> Taxa de Resolução</div>
@@ -315,7 +327,7 @@ function Dashboard({ records, users, me, isAdmin }) {
 
 function Kpi({ i: Icon, c, v, l, d }) {
   return (
-    <div style={{ ...SX.kpiCard, animationDelay: `${d * 0.07}s` }} className="kpi card-hover">
+    <div style={{ ...SX.kpiCard, animationDelay: `${d * 0.07}s` }} className="kpi card-hover panel">
       <div style={{ ...SX.kpiIcon, background: c + "1c", color: c }}><Icon size={22} strokeWidth={2.2} /></div>
       <div><div style={SX.kpiValue}>{v}</div><div style={SX.kpiLabel}>{l}</div></div>
     </div>
@@ -327,19 +339,25 @@ function AnaliseIA({ records, users }) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  const [modo, setModo] = useState("equipe");        // equipe | individual
+  const [colabSel, setColabSel] = useState("");      // id da colaboradora p/ análise individual
 
   const colabs = users.filter((u) => u.role !== "admin");
   const stats = useMemo(() => buildStats(records, users), [records, users]);
 
   async function analisar() {
+    if (modo === "individual" && !colabSel) { setError("Escolha uma colaboradora para analisar."); return; }
     setLoading(true); setError(null); setResult(null);
     try {
-      const { result } = await api.analise();
+      const { result } = await api.analise(modo === "individual" ? colabSel : null);
       setResult(result);
     } catch (e) {
       setError(e.message || "Não consegui gerar a análise agora. Tente novamente em instantes.");
     } finally { setLoading(false); }
   }
+
+  // ao trocar de modo, limpa o resultado anterior
+  function trocarModo(m) { setModo(m); setResult(null); setError(null); }
 
   const AVAL = {
     "Excelente": { c: "#12A150", bg: "rgba(18,161,80,0.1)", icon: Star },
@@ -351,22 +369,43 @@ function AnaliseIA({ records, users }) {
   return (
     <div>
       <Header title={<span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}><Brain size={28} color="#F39200" /> Análise Inteligente</span>}
-        subtitle="A IA lê o desempenho da equipe e sugere melhorias" />
+        subtitle="A IA lê o desempenho e sugere melhorias" />
+
+      {/* seletor de modo */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+        <button onClick={() => trocarModo("equipe")} className="filter-chip" style={{ ...SX.filterChip, ...(modo === "equipe" ? SX.filterChipOn : {}) }}><Users size={14} /> Equipe inteira</button>
+        <button onClick={() => trocarModo("individual")} className="filter-chip" style={{ ...SX.filterChip, ...(modo === "individual" ? SX.filterChipOn : {}) }}><UserCircle size={14} /> Colaboradora específica</button>
+      </div>
 
       <div style={SX.aiHero} className="rise">
         <div style={SX.aiHeroGlow} />
         <div style={{ position: "relative", flex: 1 }}>
           <div style={SX.aiBadge}><Sparkles size={13} /> Inteligência Artificial</div>
-          <h2 style={SX.aiHeroTitle}>Relatório gerencial automático</h2>
-          <p style={SX.aiHeroText}>A IA analisa volume, taxa de resolução, pendências e padrões de cada colaboradora, gerando uma leitura individual e recomendações práticas para apresentar à diretoria.</p>
-          <div style={SX.aiMeta}>
-            <span><strong>{records.length}</strong> atendimentos</span><span style={SX.dot} />
-            <span><strong>{colabs.length}</strong> colaboradoras</span><span style={SX.dot} />
-            <span><strong>{stats.taxa}%</strong> resolução</span>
-          </div>
+          <h2 style={SX.aiHeroTitle}>{modo === "equipe" ? "Relatório gerencial da equipe" : "Análise individual de desempenho"}</h2>
+          <p style={SX.aiHeroText}>
+            {modo === "equipe"
+              ? "A IA analisa volume, taxa de resolução, pendências e padrões de cada colaboradora, gerando uma leitura geral e recomendações para apresentar à diretoria."
+              : "Escolha uma colaboradora e a IA gera um parecer focado: pontos fortes, pontos a melhorar, sugestões práticas e um feedback pronto para você passar a ela."}
+          </p>
+
+          {modo === "individual" && (
+            <select value={colabSel} onChange={(e) => setColabSel(e.target.value)} style={{ ...SX.input, maxWidth: 320, marginBottom: 16 }}>
+              <option value="">Selecione a colaboradora…</option>
+              {users.map((u) => <option key={u.id} value={u.id}>{u.nome}{u.role === "admin" ? " (você)" : ""}</option>)}
+            </select>
+          )}
+
+          {modo === "equipe" && (
+            <div style={SX.aiMeta}>
+              <span><strong>{records.length}</strong> atendimentos</span><span style={SX.dot} />
+              <span><strong>{colabs.length}</strong> colaboradoras</span><span style={SX.dot} />
+              <span><strong>{stats.taxa}%</strong> resolução</span>
+            </div>
+          )}
+
           <button onClick={analisar} disabled={loading || records.length === 0} className="ai-cta"
             style={{ ...SX.aiCta, opacity: loading || records.length === 0 ? 0.6 : 1, cursor: loading || records.length === 0 ? "not-allowed" : "pointer" }}>
-            {loading ? <><span className="spin"><Activity size={17} /></span> Analisando dados…</> : <><Sparkles size={17} /> Gerar análise da equipe</>}
+            {loading ? <><span className="spin"><Activity size={17} /></span> Analisando dados…</> : <><Sparkles size={17} /> {modo === "equipe" ? "Gerar análise da equipe" : "Gerar análise individual"}</>}
           </button>
           {records.length === 0 && <p style={{ fontSize: 12.5, color: "#94A3B8", marginTop: 12 }}>Registre alguns atendimentos primeiro para a IA ter o que analisar.</p>}
         </div>
@@ -375,20 +414,28 @@ function AnaliseIA({ records, users }) {
       {error && <div style={SX.aiError}><AlertCircle size={16} /> {error}</div>}
       {loading && <div style={SX.aiLoading}>{[0, 1, 2].map((i) => <div key={i} className="skel" style={{ ...SX.skel, animationDelay: `${i * 0.15}s` }} />)}</div>}
 
-      {result && (
+      {/* RESULTADO INDIVIDUAL */}
+      {result && result.individual && (
         <div className="fade-in">
-          <div style={SX.aiPanorama}>
+          <IndividualResult result={result} AVAL={AVAL} />
+        </div>
+      )}
+
+      {/* RESULTADO DA EQUIPE */}
+      {result && !result.individual && (
+        <div className="fade-in">
+          <div style={SX.aiPanorama} className="panel">
             <div style={SX.aiPanIcon}><Activity size={20} color="#F39200" /></div>
             <div><div style={SX.aiPanLabel}>Panorama do setor</div><p style={SX.aiPanText}>{result.panorama}</p></div>
           </div>
 
           <div style={SX.aiHighlights}>
-            <div style={{ ...SX.aiHl, borderColor: "rgba(18,161,80,0.3)", background: "rgba(18,161,80,0.05)" }}>
+            <div style={{ ...SX.aiHl, borderColor: "rgba(18,161,80,0.3)", background: "rgba(18,161,80,0.05)" }} className="ai-hl">
               <div style={{ ...SX.aiHlIcon, background: "rgba(18,161,80,0.14)", color: "#12A150" }}><Award size={18} /></div>
               <div><div style={SX.aiHlLabel}>Destaque</div><div style={SX.aiHlText}>{result.destaque}</div></div>
             </div>
             {result.atencao && (
-              <div style={{ ...SX.aiHl, borderColor: "rgba(243,146,0,0.3)", background: "rgba(243,146,0,0.05)" }}>
+              <div style={{ ...SX.aiHl, borderColor: "rgba(243,146,0,0.3)", background: "rgba(243,146,0,0.05)" }} className="ai-hl">
                 <div style={{ ...SX.aiHlIcon, background: "rgba(243,146,0,0.14)", color: "#F39200" }}><Target size={18} /></div>
                 <div><div style={SX.aiHlLabel}>Ponto de atenção</div><div style={SX.aiHlText}>{result.atencao}</div></div>
               </div>
@@ -400,7 +447,7 @@ function AnaliseIA({ records, users }) {
             {result.colaboradoras?.map((c, idx) => {
               const av = AVAL[c.avaliacao] || AVAL["Regular"]; const AvIcon = av.icon;
               return (
-                <div key={idx} style={SX.aiColabCard} className="card-hover rise">
+                <div key={idx} style={SX.aiColabCard} className="card-hover rise panel">
                   <div style={SX.aiColabHead}>
                     <div style={SX.aiColabAvatar}>{initials(c.nome)}</div>
                     <div style={{ flex: 1 }}>
@@ -418,12 +465,68 @@ function AnaliseIA({ records, users }) {
             })}
           </div>
 
-          <div style={SX.aiActions}>
+          <div style={SX.aiActions} className="ai-actions">
             <div style={SX.aiActionsTitle}><Target size={18} color="#F39200" /> Ações recomendadas para o setor</div>
             <div style={SX.aiActionsList}>
-              {result.acoes_setor?.map((a, i) => <div key={i} style={SX.aiActionItem}><span style={SX.aiActionNum}>{i + 1}</span> {a}</div>)}
+              {result.acoes_setor?.map((a, i) => <div key={i} style={SX.aiActionItem} className="ai-action-item"><span style={SX.aiActionNum}>{i + 1}</span> {a}</div>)}
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// resultado da análise individual
+function IndividualResult({ result, AVAL }) {
+  const av = AVAL[result.avaliacao] || AVAL["Regular"];
+  const AvIcon = av.icon;
+  return (
+    <div>
+      {/* cabeçalho da pessoa */}
+      <div style={SX.indHead} className="panel">
+        <div style={SX.indAvatar}>{initials(result.nome)}</div>
+        <div style={{ flex: 1 }}>
+          <div style={SX.indName}>{result.nome}</div>
+          <span style={{ ...SX.aiAval, background: av.bg, color: av.c, marginTop: 6 }}><AvIcon size={13} /> {result.avaliacao}</span>
+        </div>
+      </div>
+
+      {/* resumo */}
+      <div style={SX.aiPanorama} className="panel">
+        <div style={SX.aiPanIcon}><Activity size={20} color="#F39200" /></div>
+        <div><div style={SX.aiPanLabel}>Resumo do desempenho</div><p style={SX.aiPanText}>{result.resumo}</p></div>
+      </div>
+
+      {/* pontos fortes + a melhorar */}
+      <div style={SX.aiHighlights}>
+        <div style={{ ...SX.indCol, borderColor: "rgba(18,161,80,0.3)" }} className="panel">
+          <div style={SX.indColTitle}><Award size={16} color="#12A150" /> Pontos fortes</div>
+          <ul style={SX.aiSugList}>
+            {result.pontos_fortes?.map((s, i) => <li key={i} style={SX.aiSugItem}><CheckCircle2 size={13} color="#12A150" style={{ flexShrink: 0, marginTop: 3 }} /> {s}</li>)}
+          </ul>
+        </div>
+        <div style={{ ...SX.indCol, borderColor: "rgba(243,146,0,0.3)" }} className="panel">
+          <div style={SX.indColTitle}><Target size={16} color="#F39200" /> Pontos a melhorar</div>
+          <ul style={SX.aiSugList}>
+            {result.pontos_melhoria?.map((s, i) => <li key={i} style={SX.aiSugItem}><TrendingUp size={13} color="#F39200" style={{ flexShrink: 0, marginTop: 3 }} /> {s}</li>)}
+          </ul>
+        </div>
+      </div>
+
+      {/* sugestões */}
+      <div style={SX.aiActions} className="ai-actions">
+        <div style={SX.aiActionsTitle}><Zap size={18} color="#F39200" /> Sugestões práticas</div>
+        <div style={SX.aiActionsList}>
+          {result.sugestoes?.map((a, i) => <div key={i} style={SX.aiActionItem} className="ai-action-item"><span style={SX.aiActionNum}>{i + 1}</span> {a}</div>)}
+        </div>
+      </div>
+
+      {/* feedback sugerido */}
+      {result.feedback_sugerido && (
+        <div style={SX.feedbackBox} className="panel feedback-box">
+          <div style={SX.feedbackLabel}><Sparkles size={15} color="#F39200" /> Feedback sugerido para passar a ela</div>
+          <p style={SX.feedbackText}>"{result.feedback_sugerido}"</p>
         </div>
       )}
     </div>
@@ -524,7 +627,7 @@ function NovoRegistro({ me, isAdmin, users, refresh, onDone }) {
   return (
     <div>
       <Header title="Novo Registro" subtitle="Registrar um atendimento ao aluno" />
-      <div style={SX.formCard} className="rise">
+      <div style={SX.formCard} className="rise panel">
         <div style={SX.formGrid}>
           <F label="Data" req><input type="date" value={form.data} onChange={set("data")} style={SX.input} /></F>
           <F label="Colaboradora" req>
@@ -628,7 +731,7 @@ function Equipe({ refresh }) {
         {users.map((u) => {
           const admin = u.role === "admin";
           return (
-            <div key={u.id} style={{ ...SX.userBlock, opacity: u.ativo ? 1 : 0.55 }} className="card-hover">
+            <div key={u.id} style={{ ...SX.userBlock, opacity: u.ativo ? 1 : 0.55 }} className="card-hover panel">
               <div style={SX.userBlockHead}>
                 <div style={{ ...SX.userBlockAvatar, background: admin ? "linear-gradient(135deg,#F39200,#C97A1A)" : "linear-gradient(135deg,#7E8084,#6E7073)" }}>{initials(u.nome)}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -680,7 +783,7 @@ function Config({ me, onUpdated }) {
   return (
     <div>
       <Header title="Configurações" subtitle="Seus dados de acesso de administradora" />
-      <div style={SX.formCard} className="rise">
+      <div style={SX.formCard} className="rise panel">
         <div style={SX.formGrid}>
           <F label="Seu nome" full><input value={nome} onChange={(e) => setNome(e.target.value)} style={SX.input} /></F>
           <F label="Usuário (login)"><input value={login} onChange={(e) => setLogin(e.target.value)} style={SX.input} /></F>
@@ -699,12 +802,137 @@ function Config({ me, onUpdated }) {
   );
 }
 
+// ============================================================= TAREFAS
+const PRIORIDADE = {
+  alta: { label: "Alta", color: "#E5484D", bg: "rgba(229,72,77,0.12)" },
+  media: { label: "Média", color: "#F39200", bg: "rgba(243,146,0,0.13)" },
+  baixa: { label: "Baixa", color: "#12A150", bg: "rgba(18,161,80,0.12)" },
+};
+
+function Tarefas({ me, isAdmin, can, users }) {
+  const podeAtribuir = isAdmin || can("gerir_usuarios");
+  const [tasks, setTasks] = useState([]);
+  const [showNew, setShowNew] = useState(false);
+  const [filtro, setFiltro] = useState("pendentes"); // pendentes | concluidas | todas
+  const blank = { titulo: "", descricao: "", responsavelId: "", prazo: "", prioridade: "media" };
+  const [nf, setNf] = useState(blank);
+
+  const colabs = users.filter((u) => u.ativo !== false);
+
+  async function load() {
+    try { const { tasks } = await api.listTasks(); setTasks(tasks); } catch (e) { /* */ }
+  }
+  useEffect(() => { load(); }, []);
+
+  async function criar() {
+    if (!nf.titulo.trim() || !nf.responsavelId) return;
+    try {
+      await api.createTask(nf);
+      setNf(blank); setShowNew(false); await load();
+    } catch (e) { alert(e.message); }
+  }
+  async function toggle(t) {
+    try { await api.updateTask(t.id, { concluida: !t.concluida }); await load(); } catch (e) { alert(e.message); }
+  }
+  async function remover(id) {
+    if (!confirm("Excluir esta tarefa?")) return;
+    try { await api.deleteTask(id); await load(); } catch (e) { alert(e.message); }
+  }
+
+  const hoje = new Date().toISOString().slice(0, 10);
+  const filtradas = tasks.filter((t) => {
+    if (filtro === "pendentes") return !t.concluida;
+    if (filtro === "concluidas") return t.concluida;
+    return true;
+  });
+  const pendentes = tasks.filter((t) => !t.concluida).length;
+  const atrasadas = tasks.filter((t) => !t.concluida && t.prazo && t.prazo < hoje).length;
+
+  return (
+    <div>
+      <Header title="Tarefas" subtitle={podeAtribuir ? "Atribua e acompanhe as tarefas da equipe" : "Suas tarefas"}>
+        {podeAtribuir && <button onClick={() => setShowNew(!showNew)} className="btn-primary" style={SX.btnPrimary}><PlusCircle size={16} /> Nova tarefa</button>}
+      </Header>
+
+      {/* mini stats */}
+      <div style={SX.taskStats}>
+        <div style={SX.taskStat}><ListTodo size={17} color="#F39200" /> <strong>{pendentes}</strong> pendente{pendentes !== 1 ? "s" : ""}</div>
+        {atrasadas > 0 && <div style={{ ...SX.taskStat, color: "#E5484D" }}><AlertTriangle size={16} /> <strong>{atrasadas}</strong> atrasada{atrasadas !== 1 ? "s" : ""}</div>}
+      </div>
+
+      {showNew && podeAtribuir && (
+        <div style={SX.newUserCard} className="fade-in panel">
+          <div style={SX.newUserTitle}><ListTodo size={17} color="#F39200" /> Nova tarefa</div>
+          <div style={SX.formGrid}>
+            <F label="Título" req full><input value={nf.titulo} onChange={(e) => setNf({ ...nf, titulo: e.target.value })} placeholder="Ex: Entrar em contato com alunos pendentes" style={SX.input} /></F>
+            <F label="Responsável" req>
+              <select value={nf.responsavelId} onChange={(e) => setNf({ ...nf, responsavelId: e.target.value })} style={SX.input}>
+                <option value="">Selecione...</option>
+                {colabs.map((u) => <option key={u.id} value={u.id}>{u.nome}{u.role === "admin" ? " (você)" : ""}</option>)}
+              </select>
+            </F>
+            <F label="Prazo"><input type="date" value={nf.prazo} onChange={(e) => setNf({ ...nf, prazo: e.target.value })} style={SX.input} /></F>
+            <F label="Prioridade">
+              <select value={nf.prioridade} onChange={(e) => setNf({ ...nf, prioridade: e.target.value })} style={SX.input}>
+                <option value="alta">Alta</option>
+                <option value="media">Média</option>
+                <option value="baixa">Baixa</option>
+              </select>
+            </F>
+            <F label="Descrição (opcional)" full><textarea value={nf.descricao} onChange={(e) => setNf({ ...nf, descricao: e.target.value })} placeholder="Detalhes da tarefa…" style={{ ...SX.input, minHeight: 70, resize: "vertical", paddingTop: 11 }} /></F>
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 18 }}>
+            <button onClick={() => setShowNew(false)} className="btn-ghost" style={SX.btnGhost}>Cancelar</button>
+            <button onClick={criar} className="btn-primary" style={SX.btnPrimary}><CheckCircle2 size={16} /> Criar tarefa</button>
+          </div>
+        </div>
+      )}
+
+      {/* filtros */}
+      <div style={{ display: "flex", gap: 8, margin: "4px 0 18px" }}>
+        {[["pendentes", "Pendentes"], ["concluidas", "Concluídas"], ["todas", "Todas"]].map(([v, l]) => (
+          <button key={v} onClick={() => setFiltro(v)} className="filter-chip" style={{ ...SX.filterChip, ...(filtro === v ? SX.filterChipOn : {}) }}>{l}</button>
+        ))}
+      </div>
+
+      {filtradas.length === 0 ? (
+        <div style={SX.noRes} className="panel"><ListTodo size={26} color="#C9CACE" /><p style={{ margin: "10px 0 0", color: "#A0A2A6" }}>Nenhuma tarefa {filtro === "concluidas" ? "concluída" : filtro === "pendentes" ? "pendente" : ""} por aqui.</p></div>
+      ) : (
+        <div style={SX.taskList}>
+          {filtradas.map((t) => {
+            const pr = PRIORIDADE[t.prioridade] || PRIORIDADE.media;
+            const atrasada = !t.concluida && t.prazo && t.prazo < hoje;
+            const podeMarcar = t.responsavelId === me.id || podeAtribuir;
+            return (
+              <div key={t.id} style={{ ...SX.taskCard, opacity: t.concluida ? 0.62 : 1 }} className="task-card panel">
+                <button onClick={() => podeMarcar && toggle(t)} className="task-check" style={{ ...SX.taskCheck, ...(t.concluida ? SX.taskCheckOn : {}), cursor: podeMarcar ? "pointer" : "default" }} title={t.concluida ? "Concluída" : "Marcar como concluída"}>
+                  {t.concluida ? <CheckCircle2 size={20} /> : <Circle size={20} />}
+                </button>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ ...SX.taskTitle, textDecoration: t.concluida ? "line-through" : "none" }}>{t.titulo}</div>
+                  {t.descricao && <div style={SX.taskDesc}>{t.descricao}</div>}
+                  <div style={SX.taskMeta}>
+                    {podeAtribuir && <span style={SX.taskMetaItem}><UserCircle size={13} /> {nameOf(users, t.responsavelId)}</span>}
+                    {t.prazo && <span style={{ ...SX.taskMetaItem, color: atrasada ? "#E5484D" : undefined, fontWeight: atrasada ? 700 : 500 }}><CalendarClock size={13} /> {fmtDate(t.prazo)}{atrasada ? " (atrasada)" : ""}</span>}
+                    <span style={{ ...SX.taskPill, background: pr.bg, color: pr.color }}><Flag size={11} /> {pr.label}</span>
+                  </div>
+                </div>
+                {podeAtribuir && <button onClick={() => remover(t.id)} className="btn-del" style={SX.btnDel}><Trash2 size={15} /></button>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ============================================================= SHARED
 function Header({ title, subtitle, children }) {
   return (<div style={SX.header}><div><h1 style={SX.h1}>{title}</h1><p style={SX.sub}>{subtitle}</p></div>{children && <div style={SX.headerActions}>{children}</div>}</div>);
 }
 function CardBox({ title, sub, children, wide }) {
-  return (<div style={{ ...SX.chartCard, gridColumn: wide ? "span 2" : "span 1" }} className="card-hover"><div style={SX.chartHead}><div><div style={SX.chartTitle}>{title}</div>{sub && <div style={SX.chartSub}>{sub}</div>}</div></div>{children}</div>);
+  return (<div style={{ ...SX.chartCard, gridColumn: wide ? "span 2" : "span 1" }} className="card-hover panel"><div style={SX.chartHead}><div><div style={SX.chartTitle}>{title}</div>{sub && <div style={SX.chartSub}>{sub}</div>}</div></div>{children}</div>);
 }
 function F({ label, children, req, full }) {
   return <div style={{ gridColumn: full ? "1 / -1" : "auto" }}><label style={SX.label}>{label}{req && <span style={{ color: "#E5484D" }}> *</span>}</label>{children}</div>;
@@ -741,6 +969,36 @@ const TT = { background: "#fff", border: "1px solid #EBEBEE", borderRadius: 12, 
 
 // ============================================================= STYLES
 const SX = {
+  // tema toggle
+  themeToggle: { display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", marginBottom: 10, borderRadius: 11, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.04)", color: "#B4B6BA", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", transition: "all .2s" },
+
+  // tarefas
+  taskStats: { display: "flex", gap: 18, marginBottom: 16, flexWrap: "wrap" },
+  taskStat: { display: "inline-flex", alignItems: "center", gap: 7, fontSize: 14, color: "var(--text-soft)", fontWeight: 500 },
+  taskList: { display: "flex", flexDirection: "column", gap: 10 },
+  taskCard: { display: "flex", alignItems: "flex-start", gap: 14, background: "var(--card)", border: "1px solid var(--border)", borderRadius: 14, padding: "16px 18px", boxShadow: "0 1px 3px rgba(60,55,45,0.04)", transition: "all .2s" },
+  taskCheck: { width: 36, height: 36, borderRadius: 10, border: "none", background: "transparent", color: "#C4C4C8", display: "grid", placeItems: "center", flexShrink: 0, transition: "all .15s" },
+  taskCheckOn: { color: "#12A150" },
+  taskTitle: { fontSize: 15, fontWeight: 700, color: "var(--text)", marginBottom: 3 },
+  taskDesc: { fontSize: 13, color: "var(--text-soft)", marginBottom: 8, lineHeight: 1.5 },
+  taskMeta: { display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", marginTop: 6 },
+  taskMetaItem: { display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12.5, color: "var(--text-soft)", fontWeight: 500 },
+  taskPill: { display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11.5, fontWeight: 700, padding: "3px 9px", borderRadius: 20 },
+
+  // filtros (chips)
+  filterChip: { display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 11, border: "1px solid var(--border)", background: "var(--card)", color: "var(--text-soft)", fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", transition: "all .15s" },
+  filterChipOn: { background: "linear-gradient(120deg,#F39200,#E08200)", color: "#fff", borderColor: "transparent", boxShadow: "0 3px 10px rgba(243,146,0,0.3)" },
+
+  // análise individual
+  indHead: { display: "flex", alignItems: "center", gap: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: 18, padding: "22px 24px", marginBottom: 16, boxShadow: "0 1px 3px rgba(60,55,45,0.04)" },
+  indAvatar: { width: 56, height: 56, borderRadius: 16, background: "linear-gradient(135deg,#F39200,#C97A1A)", display: "grid", placeItems: "center", color: "#fff", fontWeight: 700, fontSize: 20, flexShrink: 0 },
+  indName: { fontSize: 21, fontWeight: 800, color: "var(--text)" },
+  indCol: { background: "var(--card)", border: "1px solid", borderRadius: 16, padding: "18px 20px", boxShadow: "0 1px 3px rgba(60,55,45,0.04)" },
+  indColTitle: { display: "flex", alignItems: "center", gap: 8, fontSize: 14.5, fontWeight: 700, color: "var(--text)", marginBottom: 12 },
+  feedbackBox: { background: "linear-gradient(120deg,#FBF4EA,#FDF6EC)", border: "1px solid #F2E6D2", borderRadius: 16, padding: "20px 24px", marginTop: 16 },
+  feedbackLabel: { display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 700, color: "#C97A1A", textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 10 },
+  feedbackText: { margin: 0, fontSize: 15, lineHeight: 1.65, color: "#5A4E3C", fontStyle: "italic" },
+
   app: { display: "flex", minHeight: "100vh", background: "#F6F5F3", fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif", color: "#2A2B2E", position: "relative", overflow: "hidden" },
   bgGlow: { position: "fixed", top: -180, right: -120, width: 520, height: 520, background: "radial-gradient(circle, rgba(243,146,0,0.09), transparent 70%)", pointerEvents: "none", zIndex: 0 },
 
@@ -908,14 +1166,77 @@ const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 * { box-sizing: border-box; }
 body { margin: 0; }
+
+/* ===== VARIÁVEIS DE TEMA ===== */
+.theme-light {
+  --bg: #F6F5F3;
+  --card: #FFFFFF;
+  --border: #ECEAE6;
+  --text: #2A2B2E;
+  --text-soft: #6E7073;
+  --table-head: #FAFAF9;
+  --input-bg: #FFFFFF;
+}
+.theme-dark {
+  --bg: #1A1B1E;
+  --card: #25262A;
+  --border: #34353A;
+  --text: #ECECEE;
+  --text-soft: #9FA1A6;
+  --table-head: #2C2D31;
+  --input-bg: #2C2D31;
+}
+
+/* aplica o fundo do tema na tela toda */
+.app-root.theme-dark { background: var(--bg) !important; color: var(--text); }
+.app-root.theme-light { background: var(--bg) !important; }
+
+/* ===== SOBRESCRITAS PARA MODO ESCURO (cartões, textos, inputs com cores fixas) ===== */
+.theme-dark main h1 { color: var(--text) !important; }
+.theme-dark main p { color: var(--text-soft); }
+/* cartões e caixas brancas → cartão escuro (usa a classe .panel) */
+.theme-dark .panel,
+.theme-dark .card,
+.theme-dark .card-hover,
+.theme-dark .kpi { background: var(--card) !important; border-color: var(--border) !important; }
+/* inputs, selects e textareas */
+.theme-dark input, .theme-dark select, .theme-dark textarea { background: var(--input-bg) !important; border-color: var(--border) !important; color: var(--text) !important; }
+.theme-dark input::placeholder, .theme-dark textarea::placeholder { color: #6B6D72 !important; }
+/* tabelas */
+.theme-dark table thead th { background: var(--table-head) !important; color: var(--text-soft) !important; border-color: var(--border) !important; }
+.theme-dark table td { color: var(--text) !important; border-color: var(--border) !important; }
+.theme-dark .trow:hover td { background: rgba(255,255,255,0.03) !important; }
+/* botão fantasma */
+.theme-dark .btn-ghost { background: var(--card) !important; border-color: var(--border) !important; color: var(--text-soft) !important; }
+.theme-dark .btn-ghost:hover { background: rgba(255,255,255,0.05) !important; }
+/* feedback box mantém o tom quente porém mais escuro */
+.theme-dark .feedback-box { background: rgba(243,146,0,0.08) !important; border-color: rgba(243,146,0,0.25) !important; }
+.theme-dark .feedback-box p { color: #E8C9A0 !important; }
+/* caixa de ações recomendadas (gradiente bege → escuro quente) */
+.theme-dark .ai-actions { background: linear-gradient(120deg, rgba(243,146,0,0.07), rgba(243,146,0,0.04)) !important; border-color: rgba(243,146,0,0.22) !important; }
+/* highlights (destaque / atenção) no escuro */
+.theme-dark .ai-hl { background: rgba(255,255,255,0.03) !important; }
+.theme-dark .ai-action-item { color: var(--text) !important; }
+/* texto dentro dos cartões no escuro */
+.theme-dark .panel, .theme-dark .panel div:not([style*="color"]) { color: var(--text); }
+/* scrollbar no escuro */
+.theme-dark ::-webkit-scrollbar-thumb { background: #3C3D42; }
+/* o toggle de tema na sidebar */
+.theme-toggle:hover { background: rgba(255,255,255,0.1); color: #fff; }
+
 .navbtn:hover { background: rgba(255,255,255,0.07); color: #fff; }
 .logout-btn:hover { background: rgba(229,72,77,0.2); color: #FCA5A5; }
 .card-hover { transition: box-shadow .22s, transform .22s; }
 .card-hover:hover { box-shadow: 0 10px 30px rgba(60,55,45,0.1); transform: translateY(-2px); }
+.theme-dark .card-hover:hover { box-shadow: 0 10px 30px rgba(0,0,0,0.4); }
 .trow:hover td { background: #FAFAF9; }
 .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 22px rgba(243,146,0,0.45); }
 .btn-ghost:hover { border-color: #C4C4C8; background: #FAFAF9; }
 .btn-del:hover { background: #E5484D; color: #fff; border-color: #E5484D; }
+.filter-chip:hover { border-color: #F39200; }
+.task-card:hover { box-shadow: 0 6px 20px rgba(60,55,45,0.08); transform: translateY(-1px); }
+.theme-dark .task-card:hover { box-shadow: 0 6px 20px rgba(0,0,0,0.35); }
+.task-check:hover { background: rgba(18,161,80,0.1) !important; color: #12A150; }
 .ai-cta:hover { transform: translateY(-2px); }
 .login-cta:hover { transform: translateY(-2px); }
 input:focus, textarea:focus, select:focus { border-color: #F39200 !important; box-shadow: 0 0 0 3px rgba(243,146,0,0.14); }
