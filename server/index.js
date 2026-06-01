@@ -21,11 +21,28 @@ let DB_PATH = process.env.DB_PATH || join(ROOT, "instructiva.json");
 // se vier com extensão .db (config antiga), troca para .json
 if (DB_PATH.endsWith(".db")) DB_PATH = DB_PATH.replace(/\.db$/, ".json");
 
-// garante que a pasta do arquivo existe (ex.: /data)
-try {
-  const dir = dirname(DB_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-} catch (e) { console.error("Não consegui criar a pasta do banco:", e.message); }
+const DB_DIR = dirname(DB_PATH);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Espera o volume montar. No Railway o volume pode montar alguns segundos
+// DEPOIS do servidor iniciar; se gravarmos antes, o mount "cobre" os dados.
+async function aguardarVolume(maxTentativas = 30) {
+  for (let i = 0; i < maxTentativas; i++) {
+    try {
+      if (!fs.existsSync(DB_DIR)) {
+        try { fs.mkdirSync(DB_DIR, { recursive: true }); } catch {}
+      }
+      const testFile = join(DB_DIR, ".write-test");
+      fs.writeFileSync(testFile, "ok");
+      fs.unlinkSync(testFile);
+      return true;
+    } catch (e) {
+      await sleep(1000);
+    }
+  }
+  console.warn("⚠ Volume não confirmado após espera; seguindo mesmo assim.");
+  return false;
+}
 
 function loadDB() {
   try {
@@ -33,26 +50,41 @@ function loadDB() {
   } catch (e) { console.error("Erro ao ler banco:", e.message); }
   return { users: [], records: [], sessions: {} };
 }
-function saveDB(db) {
-  try { fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2)); }
+function saveDB(database) {
+  try { fs.writeFileSync(DB_PATH, JSON.stringify(database, null, 2)); }
   catch (e) { console.error("Erro ao salvar banco:", e.message); }
 }
 
-let db = loadDB();
+let db = { users: [], records: [], sessions: {} };
 
-// cria a conta admin padrão se não existir nenhuma
-if (!db.users.some((u) => u.role === "admin")) {
-  db.users.push({
-    id: "admin",
-    nome: "",
-    login: "gerente",
-    senha: hash("admin123"),
-    role: "admin",
-    perms: { ver_todos: true, registrar: true, excluir: true, exportar: true, ia: true, gerir_usuarios: true },
-    ativo: true,
-  });
-  saveDB(db);
-  console.log("→ Conta admin criada: login 'gerente' / senha 'admin123'");
+// Inicialização assíncrona: espera o volume, carrega o banco, cria admin,
+// e SÓ ENTÃO sobe o servidor.
+async function iniciar() {
+  console.log("Aguardando volume em:", DB_DIR);
+  await aguardarVolume();
+  console.log("Volume pronto. Usando banco em:", DB_PATH);
+
+  db = loadDB();
+
+  // cria a conta admin padrão se não existir nenhuma
+  if (!db.users.some((u) => u.role === "admin")) {
+    db.users.push({
+      id: "admin",
+      nome: "",
+      login: "gerente",
+      senha: hash("admin123"),
+      role: "admin",
+      perms: { ver_todos: true, registrar: true, excluir: true, exportar: true, ia: true, gerir_usuarios: true },
+      ativo: true,
+    });
+    saveDB(db);
+    console.log("→ Conta admin criada: login 'gerente' / senha 'admin123'");
+  } else {
+    console.log("→ Banco já existe. Usuários:", db.users.length, "| Atendimentos:", db.records.length);
+  }
+
+  const PORT = process.env.PORT || 3001;
+  app.listen(PORT, () => console.log(`✓ Servidor rodando na porta ${PORT}`));
 }
 
 // ---------------------------------------------------------------------------
@@ -286,5 +318,5 @@ if (fs.existsSync(distPath)) {
   });
 }
 
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`✓ Servidor rodando na porta ${PORT}`));
+// inicia tudo (espera volume → carrega banco → cria admin → sobe servidor)
+iniciar();
