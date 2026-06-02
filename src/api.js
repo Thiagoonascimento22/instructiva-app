@@ -48,4 +48,10 @@ export const api = {
   deleteTask: (id) => req("DELETE", "/tasks/" + id),
   // ia
   analise: (colaboradoraId) => req("POST", "/analise", colaboradoraId ? { colaboradoraId } : {}),
+  // whatsapp
+  waGetConfig: () => req("GET", "/wa/config"),
+  waSetConfig: (payload) => req("PUT", "/wa/config", payload),
+  waListChats: () => req("GET", "/wa/chats"),
+  waGetChat: (numero) => req("GET", "/wa/chats/" + numero),
+  waSend: (numero, texto) => req("POST", "/wa/send", { numero, texto }),
 };

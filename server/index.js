@@ -53,17 +53,19 @@ function loadDB() {
       if (!d.records) d.records = [];
       if (!d.tasks) d.tasks = [];
       if (!d.sessions) d.sessions = {};
+      if (!d.waChats) d.waChats = {};       // conversas do WhatsApp por número
+      if (!d.waConfig) d.waConfig = {};      // config da conexão (url, key, instâncias)
       return d;
     }
   } catch (e) { console.error("Erro ao ler banco:", e.message); }
-  return { users: [], records: [], tasks: [], sessions: {} };
+  return { users: [], records: [], tasks: [], sessions: {}, waChats: {}, waConfig: {} };
 }
 function saveDB(database) {
   try { fs.writeFileSync(DB_PATH, JSON.stringify(database, null, 2)); }
   catch (e) { console.error("Erro ao salvar banco:", e.message); }
 }
 
-let db = { users: [], records: [], tasks: [], sessions: {} };
+let db = { users: [], records: [], tasks: [], sessions: {}, waChats: {}, waConfig: {} };
 
 // Inicialização assíncrona: espera o volume, carrega o banco, cria admin,
 // e SÓ ENTÃO sobe o servidor.
@@ -442,6 +444,139 @@ Tarefas atribuídas: ${ts.length} (${tConcl} concluídas, ${tAtrasadas} atrasada
 
 Comparação com o setor: a taxa de resolução média do setor é ${taxaSetor}%. A dela é ${taxa}%.`;
 }
+
+// ---------------------------------------------------------------------------
+// WHATSAPP (integração com Evolution API)
+// ---------------------------------------------------------------------------
+
+// helper: normaliza um número de telefone (tira sufixos do whatsapp)
+function normalizeJid(jid) {
+  if (!jid) return "";
+  return String(jid).split("@")[0].split(":")[0];
+}
+
+// ---- WEBHOOK: a Evolution chama aqui quando chega/sai mensagem ----
+// Não exige login (é a Evolution chamando), mas valida um token simples na URL.
+app.post("/api/wa/webhook/:token", (req, res) => {
+  // valida o token configurado (evita qualquer um chamar)
+  const expected = db.waConfig?.webhookToken;
+  if (expected && req.params.token !== expected) {
+    return res.status(403).json({ error: "token inválido" });
+  }
+
+  try {
+    const body = req.body || {};
+    const event = body.event || body.type || "";
+    const instance = body.instance || body.instanceName || "";
+
+    // a Evolution manda eventos de mensagem como "messages.upsert"
+    if (event === "messages.upsert" || event === "messages.update" || body.data?.message) {
+      const data = body.data || {};
+      const key = data.key || {};
+      const remoteJid = key.remoteJid || "";
+      const numero = normalizeJid(remoteJid);
+      if (numero && !remoteJid.includes("@g.us")) {  // ignora grupos por enquanto
+        const fromMe = !!key.fromMe;
+        // extrai o texto da mensagem (vários formatos possíveis)
+        const msg = data.message || {};
+        const texto =
+          msg.conversation ||
+          msg.extendedTextMessage?.text ||
+          msg.imageMessage?.caption ||
+          msg.videoMessage?.caption ||
+          (msg.audioMessage ? "[áudio]" : "") ||
+          (msg.imageMessage ? "[imagem]" : "") ||
+          (msg.documentMessage ? "[documento]" : "") ||
+          "";
+        const pushName = data.pushName || "";
+        const ts = (data.messageTimestamp ? Number(data.messageTimestamp) * 1000 : Date.now());
+
+        if (!db.waChats[numero]) {
+          db.waChats[numero] = { numero, nome: pushName || numero, instance, mensagens: [], atualizadoEm: ts, naoLidas: 0 };
+        }
+        const chat = db.waChats[numero];
+        if (pushName && !fromMe) chat.nome = pushName;
+        chat.instance = instance || chat.instance;
+        chat.mensagens.push({ id: key.id || (Date.now() + "-" + Math.random()), fromMe, texto, ts });
+        // mantém só as últimas 200 mensagens por conversa (evita crescer demais)
+        if (chat.mensagens.length > 200) chat.mensagens = chat.mensagens.slice(-200);
+        chat.atualizadoEm = ts;
+        if (!fromMe) chat.naoLidas = (chat.naoLidas || 0) + 1;
+        saveDB(db);
+      }
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("Erro no webhook WA:", e.message);
+    res.json({ ok: true }); // sempre 200 pra Evolution não ficar reenviando
+  }
+});
+
+// ---- CONFIG: salvar dados da conexão (admin) ----
+app.get("/api/wa/config", requireAuth, (req, res) => {
+  if (!req.isAdmin && !can(req, "gerir_usuarios")) return res.status(403).json({ error: "sem permissão" });
+  const c = db.waConfig || {};
+  // não devolve a apiKey inteira por segurança
+  res.json({ config: { url: c.url || "", instance: c.instance || "", webhookToken: c.webhookToken || "", temApiKey: !!c.apiKey, conectado: !!c.url } });
+});
+
+app.put("/api/wa/config", requireAuth, (req, res) => {
+  if (!req.isAdmin && !can(req, "gerir_usuarios")) return res.status(403).json({ error: "sem permissão" });
+  const { url, apiKey, instance } = req.body;
+  db.waConfig = db.waConfig || {};
+  if (url !== undefined) db.waConfig.url = String(url).trim().replace(/\/$/, "");
+  if (apiKey !== undefined && apiKey) db.waConfig.apiKey = String(apiKey).trim();
+  if (instance !== undefined) db.waConfig.instance = String(instance).trim();
+  // gera um token de webhook se ainda não tiver
+  if (!db.waConfig.webhookToken) db.waConfig.webhookToken = crypto.randomBytes(12).toString("hex");
+  saveDB(db);
+  res.json({ ok: true, webhookToken: db.waConfig.webhookToken });
+});
+
+// ---- listar conversas ----
+app.get("/api/wa/chats", requireAuth, (req, res) => {
+  const chats = Object.values(db.waChats || {})
+    .map((c) => ({ numero: c.numero, nome: c.nome, instance: c.instance, atualizadoEm: c.atualizadoEm, naoLidas: c.naoLidas || 0, ultima: c.mensagens?.[c.mensagens.length - 1]?.texto || "" }))
+    .sort((a, b) => (b.atualizadoEm || 0) - (a.atualizadoEm || 0));
+  res.json({ chats });
+});
+
+// ---- ver mensagens de uma conversa ----
+app.get("/api/wa/chats/:numero", requireAuth, (req, res) => {
+  const chat = db.waChats?.[req.params.numero];
+  if (!chat) return res.status(404).json({ error: "conversa não encontrada" });
+  // zera não-lidas ao abrir
+  chat.naoLidas = 0;
+  saveDB(db);
+  res.json({ chat });
+});
+
+// ---- enviar mensagem (pela Evolution) ----
+app.post("/api/wa/send", requireAuth, async (req, res) => {
+  const { numero, texto } = req.body;
+  const c = db.waConfig || {};
+  if (!c.url || !c.apiKey || !c.instance) return res.status(400).json({ error: "WhatsApp não configurado" });
+  if (!numero || !texto?.trim()) return res.status(400).json({ error: "número e texto obrigatórios" });
+  try {
+    const r = await fetch(`${c.url}/message/sendText/${c.instance}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "apikey": c.apiKey },
+      body: JSON.stringify({ number: numero, text: texto.trim() }),
+    });
+    const data = await r.json();
+    if (!r.ok) return res.status(502).json({ error: data?.message || "falha ao enviar" });
+    // registra na conversa
+    if (db.waChats[numero]) {
+      db.waChats[numero].mensagens.push({ id: Date.now() + "-out", fromMe: true, texto: texto.trim(), ts: Date.now() });
+      db.waChats[numero].atualizadoEm = Date.now();
+      saveDB(db);
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("Erro ao enviar WA:", e.message);
+    res.status(502).json({ error: "não foi possível enviar agora" });
+  }
+});
 
 // ---------------------------------------------------------------------------
 // Servir o frontend buildado
