@@ -16,11 +16,11 @@ import { api } from "./api";
 
 const STATUS = {
   resolvido: { label: "Resolvido", color: "#12A150", bg: "rgba(18,161,80,0.12)", icon: CheckCircle2 },
-  andamento: { label: "Em andamento", color: "#F39200", bg: "rgba(243,146,0,0.14)", icon: Clock },
+  andamento: { label: "Em andamento", color: "#6366F1", bg: "rgba(99,102,241,0.14)", icon: Clock },
   pendente: { label: "Pendente", color: "#E5484D", bg: "rgba(229,72,77,0.12)", icon: AlertCircle },
 };
 // paleta de gráficos derivada da marca (laranja + cinzas + apoios sóbrios)
-const PALETTE = ["#F39200", "#6E7073", "#E8A93C", "#9A9CA0", "#C97A1A", "#B5B7BA", "#12A150", "#5B8DB8"];
+const PALETTE = ["#6366F1", "#6E7073", "#818CF8", "#9A9CA0", "#4F46E5", "#B5B7BA", "#12A150", "#5B8DB8"];
 
 // emojis mais usados em atendimento
 const EMOJIS = ["😀","😁","😂","🤣","😊","😍","😉","😎","🤝","👍","👏","🙏","❤️","🔥","✅","✔️","⭐","🎉","💪","🙌","👋","😅","😢","😭","😡","🤔","😴","🥰","😘","💯","⏰","📌","📎","📞","💬","✍️","👀","🚀","💡","⚠️"];
@@ -177,7 +177,7 @@ function Onboarding({ onSave }) {
       <div style={SX.loginGlow} />
       <div style={SX.loginCard} className="login-rise">
         <img src={LOGO_FULL} alt="Instructiva" style={{ width: 190, display: "block", margin: "0 auto 6px" }} />
-        <div style={SX.onbIcon}><Sparkles size={22} color="#F39200" /></div>
+        <div style={SX.onbIcon}><Sparkles size={22} color="#6366F1" /></div>
         <h2 style={SX.onbTitle}>Bem-vinda! 👋</h2>
         <p style={SX.onbText}>Como você gostaria de ser chamada no sistema? Esse nome vai aparecer no seu painel e nos relatórios.</p>
         <label style={{ ...SX.loginLabel, marginTop: 20 }}>Seu nome</label>
@@ -227,8 +227,6 @@ function Login({ onLogin }) {
           {err && <div className="shake" style={SX.loginErr}><AlertCircle size={14} /> Usuário ou senha incorretos</div>}
           <button onClick={submit} className="login-cta" style={SX.loginBtn}>Entrar <ChevronRight size={18} /></button>
         </div>
-
-        <div style={SX.loginHint}><strong>Primeiro acesso (gerente):</strong> usuário <code style={SX.code}>gerente</code> · senha <code style={SX.code}>admin123</code></div>
       </div>
       <div style={SX.loginFoot}>Instructiva · Painel de gestão de suporte</div>
     </div>
@@ -250,9 +248,9 @@ function Dashboard({ records, users, me, isAdmin }) {
       <Header title={`${saud}, ${primeiroNome} 👋`} subtitle={isAdmin ? "Painel geral do setor de suporte" : "Resumo dos seus atendimentos"} />
 
       <div style={SX.kpiGrid}>
-        <Kpi i={ClipboardList} c="#F39200" v={stats.total} l="Total de atendimentos" d={0} />
+        <Kpi i={ClipboardList} c="#6366F1" v={stats.total} l="Total de atendimentos" d={0} />
         <Kpi i={CheckCircle2} c="#12A150" v={stats.byStatus.resolvido} l="Resolvidos" d={1} />
-        <Kpi i={Clock} c="#E8A93C" v={stats.byStatus.andamento} l="Em andamento" d={2} />
+        <Kpi i={Clock} c="#818CF8" v={stats.byStatus.andamento} l="Em andamento" d={2} />
         <Kpi i={isAdmin ? Users : Target} c="#6E7073" v={isAdmin ? stats.byColab.length : stats.byStatus.pendente} l={isAdmin ? "Colaboradoras ativas" : "Pendentes"} d={3} />
       </div>
 
@@ -276,7 +274,7 @@ function Dashboard({ records, users, me, isAdmin }) {
                 <CartesianGrid strokeDasharray="3 3" stroke="#EEEEF0" vertical={false} />
                 <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#8A8C90" }} interval={0} angle={-15} textAnchor="end" height={48} />
                 <YAxis tick={{ fontSize: 11, fill: "#8A8C90" }} allowDecimals={false} />
-                <Tooltip contentStyle={TT} cursor={{ fill: "rgba(243,146,0,0.06)" }} />
+                <Tooltip contentStyle={TT} cursor={{ fill: "rgba(99,102,241,0.06)" }} />
                 <Bar dataKey="value" name="Atendimentos" radius={[7, 7, 0, 0]} maxBarSize={46}>
                   {stats.byColab.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
                 </Bar>
@@ -302,15 +300,15 @@ function Dashboard({ records, users, me, isAdmin }) {
             <AreaChart data={stats.byDay} margin={{ top: 8, right: 16, left: -10, bottom: 4 }}>
               <defs>
                 <linearGradient id="ar" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#F39200" stopOpacity={0.32} />
-                  <stop offset="100%" stopColor="#F39200" stopOpacity={0} />
+                  <stop offset="0%" stopColor="#6366F1" stopOpacity={0.32} />
+                  <stop offset="100%" stopColor="#6366F1" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#EEEEF0" vertical={false} />
               <XAxis dataKey="data" tick={{ fontSize: 11, fill: "#8A8C90" }} />
               <YAxis tick={{ fontSize: 11, fill: "#8A8C90" }} allowDecimals={false} />
               <Tooltip contentStyle={TT} />
-              <Area type="monotone" dataKey="value" name="Atendimentos" stroke="#F39200" strokeWidth={2.5} fill="url(#ar)" dot={{ r: 3, fill: "#F39200" }} activeDot={{ r: 5 }} />
+              <Area type="monotone" dataKey="value" name="Atendimentos" stroke="#6366F1" strokeWidth={2.5} fill="url(#ar)" dot={{ r: 3, fill: "#6366F1" }} activeDot={{ r: 5 }} />
             </AreaChart>
           </ResponsiveContainer>
         </CardBox>
@@ -321,7 +319,7 @@ function Dashboard({ records, users, me, isAdmin }) {
               <CartesianGrid strokeDasharray="3 3" stroke="#EEEEF0" horizontal={false} />
               <XAxis type="number" tick={{ fontSize: 11, fill: "#8A8C90" }} allowDecimals={false} />
               <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: "#8A8C90" }} width={130} />
-              <Tooltip contentStyle={TT} cursor={{ fill: "rgba(243,146,0,0.06)" }} />
+              <Tooltip contentStyle={TT} cursor={{ fill: "rgba(99,102,241,0.06)" }} />
               <Bar dataKey="value" name="Ocorrências" radius={[0, 7, 7, 0]} maxBarSize={26}>
                 {stats.byAssunto.map((_, i) => <Cell key={i} fill={PALETTE[(i + 1) % PALETTE.length]} />)}
               </Bar>
@@ -369,14 +367,14 @@ function AnaliseIA({ records, users }) {
 
   const AVAL = {
     "Excelente": { c: "#12A150", bg: "rgba(18,161,80,0.1)", icon: Star },
-    "Bom": { c: "#F39200", bg: "rgba(243,146,0,0.12)", icon: TrendingUp },
-    "Regular": { c: "#C97A1A", bg: "rgba(201,122,26,0.1)", icon: Activity },
+    "Bom": { c: "#6366F1", bg: "rgba(99,102,241,0.12)", icon: TrendingUp },
+    "Regular": { c: "#4F46E5", bg: "rgba(79,70,229,0.1)", icon: Activity },
     "Precisa atenção": { c: "#E5484D", bg: "rgba(229,72,77,0.1)", icon: AlertTriangle },
   };
 
   return (
     <div>
-      <Header title={<span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}><Brain size={28} color="#F39200" /> Análise Inteligente</span>}
+      <Header title={<span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}><Brain size={28} color="#6366F1" /> Análise Inteligente</span>}
         subtitle="A IA lê o desempenho e sugere melhorias" />
 
       {/* seletor de modo */}
@@ -433,7 +431,7 @@ function AnaliseIA({ records, users }) {
       {result && !result.individual && (
         <div className="fade-in">
           <div style={SX.aiPanorama} className="panel">
-            <div style={SX.aiPanIcon}><Activity size={20} color="#F39200" /></div>
+            <div style={SX.aiPanIcon}><Activity size={20} color="#6366F1" /></div>
             <div><div style={SX.aiPanLabel}>Panorama do setor</div><p style={SX.aiPanText}>{result.panorama}</p></div>
           </div>
 
@@ -443,8 +441,8 @@ function AnaliseIA({ records, users }) {
               <div><div style={SX.aiHlLabel}>Destaque</div><div style={SX.aiHlText}>{result.destaque}</div></div>
             </div>
             {result.atencao && (
-              <div style={{ ...SX.aiHl, borderColor: "rgba(243,146,0,0.3)", background: "rgba(243,146,0,0.05)" }} className="ai-hl">
-                <div style={{ ...SX.aiHlIcon, background: "rgba(243,146,0,0.14)", color: "#F39200" }}><Target size={18} /></div>
+              <div style={{ ...SX.aiHl, borderColor: "rgba(99,102,241,0.3)", background: "rgba(99,102,241,0.05)" }} className="ai-hl">
+                <div style={{ ...SX.aiHlIcon, background: "rgba(99,102,241,0.14)", color: "#6366F1" }}><Target size={18} /></div>
                 <div><div style={SX.aiHlLabel}>Ponto de atenção</div><div style={SX.aiHlText}>{result.atencao}</div></div>
               </div>
             )}
@@ -466,7 +464,7 @@ function AnaliseIA({ records, users }) {
                   <p style={SX.aiColabLeitura}>{c.leitura}</p>
                   <div style={SX.aiSugLabel}>Sugestões de melhoria</div>
                   <ul style={SX.aiSugList}>
-                    {c.sugestoes?.map((s, i) => <li key={i} style={SX.aiSugItem}><Zap size={13} color="#F39200" style={{ flexShrink: 0, marginTop: 3 }} /> {s}</li>)}
+                    {c.sugestoes?.map((s, i) => <li key={i} style={SX.aiSugItem}><Zap size={13} color="#6366F1" style={{ flexShrink: 0, marginTop: 3 }} /> {s}</li>)}
                   </ul>
                 </div>
               );
@@ -474,7 +472,7 @@ function AnaliseIA({ records, users }) {
           </div>
 
           <div style={SX.aiActions} className="ai-actions">
-            <div style={SX.aiActionsTitle}><Target size={18} color="#F39200" /> Ações recomendadas para o setor</div>
+            <div style={SX.aiActionsTitle}><Target size={18} color="#6366F1" /> Ações recomendadas para o setor</div>
             <div style={SX.aiActionsList}>
               {result.acoes_setor?.map((a, i) => <div key={i} style={SX.aiActionItem} className="ai-action-item"><span style={SX.aiActionNum}>{i + 1}</span> {a}</div>)}
             </div>
@@ -502,7 +500,7 @@ function IndividualResult({ result, AVAL }) {
 
       {/* resumo */}
       <div style={SX.aiPanorama} className="panel">
-        <div style={SX.aiPanIcon}><Activity size={20} color="#F39200" /></div>
+        <div style={SX.aiPanIcon}><Activity size={20} color="#6366F1" /></div>
         <div><div style={SX.aiPanLabel}>Resumo do desempenho</div><p style={SX.aiPanText}>{result.resumo}</p></div>
       </div>
 
@@ -514,17 +512,17 @@ function IndividualResult({ result, AVAL }) {
             {result.pontos_fortes?.map((s, i) => <li key={i} style={SX.aiSugItem}><CheckCircle2 size={13} color="#12A150" style={{ flexShrink: 0, marginTop: 3 }} /> {s}</li>)}
           </ul>
         </div>
-        <div style={{ ...SX.indCol, borderColor: "rgba(243,146,0,0.3)" }} className="panel">
-          <div style={SX.indColTitle}><Target size={16} color="#F39200" /> Pontos a melhorar</div>
+        <div style={{ ...SX.indCol, borderColor: "rgba(99,102,241,0.3)" }} className="panel">
+          <div style={SX.indColTitle}><Target size={16} color="#6366F1" /> Pontos a melhorar</div>
           <ul style={SX.aiSugList}>
-            {result.pontos_melhoria?.map((s, i) => <li key={i} style={SX.aiSugItem}><TrendingUp size={13} color="#F39200" style={{ flexShrink: 0, marginTop: 3 }} /> {s}</li>)}
+            {result.pontos_melhoria?.map((s, i) => <li key={i} style={SX.aiSugItem}><TrendingUp size={13} color="#6366F1" style={{ flexShrink: 0, marginTop: 3 }} /> {s}</li>)}
           </ul>
         </div>
       </div>
 
       {/* sugestões */}
       <div style={SX.aiActions} className="ai-actions">
-        <div style={SX.aiActionsTitle}><Zap size={18} color="#F39200" /> Sugestões práticas</div>
+        <div style={SX.aiActionsTitle}><Zap size={18} color="#6366F1" /> Sugestões práticas</div>
         <div style={SX.aiActionsList}>
           {result.sugestoes?.map((a, i) => <div key={i} style={SX.aiActionItem} className="ai-action-item"><span style={SX.aiActionNum}>{i + 1}</span> {a}</div>)}
         </div>
@@ -533,7 +531,7 @@ function IndividualResult({ result, AVAL }) {
       {/* feedback sugerido */}
       {result.feedback_sugerido && (
         <div style={SX.feedbackBox} className="panel feedback-box">
-          <div style={SX.feedbackLabel}><Sparkles size={15} color="#F39200" /> Feedback sugerido para passar a ela</div>
+          <div style={SX.feedbackLabel}><Sparkles size={15} color="#6366F1" /> Feedback sugerido para passar a ela</div>
           <p style={SX.feedbackText}>"{result.feedback_sugerido}"</p>
         </div>
       )}
@@ -717,7 +715,7 @@ function Equipe({ refresh }) {
 
       {showNew && (
         <div style={SX.newUserCard} className="fade-in">
-          <div style={SX.newUserTitle}><UserPlus size={17} color="#F39200" /> Criar acesso de colaboradora</div>
+          <div style={SX.newUserTitle}><UserPlus size={17} color="#6366F1" /> Criar acesso de colaboradora</div>
           <div style={SX.newUserGrid}>
             <F label="Nome" req><input value={nf.nome} onChange={(e) => setNf({ ...nf, nome: e.target.value })} placeholder="Nome da colaboradora" style={SX.input} /></F>
             <F label="Usuário (login)" req><input value={nf.login} onChange={(e) => setNf({ ...nf, login: e.target.value })} placeholder="ex: ana.paula" style={SX.input} /></F>
@@ -745,9 +743,9 @@ function Equipe({ refresh }) {
           return (
             <div key={u.id} style={{ ...SX.userBlock, opacity: u.ativo ? 1 : 0.55 }} className="card-hover panel">
               <div style={SX.userBlockHead}>
-                <div style={{ ...SX.userBlockAvatar, background: admin ? "linear-gradient(135deg,#F39200,#C97A1A)" : "linear-gradient(135deg,#7E8084,#6E7073)" }}>{initials(u.nome)}</div>
+                <div style={{ ...SX.userBlockAvatar, background: admin ? "linear-gradient(135deg,#6366F1 0%,#7C5CF0 55%,#4F46E5 100%)" : "linear-gradient(135deg,#7E8084,#6E7073)" }}>{initials(u.nome)}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={SX.userBlockName}>{u.nome} {admin && <Crown size={13} color="#F39200" />}</div>
+                  <div style={SX.userBlockName}>{u.nome} {admin && <Crown size={13} color="#6366F1" />}</div>
                   <div style={SX.userBlockLogin}>@{u.login} · {count(u.id)} atendimento{count(u.id) !== 1 ? "s" : ""}</div>
                 </div>
                 {!admin && (
@@ -807,7 +805,7 @@ function Config({ me, onUpdated }) {
         </div>
       </div>
       <div style={SX.configNote}>
-        <Shield size={15} color="#F39200" />
+        <Shield size={15} color="#6366F1" />
         <span>Como administradora, você tem acesso total: dashboard, análise por IA, gestão de toda a equipe e exportações. Use <strong>Equipe & Acessos</strong> para liberar logins às colaboradoras com permissões específicas.</span>
       </div>
     </div>
@@ -817,7 +815,7 @@ function Config({ me, onUpdated }) {
 // ============================================================= TAREFAS
 const PRIORIDADE = {
   alta: { label: "Alta", color: "#E5484D", bg: "rgba(229,72,77,0.12)" },
-  media: { label: "Média", color: "#F39200", bg: "rgba(243,146,0,0.13)" },
+  media: { label: "Média", color: "#6366F1", bg: "rgba(99,102,241,0.13)" },
   baixa: { label: "Baixa", color: "#12A150", bg: "rgba(18,161,80,0.12)" },
 };
 
@@ -868,13 +866,13 @@ function Tarefas({ me, isAdmin, can, users }) {
 
       {/* mini stats */}
       <div style={SX.taskStats}>
-        <div style={SX.taskStat}><ListTodo size={17} color="#F39200" /> <strong>{pendentes}</strong> pendente{pendentes !== 1 ? "s" : ""}</div>
+        <div style={SX.taskStat}><ListTodo size={17} color="#6366F1" /> <strong>{pendentes}</strong> pendente{pendentes !== 1 ? "s" : ""}</div>
         {atrasadas > 0 && <div style={{ ...SX.taskStat, color: "#E5484D" }}><AlertTriangle size={16} /> <strong>{atrasadas}</strong> atrasada{atrasadas !== 1 ? "s" : ""}</div>}
       </div>
 
       {showNew && podeAtribuir && (
         <div style={SX.newUserCard} className="fade-in panel">
-          <div style={SX.newUserTitle}><ListTodo size={17} color="#F39200" /> Nova tarefa</div>
+          <div style={SX.newUserTitle}><ListTodo size={17} color="#6366F1" /> Nova tarefa</div>
           <div style={SX.formGrid}>
             <F label="Título" req full><input value={nf.titulo} onChange={(e) => setNf({ ...nf, titulo: e.target.value })} placeholder="Ex: Entrar em contato com alunos pendentes" style={SX.input} /></F>
             <F label="Responsável" req>
@@ -963,7 +961,7 @@ function MidiaMsg({ msg, chatId }) {
   if (carregando) return <span style={{ fontSize: 13, opacity: 0.7 }}>⏳ Carregando {msg.tipoMidia === "audio" ? "áudio" : "imagem"}…</span>;
   if (erro) return (
     <span style={{ fontSize: 13 }}>
-      {msg.texto} <button onClick={baixar} style={{ border: "none", background: "transparent", color: "#C97A1A", cursor: "pointer", fontWeight: 700, fontSize: 12 }}>tentar de novo</button>
+      {msg.texto} <button onClick={baixar} style={{ border: "none", background: "transparent", color: "#4F46E5", cursor: "pointer", fontWeight: 700, fontSize: 12 }}>tentar de novo</button>
     </span>
   );
   if (!dados) return <span style={SX.waBubbleText}>{msg.texto || "—"}</span>;
@@ -1235,7 +1233,7 @@ function WhatsApp({ me, isAdmin, can, goNovo }) {
       {/* aviso para colaboradora sem instância vinculada */}
       {!podeConfigurar && minhaInst && minhaInst.instancias.length === 0 && (
         <div style={SX.waNoInst}>
-          <AlertCircle size={16} style={{ color: "#C97A1A", flexShrink: 0 }} />
+          <AlertCircle size={16} style={{ color: "#4F46E5", flexShrink: 0 }} />
           <span>Seu WhatsApp ainda não foi configurado pela gerente. Peça para ela vincular seu número.</span>
         </div>
       )}
@@ -1268,14 +1266,14 @@ function WhatsApp({ me, isAdmin, can, goNovo }) {
                         <button onClick={() => { setFiltroInst(""); setShowFiltro(false); }}
                           style={{ ...SX.waFunilItem, ...(filtroInst === "" ? SX.waFunilItemOn : {}) }}>
                           <Users size={15} /> Todos os atendentes
-                        {filtroInst === "" && <CheckCircle2 size={15} style={{ marginLeft: "auto", color: "#F39200" }} />}
+                        {filtroInst === "" && <CheckCircle2 size={15} style={{ marginLeft: "auto", color: "#6366F1" }} />}
                       </button>
                       {instancias.map((i) => (
                         <button key={i.instance} onClick={() => { setFiltroInst(i.instance); setShowFiltro(false); }}
                           style={{ ...SX.waFunilItem, ...(filtroInst === i.instance ? SX.waFunilItemOn : {}) }}>
                           <div style={SX.waFunilAvatar}>{(i.colaboradoraNome || i.instance).slice(0, 1).toUpperCase()}</div>
                           {i.colaboradoraNome || i.instance}
-                          {filtroInst === i.instance && <CheckCircle2 size={15} style={{ marginLeft: "auto", color: "#F39200" }} />}
+                          {filtroInst === i.instance && <CheckCircle2 size={15} style={{ marginLeft: "auto", color: "#6366F1" }} />}
                         </button>
                       ))}
                       </div>
@@ -1322,7 +1320,7 @@ function WhatsApp({ me, isAdmin, can, goNovo }) {
                 <button key={c.id} onClick={() => abrir(c.id)}
                   className="wa-chat-item"
                   style={{ ...SX.waChatItem, ...(sel === c.id ? SX.waChatItemActive : {}) }}>
-                  <div style={{ ...SX.waAvatar, background: c.ehGrupo ? "linear-gradient(135deg,#5B8DB8,#3E6A92)" : "linear-gradient(135deg,#F39200,#C97A1A)" }}>
+                  <div style={{ ...SX.waAvatar, background: c.ehGrupo ? "linear-gradient(135deg,#5B8DB8,#3E6A92)" : "linear-gradient(135deg,#6366F1 0%,#7C5CF0 55%,#4F46E5 100%)" }}>
                     {c.ehGrupo ? <Users size={20} /> : (c.nome || c.numero).slice(0, 2).toUpperCase()}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -1899,7 +1897,7 @@ function Sel({ value, onChange, opts }) {
   return <select value={value} onChange={(e) => onChange(e.target.value)} style={SX.filterSel}>{opts.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>;
 }
 function Empty() {
-  return (<div style={SX.empty}><div style={SX.emptyIcon}><ClipboardList size={34} color="#F39200" /></div><h3 style={SX.emptyTitle}>Nenhum atendimento ainda</h3><p style={SX.emptyText}>Os registros e gráficos aparecem aqui assim que os atendimentos forem cadastrados.</p></div>);
+  return (<div style={SX.empty}><div style={SX.emptyIcon}><ClipboardList size={34} color="#6366F1" /></div><h3 style={SX.emptyTitle}>Nenhum atendimento ainda</h3><p style={SX.emptyText}>Os registros e gráficos aparecem aqui assim que os atendimentos forem cadastrados.</p></div>);
 }
 
 // ============================================================= LOGIC
@@ -1945,31 +1943,31 @@ const SX = {
 
   // filtros (chips)
   filterChip: { display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 11, border: "1px solid var(--border)", background: "var(--card)", color: "var(--text-soft)", fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", transition: "all .15s" },
-  filterChipOn: { background: "linear-gradient(120deg,#F39200,#E08200)", color: "#fff", borderColor: "transparent", boxShadow: "0 3px 10px rgba(243,146,0,0.3)" },
+  filterChipOn: { background: "linear-gradient(120deg,#6366F1 0%,#7C5CF0 55%,#4F46E5 100%)", color: "#fff", borderColor: "transparent", boxShadow: "0 3px 10px rgba(99,102,241,0.3)" },
 
   // análise individual
   indHead: { display: "flex", alignItems: "center", gap: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: 18, padding: "22px 24px", marginBottom: 16, boxShadow: "0 1px 3px rgba(60,55,45,0.04)" },
-  indAvatar: { width: 56, height: 56, borderRadius: 16, background: "linear-gradient(135deg,#F39200,#C97A1A)", display: "grid", placeItems: "center", color: "#fff", fontWeight: 700, fontSize: 20, flexShrink: 0 },
+  indAvatar: { width: 56, height: 56, borderRadius: 16, background: "linear-gradient(135deg,#6366F1 0%,#7C5CF0 55%,#4F46E5 100%)", display: "grid", placeItems: "center", color: "#fff", fontWeight: 700, fontSize: 20, flexShrink: 0 },
   indName: { fontSize: 21, fontWeight: 800, color: "var(--text)" },
   indCol: { background: "var(--card)", border: "1px solid", borderRadius: 16, padding: "18px 20px", boxShadow: "0 1px 3px rgba(60,55,45,0.04)" },
   indColTitle: { display: "flex", alignItems: "center", gap: 8, fontSize: 14.5, fontWeight: 700, color: "var(--text)", marginBottom: 12 },
   feedbackBox: { background: "linear-gradient(120deg,#FBF4EA,#FDF6EC)", border: "1px solid #F2E6D2", borderRadius: 16, padding: "20px 24px", marginTop: 16 },
-  feedbackLabel: { display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 700, color: "#C97A1A", textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 10 },
+  feedbackLabel: { display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 700, color: "#4F46E5", textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 10 },
   feedbackText: { margin: 0, fontSize: 15, lineHeight: 1.65, color: "#5A4E3C", fontStyle: "italic" },
 
   app: { display: "flex", minHeight: "100vh", background: "transparent", fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif", color: "var(--text)", position: "relative", overflow: "hidden" },
-  bgGlow: { position: "fixed", top: -180, right: -120, width: 520, height: 520, background: "radial-gradient(circle, rgba(243,146,0,0.09), transparent 70%)", pointerEvents: "none", zIndex: 0 },
+  bgGlow: { position: "fixed", top: -180, right: -120, width: 520, height: 520, background: "radial-gradient(circle, rgba(99,102,241,0.09), transparent 70%)", pointerEvents: "none", zIndex: 0 },
 
-  sidebar: { width: 262, background: "linear-gradient(180deg,#3A3B3E,#2C2D30)", display: "flex", flexDirection: "column", padding: "28px 16px 20px", position: "sticky", top: 0, height: "100vh", zIndex: 2, boxShadow: "4px 0 30px rgba(40,40,44,0.14)" },
+  sidebar: { width: 262, background: "linear-gradient(180deg,#1E2235 0%,#171A28 100%)", display: "flex", flexDirection: "column", padding: "28px 16px 20px", position: "sticky", top: 0, height: "100vh", zIndex: 2, boxShadow: "1px 0 0 rgba(255,255,255,0.04), 8px 0 40px rgba(15,18,30,0.35)", borderRight: "1px solid rgba(255,255,255,0.05)" },
   brand: { padding: "0 8px", marginBottom: 4 },
   brandLogo: { width: 150, display: "block" },
   brandTag: { color: "#9A9CA0", fontSize: 11.5, fontWeight: 600, padding: "0 10px", marginBottom: 30, letterSpacing: "0.3px" },
   nav: { display: "flex", flexDirection: "column", gap: 4, flex: 1 },
   navBtn: { display: "flex", alignItems: "center", gap: 12, padding: "11px 14px", borderRadius: 12, border: "none", background: "transparent", color: "#B4B6BA", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", transition: "all .2s", position: "relative" },
-  navBtnActive: { background: "linear-gradient(100deg,rgba(243,146,0,0.95),rgba(201,122,26,0.9))", color: "#fff", boxShadow: "0 4px 14px rgba(243,146,0,0.35)" },
+  navBtnActive: { background: "linear-gradient(100deg,rgba(99,102,241,0.95),rgba(79,70,229,0.9))", color: "#fff", boxShadow: "0 4px 14px rgba(99,102,241,0.35)" },
 
   userCard: { marginTop: "auto", display: "flex", alignItems: "center", gap: 11, padding: "12px", background: "rgba(255,255,255,0.05)", borderRadius: 14, border: "1px solid rgba(255,255,255,0.07)" },
-  avatar: { width: 38, height: 38, borderRadius: 11, background: "linear-gradient(135deg,#F39200,#C97A1A)", display: "grid", placeItems: "center", color: "#fff", fontWeight: 700, fontSize: 14, flexShrink: 0 },
+  avatar: { width: 38, height: 38, borderRadius: 11, background: "linear-gradient(135deg,#6366F1 0%,#7C5CF0 55%,#4F46E5 100%)", display: "grid", placeItems: "center", color: "#fff", fontWeight: 700, fontSize: 14, flexShrink: 0 },
   userName: { color: "#fff", fontSize: 13.5, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
   userRole: { color: "#9A9CA0", fontSize: 11, display: "flex", alignItems: "center", gap: 4, marginTop: 1 },
   logoutBtn: { width: 32, height: 32, borderRadius: 9, border: "none", background: "rgba(255,255,255,0.06)", color: "#B4B6BA", cursor: "pointer", display: "grid", placeItems: "center", flexShrink: 0, transition: "all .15s" },
@@ -1988,12 +1986,12 @@ const SX = {
   kpiLabel: { fontSize: 12.5, color: "#82848A", marginTop: 5, fontWeight: 500 },
 
   taxaCard: { background: "linear-gradient(110deg,#2C2D30,#46474A)", borderRadius: 18, padding: "24px 28px", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 18, boxShadow: "0 12px 32px rgba(44,45,48,0.26)", position: "relative", overflow: "hidden" },
-  taxaShine: { position: "absolute", top: -60, right: -40, width: 240, height: 240, background: "radial-gradient(circle,rgba(243,146,0,0.32),transparent 70%)" },
+  taxaShine: { position: "absolute", top: -60, right: -40, width: 240, height: 240, background: "radial-gradient(circle,rgba(99,102,241,0.32),transparent 70%)" },
   taxaLabel: { color: "#fff", fontSize: 17, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 },
   taxaSub: { color: "#B4B6BA", fontSize: 13, marginTop: 4 },
   taxaRight: { display: "flex", alignItems: "center", gap: 18, flex: 1, maxWidth: 440, minWidth: 240, position: "relative" },
   taxaTrack: { flex: 1, height: 13, background: "rgba(255,255,255,0.14)", borderRadius: 20, overflow: "hidden" },
-  taxaFill: { height: "100%", background: "linear-gradient(90deg,#F8B14E,#F39200)", borderRadius: 20, transition: "width 1s cubic-bezier(.4,0,.2,1)", boxShadow: "0 0 12px rgba(243,146,0,0.55)" },
+  taxaFill: { height: "100%", background: "linear-gradient(90deg,#818CF8,#6366F1)", borderRadius: 20, transition: "width 1s cubic-bezier(.4,0,.2,1)", boxShadow: "0 0 12px rgba(99,102,241,0.55)" },
   taxaPct: { color: "#fff", fontSize: 34, fontWeight: 800, minWidth: 76, textAlign: "right" },
 
   chartGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 15 },
@@ -2003,20 +2001,20 @@ const SX = {
   chartSub: { fontSize: 12, color: "#969A9E", marginTop: 2, fontWeight: 500 },
 
   aiHero: { background: "linear-gradient(120deg,#2C2D30 0%,#46474A 55%,#5A4326 100%)", borderRadius: 22, padding: "30px 32px", display: "flex", gap: 24, marginBottom: 22, position: "relative", overflow: "hidden", boxShadow: "0 16px 40px rgba(44,45,48,0.28)" },
-  aiHeroGlow: { position: "absolute", top: -80, right: -60, width: 320, height: 320, background: "radial-gradient(circle,rgba(243,146,0,0.4),transparent 70%)" },
-  aiBadge: { display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(243,146,0,0.2)", color: "#FFD9A0", fontSize: 12, fontWeight: 600, padding: "5px 12px", borderRadius: 20, border: "1px solid rgba(243,146,0,0.35)" },
+  aiHeroGlow: { position: "absolute", top: -80, right: -60, width: 320, height: 320, background: "radial-gradient(circle,rgba(99,102,241,0.4),transparent 70%)" },
+  aiBadge: { display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(99,102,241,0.2)", color: "#FFD9A0", fontSize: 12, fontWeight: 600, padding: "5px 12px", borderRadius: 20, border: "1px solid rgba(99,102,241,0.35)" },
   aiHeroTitle: { color: "#fff", fontSize: 25, fontWeight: 800, margin: "14px 0 8px", letterSpacing: "-0.5px" },
   aiHeroText: { color: "#C4C6CA", fontSize: 14.5, lineHeight: 1.6, maxWidth: 620, margin: 0 },
   aiMeta: { display: "flex", alignItems: "center", gap: 14, margin: "18px 0 22px", color: "#DADCE0", fontSize: 13.5, flexWrap: "wrap" },
   dot: { width: 4, height: 4, borderRadius: 4, background: "rgba(255,255,255,0.3)" },
-  aiCta: { display: "inline-flex", alignItems: "center", gap: 9, background: "#F39200", color: "#fff", border: "none", borderRadius: 13, padding: "0 24px", height: 48, fontSize: 14.5, fontWeight: 700, fontFamily: "inherit", boxShadow: "0 8px 24px rgba(243,146,0,0.4)", transition: "transform .15s" },
+  aiCta: { display: "inline-flex", alignItems: "center", gap: 9, background: "#6366F1", color: "#fff", border: "none", borderRadius: 13, padding: "0 24px", height: 48, fontSize: 14.5, fontWeight: 700, fontFamily: "inherit", boxShadow: "0 8px 24px rgba(99,102,241,0.4)", transition: "transform .15s" },
   aiError: { display: "flex", alignItems: "center", gap: 8, background: "rgba(229,72,77,0.08)", border: "1px solid rgba(229,72,77,0.25)", color: "#C13B30", padding: "13px 16px", borderRadius: 13, fontSize: 14, marginBottom: 16 },
   aiLoading: { display: "flex", flexDirection: "column", gap: 12 },
   skel: { height: 90, background: "linear-gradient(90deg,#EEEEF0,#F7F7F8,#EEEEF0)", backgroundSize: "200% 100%", borderRadius: 16 },
 
   aiPanorama: { display: "flex", gap: 16, background: "#fff", border: "1px solid #ECECEE", borderRadius: 18, padding: "22px 24px", marginBottom: 16, boxShadow: "0 1px 3px rgba(60,55,45,0.04)" },
-  aiPanIcon: { width: 46, height: 46, borderRadius: 13, background: "rgba(243,146,0,0.1)", display: "grid", placeItems: "center", flexShrink: 0 },
-  aiPanLabel: { fontSize: 12.5, fontWeight: 700, color: "#F39200", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6 },
+  aiPanIcon: { width: 46, height: 46, borderRadius: 13, background: "rgba(99,102,241,0.1)", display: "grid", placeItems: "center", flexShrink: 0 },
+  aiPanLabel: { fontSize: 12.5, fontWeight: 700, color: "#6366F1", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6 },
   aiPanText: { margin: 0, fontSize: 15.5, lineHeight: 1.6, color: "#3C3D40", fontWeight: 500 },
 
   aiHighlights: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 24 },
@@ -2029,7 +2027,7 @@ const SX = {
   aiColabGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(330px,1fr))", gap: 15, marginBottom: 26 },
   aiColabCard: { background: "#fff", border: "1px solid #ECECEE", borderRadius: 18, padding: "20px 22px", boxShadow: "0 1px 3px rgba(60,55,45,0.04)" },
   aiColabHead: { display: "flex", alignItems: "center", gap: 13, marginBottom: 14 },
-  aiColabAvatar: { width: 44, height: 44, borderRadius: 13, background: "linear-gradient(135deg,#F39200,#C97A1A)", display: "grid", placeItems: "center", color: "#fff", fontWeight: 700, fontSize: 15, flexShrink: 0 },
+  aiColabAvatar: { width: 44, height: 44, borderRadius: 13, background: "linear-gradient(135deg,#6366F1 0%,#7C5CF0 55%,#4F46E5 100%)", display: "grid", placeItems: "center", color: "#fff", fontWeight: 700, fontSize: 15, flexShrink: 0 },
   aiColabName: { fontSize: 15.5, fontWeight: 700, color: "#2A2B2E", marginBottom: 5 },
   aiAval: { display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, fontWeight: 700, padding: "3px 10px", borderRadius: 20 },
   aiColabLeitura: { fontSize: 14, lineHeight: 1.55, color: "#4C4E52", margin: "0 0 16px", fontWeight: 500 },
@@ -2041,7 +2039,7 @@ const SX = {
   aiActionsTitle: { display: "flex", alignItems: "center", gap: 9, fontSize: 16.5, fontWeight: 800, color: "#2A2B2E", marginBottom: 16 },
   aiActionsList: { display: "flex", flexDirection: "column", gap: 11 },
   aiActionItem: { display: "flex", alignItems: "flex-start", gap: 12, fontSize: 14.5, color: "#3C3D40", lineHeight: 1.5, fontWeight: 500 },
-  aiActionNum: { width: 24, height: 24, borderRadius: 8, background: "#F39200", color: "#fff", fontSize: 12.5, fontWeight: 700, display: "grid", placeItems: "center", flexShrink: 0 },
+  aiActionNum: { width: 24, height: 24, borderRadius: 8, background: "#6366F1", color: "#fff", fontSize: 12.5, fontWeight: 700, display: "grid", placeItems: "center", flexShrink: 0 },
 
   filterBar: { display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap" },
   searchWrap: { display: "flex", alignItems: "center", gap: 9, background: "#fff", border: "1px solid #E6E6E9", borderRadius: 13, padding: "0 15px", flex: 1, minWidth: 220, height: 44 },
@@ -2052,9 +2050,9 @@ const SX = {
   table: { width: "100%", borderCollapse: "collapse", fontSize: 13.5 },
   th: { textAlign: "left", padding: "14px 16px", fontSize: 11, fontWeight: 700, color: "#969A9E", textTransform: "uppercase", letterSpacing: "0.5px", borderBottom: "1px solid #ECECEE", background: "#FAFAFA", whiteSpace: "nowrap" },
   td: { padding: "13px 16px", borderBottom: "1px solid #F2F2F3", color: "#46484C", verticalAlign: "middle" },
-  dataChip: { fontVariantNumeric: "tabular-nums", fontWeight: 700, color: "#C97A1A", fontSize: 13 },
+  dataChip: { fontVariantNumeric: "tabular-nums", fontWeight: 700, color: "#4F46E5", fontSize: 13 },
   colabTag: { display: "inline-flex", alignItems: "center", gap: 8, fontWeight: 600, color: "#2E2F32" },
-  colabDot: { width: 24, height: 24, borderRadius: 7, background: "linear-gradient(135deg,#F39200,#C97A1A)", color: "#fff", fontSize: 10, fontWeight: 700, display: "grid", placeItems: "center", flexShrink: 0 },
+  colabDot: { width: 24, height: 24, borderRadius: 7, background: "linear-gradient(135deg,#6366F1 0%,#7C5CF0 55%,#4F46E5 100%)", color: "#fff", fontSize: 10, fontWeight: 700, display: "grid", placeItems: "center", flexShrink: 0 },
   contact: { display: "flex", flexDirection: "column", gap: 1 },
   cMain: { fontSize: 12.5, color: "#46484C" },
   cSub: { fontSize: 12, color: "#969A9E" },
@@ -2069,16 +2067,16 @@ const SX = {
   input: { width: "100%", boxSizing: "border-box", height: 44, padding: "0 14px", border: "1px solid #DCDCDF", borderRadius: 11, fontSize: 14, fontFamily: "inherit", color: "#2A2B2E", outline: "none", background: "#fff", transition: "all .15s" },
   formActions: { display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 26 },
 
-  btnPrimary: { display: "inline-flex", alignItems: "center", gap: 8, background: "linear-gradient(120deg,#F39200,#E08200)", color: "#fff", border: "none", borderRadius: 12, padding: "0 20px", height: 44, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 4px 14px rgba(243,146,0,0.35)", transition: "all .15s" },
+  btnPrimary: { display: "inline-flex", alignItems: "center", gap: 8, background: "linear-gradient(120deg,#6366F1 0%,#7C5CF0 55%,#4F46E5 100%)", color: "#fff", border: "none", borderRadius: 12, padding: "0 20px", height: 44, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 4px 14px rgba(99,102,241,0.35)", transition: "all .15s" },
   btnGhost: { display: "inline-flex", alignItems: "center", gap: 8, background: "#fff", color: "#5C5E62", border: "1px solid #DCDCDF", borderRadius: 12, padding: "0 18px", height: 44, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", transition: "all .15s" },
 
-  newUserCard: { background: "#fff", borderRadius: 18, border: "1px solid #F2E6D2", padding: 26, marginBottom: 22, boxShadow: "0 8px 28px rgba(243,146,0,0.1)" },
+  newUserCard: { background: "#fff", borderRadius: 18, border: "1px solid #F2E6D2", padding: 26, marginBottom: 22, boxShadow: "0 8px 28px rgba(99,102,241,0.1)" },
   newUserTitle: { display: "flex", alignItems: "center", gap: 9, fontSize: 16, fontWeight: 700, color: "#2A2B2E", marginBottom: 20 },
   newUserGrid: { display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, marginBottom: 20 },
   permLabel: { fontSize: 12.5, fontWeight: 700, color: "#82848A", textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 12 },
   permGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 10 },
   permChk: { display: "flex", alignItems: "center", gap: 9, fontSize: 13.5, color: "#46484C", fontWeight: 500, cursor: "pointer", padding: "8px 0" },
-  checkbox: { width: 17, height: 17, accentColor: "#F39200", cursor: "pointer" },
+  checkbox: { width: 17, height: 17, accentColor: "#6366F1", cursor: "pointer" },
 
   userGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(420px,1fr))", gap: 15 },
   userBlock: { background: "#fff", borderRadius: 18, border: "1px solid #ECECEE", padding: "20px 22px", boxShadow: "0 1px 3px rgba(60,55,45,0.04)", transition: "all .2s" },
@@ -2088,21 +2086,21 @@ const SX = {
   userBlockLogin: { fontSize: 12.5, color: "#969A9E", marginTop: 2, fontWeight: 500 },
   miniBtn: { width: 32, height: 32, borderRadius: 9, border: "1px solid #DCDCDF", background: "#fff", color: "#5C5E62", cursor: "pointer", display: "grid", placeItems: "center", padding: 0 },
   miniBtnDel: { width: 32, height: 32, borderRadius: 9, border: "1px solid #F3D7D8", background: "#fff", color: "#E5484D", cursor: "pointer", display: "grid", placeItems: "center", padding: 0 },
-  adminNote: { display: "inline-flex", alignItems: "center", gap: 7, fontSize: 13, fontWeight: 600, color: "#C97A1A", background: "rgba(243,146,0,0.1)", padding: "8px 14px", borderRadius: 10 },
+  adminNote: { display: "inline-flex", alignItems: "center", gap: 7, fontSize: 13, fontWeight: 600, color: "#4F46E5", background: "rgba(99,102,241,0.1)", padding: "8px 14px", borderRadius: 10 },
   permRow: { display: "flex", flexWrap: "wrap", gap: 7 },
   permPill: { display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, fontWeight: 600, padding: "6px 11px", borderRadius: 9, border: "1px solid #E6E6E9", background: "#F8F8F9", color: "#969A9E", cursor: "pointer", fontFamily: "inherit", transition: "all .15s" },
-  permPillOn: { background: "rgba(243,146,0,0.1)", color: "#C97A1A", borderColor: "rgba(243,146,0,0.35)" },
+  permPillOn: { background: "rgba(99,102,241,0.1)", color: "#4F46E5", borderColor: "rgba(99,102,241,0.35)" },
 
   savedMsg: { display: "inline-flex", alignItems: "center", gap: 7, color: "#12A150", fontSize: 14, fontWeight: 600 },
-  configNote: { display: "flex", gap: 11, marginTop: 18, padding: "16px 18px", background: "rgba(243,146,0,0.05)", border: "1px solid rgba(243,146,0,0.16)", borderRadius: 14, fontSize: 13.5, color: "#4C4E52", lineHeight: 1.55, maxWidth: 880 },
+  configNote: { display: "flex", gap: 11, marginTop: 18, padding: "16px 18px", background: "rgba(99,102,241,0.05)", border: "1px solid rgba(99,102,241,0.16)", borderRadius: 14, fontSize: 13.5, color: "#4C4E52", lineHeight: 1.55, maxWidth: 880 },
 
   empty: { background: "#fff", borderRadius: 20, border: "1px dashed #DCDCDF", padding: "56px 24px", textAlign: "center", maxWidth: 540, margin: "20px auto" },
-  emptyIcon: { width: 72, height: 72, borderRadius: 20, background: "rgba(243,146,0,0.09)", display: "grid", placeItems: "center", margin: "0 auto 18px" },
+  emptyIcon: { width: 72, height: 72, borderRadius: 20, background: "rgba(99,102,241,0.09)", display: "grid", placeItems: "center", margin: "0 auto 18px" },
   emptyTitle: { margin: 0, fontSize: 20, fontWeight: 800, color: "#2A2B2E" },
   emptyText: { margin: "10px 0 0", color: "#82848A", fontSize: 14.5, lineHeight: 1.6 },
 
   loginWrap: { minHeight: "100vh", background: "linear-gradient(135deg,#2C2D30 0%,#3E3F42 50%,#4A3A22 100%)", display: "grid", placeItems: "center", fontFamily: "'Plus Jakarta Sans',system-ui,sans-serif", position: "relative", overflow: "hidden", padding: 20 },
-  loginGlow: { position: "absolute", top: "18%", left: "50%", transform: "translateX(-50%)", width: 600, height: 600, background: "radial-gradient(circle,rgba(243,146,0,0.22),transparent 65%)", pointerEvents: "none" },
+  loginGlow: { position: "absolute", top: "18%", left: "50%", transform: "translateX(-50%)", width: 600, height: 600, background: "radial-gradient(circle,rgba(99,102,241,0.22),transparent 65%)", pointerEvents: "none" },
   loginCard: { background: "rgba(255,255,255,0.98)", borderRadius: 24, padding: "40px 38px", width: "100%", maxWidth: 410, boxShadow: "0 30px 80px rgba(0,0,0,0.4)", position: "relative", zIndex: 1, border: "1px solid rgba(255,255,255,0.5)" },
   loginSub: { textAlign: "center", color: "#82848A", fontSize: 14, margin: "12px 0 0", fontWeight: 500 },
   loginLabel: { display: "block", fontSize: 13, fontWeight: 600, color: "#5C5E62", marginBottom: 8 },
@@ -2110,27 +2108,27 @@ const SX = {
   loginInput: { border: "none", outline: "none", background: "transparent", flex: 1, fontSize: 14.5, fontFamily: "inherit", color: "#2A2B2E" },
   eyeBtn: { border: "none", background: "transparent", color: "#A0A2A6", cursor: "pointer", padding: 4, display: "grid", placeItems: "center" },
   loginErr: { display: "flex", alignItems: "center", gap: 7, color: "#E5484D", fontSize: 13, fontWeight: 600, marginTop: 14, justifyContent: "center" },
-  loginBtn: { width: "100%", marginTop: 22, height: 50, background: "linear-gradient(120deg,#F39200,#E08200)", color: "#fff", border: "none", borderRadius: 13, fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, boxShadow: "0 10px 28px rgba(243,146,0,0.4)", transition: "transform .15s" },
-  loginHint: { marginTop: 24, padding: "13px 15px", background: "rgba(243,146,0,0.07)", border: "1px solid rgba(243,146,0,0.16)", borderRadius: 12, fontSize: 12.5, color: "#6E6A62", lineHeight: 1.6, textAlign: "center" },
-  code: { background: "#2C2D30", color: "#F8B14E", padding: "1px 7px", borderRadius: 6, fontSize: 12, fontFamily: "monospace", fontWeight: 600 },
+  loginBtn: { width: "100%", marginTop: 22, height: 50, background: "linear-gradient(120deg,#6366F1 0%,#7C5CF0 55%,#4F46E5 100%)", color: "#fff", border: "none", borderRadius: 13, fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, boxShadow: "0 10px 28px rgba(99,102,241,0.4)", transition: "transform .15s" },
+  loginHint: { marginTop: 24, padding: "13px 15px", background: "rgba(99,102,241,0.07)", border: "1px solid rgba(99,102,241,0.16)", borderRadius: 12, fontSize: 12.5, color: "#6E6A62", lineHeight: 1.6, textAlign: "center" },
+  code: { background: "#2C2D30", color: "#818CF8", padding: "1px 7px", borderRadius: 6, fontSize: 12, fontFamily: "monospace", fontWeight: 600 },
   loginFoot: { position: "absolute", bottom: 22, color: "rgba(255,255,255,0.4)", fontSize: 12.5, zIndex: 1 },
 
-  onbIcon: { width: 52, height: 52, borderRadius: 16, background: "rgba(243,146,0,0.1)", display: "grid", placeItems: "center", margin: "18px auto 0" },
+  onbIcon: { width: 52, height: 52, borderRadius: 16, background: "rgba(99,102,241,0.1)", display: "grid", placeItems: "center", margin: "18px auto 0" },
   onbTitle: { textAlign: "center", fontSize: 23, fontWeight: 800, color: "#2A2B2E", margin: "14px 0 0" },
   onbText: { textAlign: "center", color: "#82848A", fontSize: 14, lineHeight: 1.55, margin: "10px 0 0" },
   onbHint: { textAlign: "center", color: "#A0A2A6", fontSize: 12.5, marginTop: 16 },
 
   // ---- WhatsApp ----
-  btnPrimarySm: { display: "inline-flex", alignItems: "center", gap: 7, background: "linear-gradient(120deg,#F39200,#E08200)", color: "#fff", border: "none", borderRadius: 10, padding: "0 14px", height: 38, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 4px 12px rgba(243,146,0,0.3)", whiteSpace: "nowrap" },
+  btnPrimarySm: { display: "inline-flex", alignItems: "center", gap: 7, background: "linear-gradient(120deg,#6366F1 0%,#7C5CF0 55%,#4F46E5 100%)", color: "#fff", border: "none", borderRadius: 10, padding: "0 14px", height: 38, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 4px 12px rgba(99,102,241,0.3)", whiteSpace: "nowrap" },
   waWrap: { display: "grid", gridTemplateColumns: "360px 1fr", height: "calc(100vh - 116px)", minHeight: 480, borderRadius: 16, overflow: "hidden", border: "1px solid var(--line)", background: "var(--card)", boxShadow: "0 10px 40px -12px rgba(0,0,0,0.18)" },
   waList: { display: "flex", flexDirection: "column", borderRight: "1px solid var(--line)", minWidth: 0, background: "var(--card)" },
   waListHead: { display: "flex", alignItems: "center", gap: 8, padding: "16px 18px", fontWeight: 700, fontSize: 14, color: "var(--text)", borderBottom: "1px solid var(--line)" },
-  waCount: { marginLeft: "auto", fontSize: 12, fontWeight: 700, color: "#fff", background: "#F39200", borderRadius: 20, padding: "1px 9px" },
+  waCount: { marginLeft: "auto", fontSize: 12, fontWeight: 700, color: "#fff", background: "#6366F1", borderRadius: 20, padding: "1px 9px" },
   waListScroll: { flex: 1, overflowY: "auto" },
   waEmpty: { padding: "36px 20px", textAlign: "center", color: "var(--muted)", fontSize: 14, display: "flex", flexDirection: "column", alignItems: "center" },
   waChatItem: { display: "flex", alignItems: "center", gap: 11, width: "100%", padding: "12px 16px", border: "none", borderBottom: "1px solid var(--line)", background: "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left", transition: "background .12s" },
-  waChatItemActive: { background: "rgba(243,146,0,0.1)" },
-  waAvatar: { width: 42, height: 42, borderRadius: 12, background: "linear-gradient(135deg,#F39200,#C97A1A)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 700, fontSize: 14, flexShrink: 0 },
+  waChatItemActive: { background: "rgba(99,102,241,0.1)" },
+  waAvatar: { width: 42, height: 42, borderRadius: 12, background: "linear-gradient(135deg,#6366F1 0%,#7C5CF0 55%,#4F46E5 100%)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 700, fontSize: 14, flexShrink: 0 },
   waChatName: { fontSize: 14, fontWeight: 700, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
   waChatPreview: { fontSize: 12.5, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginTop: 2 },
   waBadge: { fontSize: 11, fontWeight: 700, color: "#fff", background: "#12A150", borderRadius: 20, padding: "1px 7px", flexShrink: 0 },
@@ -2142,12 +2140,12 @@ const SX = {
   waBubble: { position: "relative", maxWidth: "65%", padding: "7px 11px 7px 12px", borderRadius: 12, fontSize: 14.2, lineHeight: 1.4, wordBreak: "break-word", boxShadow: "0 1px 1px rgba(0,0,0,0.08)", display: "flex", alignItems: "flex-end", gap: 8 },
   waBubbleText: { whiteSpace: "pre-wrap" },
   waBubbleThem: { background: "var(--wa-bubble-them)", color: "var(--text)", borderTopLeftRadius: 3 },
-  waBubbleMe: { background: "linear-gradient(135deg,#F8A93C,#E08200)", color: "#fff", borderTopRightRadius: 3 },
+  waBubbleMe: { background: "linear-gradient(135deg,#F8A93C,#4F46E5)", color: "#fff", borderTopRightRadius: 3 },
   waTime: { fontSize: 10, fontWeight: 500, flexShrink: 0, alignSelf: "flex-end", marginBottom: 1, whiteSpace: "nowrap" },
   waInputBar: { display: "flex", alignItems: "center", gap: 8, padding: "12px 16px", borderTop: "1px solid var(--line)", background: "var(--card)" },
   waIconBtn: { width: 42, height: 42, borderRadius: 12, border: "none", background: "transparent", color: "var(--muted)", cursor: "pointer", display: "grid", placeItems: "center", flexShrink: 0 },
   waInput: { flex: 1, border: "1px solid var(--line)", borderRadius: 22, padding: "0 18px", height: 44, fontSize: 14.2, fontFamily: "inherit", background: "var(--bg)", color: "var(--text)", outline: "none" },
-  waSendBtn: { width: 46, height: 46, borderRadius: "50%", border: "none", background: "linear-gradient(135deg,#F39200,#E08200)", color: "#fff", cursor: "pointer", display: "grid", placeItems: "center", boxShadow: "0 4px 12px rgba(243,146,0,0.35)", flexShrink: 0 },
+  waSendBtn: { width: 46, height: 46, borderRadius: "50%", border: "none", background: "linear-gradient(135deg,#6366F1 0%,#7C5CF0 55%,#4F46E5 100%)", color: "#fff", cursor: "pointer", display: "grid", placeItems: "center", boxShadow: "0 4px 12px rgba(99,102,241,0.35)", flexShrink: 0 },
   waRecBtn: { background: "linear-gradient(135deg,#E5484D,#C1383C)", boxShadow: "0 4px 12px rgba(229,72,77,0.4)" },
   waRecBar: { display: "flex", alignItems: "center", gap: 8, padding: "8px 18px", fontSize: 13, fontWeight: 600, color: "#E5484D", background: "var(--card)", borderTop: "1px solid var(--line)" },
   waRecDot: { width: 10, height: 10, borderRadius: "50%", background: "#E5484D", animation: "pulse 1s infinite" },
@@ -2155,39 +2153,39 @@ const SX = {
   emojiPanel: { display: "flex", flexWrap: "wrap", gap: 2, padding: "10px 14px", borderTop: "1px solid var(--line)", background: "var(--card)", maxHeight: 140, overflowY: "auto" },
   emojiBtn: { border: "none", background: "transparent", cursor: "pointer", fontSize: 22, lineHeight: 1, padding: "5px 6px", borderRadius: 8 },
   waOk: { display: "inline-flex", alignItems: "center", gap: 7, color: "#12A150", fontSize: 14, fontWeight: 600 },
-  waWebhookBox: { marginTop: 8, padding: "16px 18px", background: "rgba(243,146,0,0.05)", border: "1px solid rgba(243,146,0,0.16)", borderRadius: 14 },
-  waCode: { display: "block", background: "#2C2D30", color: "#F8B14E", padding: "10px 13px", borderRadius: 9, fontSize: 12.5, fontFamily: "monospace", fontWeight: 600, wordBreak: "break-all", lineHeight: 1.5 },
+  waWebhookBox: { marginTop: 8, padding: "16px 18px", background: "rgba(99,102,241,0.05)", border: "1px solid rgba(99,102,241,0.16)", borderRadius: 14 },
+  waCode: { display: "block", background: "#2C2D30", color: "#818CF8", padding: "10px 13px", borderRadius: 9, fontSize: 12.5, fontFamily: "monospace", fontWeight: 600, wordBreak: "break-all", lineHeight: 1.5 },
   // busca + filtro
   waSearchWrap: { display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "1px solid var(--line)" },
   waSearchInput: { flex: 1, border: "none", outline: "none", background: "transparent", fontSize: 13.5, fontFamily: "inherit", color: "var(--text)" },
   waSearchClear: { border: "none", background: "transparent", color: "var(--muted)", cursor: "pointer", padding: 2, display: "grid", placeItems: "center" },
   waFunil: { position: "relative", width: 34, height: 34, borderRadius: 9, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", cursor: "pointer", display: "grid", placeItems: "center", padding: 0 },
-  waNovaBtn: { width: 34, height: 34, borderRadius: 9, border: "none", background: "linear-gradient(135deg,#F39200,#E08200)", color: "#fff", cursor: "pointer", display: "grid", placeItems: "center", padding: 0, boxShadow: "0 3px 10px rgba(243,146,0,0.3)" },
+  waNovaBtn: { width: 34, height: 34, borderRadius: 9, border: "none", background: "linear-gradient(135deg,#6366F1 0%,#7C5CF0 55%,#4F46E5 100%)", color: "#fff", cursor: "pointer", display: "grid", placeItems: "center", padding: 0, boxShadow: "0 3px 10px rgba(99,102,241,0.3)" },
   waZonaLimpeza: { marginTop: 20, padding: 18, borderRadius: 14, border: "1px solid rgba(192,57,43,0.25)", background: "rgba(192,57,43,0.035)" },
   waInstRow: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", background: "var(--card)" },
   waInstDot: { width: 9, height: 9, borderRadius: "50%", flexShrink: 0 },
   waInstDel: { display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 12px", borderRadius: 8, border: "1px solid rgba(192,57,43,0.3)", background: "transparent", color: "#C0392B", cursor: "pointer", fontSize: 12.5, fontWeight: 600, fontFamily: "inherit", flexShrink: 0 },
   waRefreshInst: { display: "inline-flex", alignItems: "center", gap: 5, border: "none", background: "transparent", color: "var(--muted)", cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: "inherit", padding: 0 },
   waLimparConv: { width: "100%", padding: "11px", borderRadius: 10, border: "1px solid rgba(192,57,43,0.35)", background: "rgba(192,57,43,0.06)", color: "#C0392B", cursor: "pointer", fontSize: 13.5, fontWeight: 700, fontFamily: "inherit" },
-  waFunilOn: { background: "rgba(243,146,0,0.12)", color: "#C97A1A", borderColor: "rgba(243,146,0,0.4)" },
-  waFunilDot: { position: "absolute", top: -3, right: -3, width: 9, height: 9, borderRadius: "50%", background: "#F39200", border: "2px solid var(--card)" },
+  waFunilOn: { background: "rgba(99,102,241,0.12)", color: "#4F46E5", borderColor: "rgba(99,102,241,0.4)" },
+  waFunilDot: { position: "absolute", top: -3, right: -3, width: 9, height: 9, borderRadius: "50%", background: "#6366F1", border: "2px solid var(--card)" },
   waFunilBackdrop: { position: "fixed", inset: 0, zIndex: 40 },
   waFunilMenu: { position: "absolute", top: "calc(100% + 8px)", right: 0, width: 250, background: "var(--card)", border: "1px solid var(--line)", borderRadius: 14, boxShadow: "0 16px 44px -10px rgba(0,0,0,0.3)", padding: 8, zIndex: 41 },
   waFunilTitle: { fontSize: 11.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.4px", padding: "6px 10px 8px" },
   waFunilItem: { display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "9px 10px", border: "none", background: "transparent", color: "var(--text)", cursor: "pointer", fontFamily: "inherit", fontSize: 13.5, fontWeight: 600, borderRadius: 9, textAlign: "left" },
-  waFunilItemOn: { background: "rgba(243,146,0,0.08)" },
-  waFunilAvatar: { width: 26, height: 26, borderRadius: 8, background: "linear-gradient(135deg,#F39200,#C97A1A)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 700, fontSize: 12, flexShrink: 0 },
-  waFiltroAtivo: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 14px", fontSize: 12.5, color: "var(--text)", background: "rgba(243,146,0,0.06)", borderBottom: "1px solid var(--line)" },
-  waFiltroLimpar: { display: "inline-flex", alignItems: "center", gap: 3, border: "none", background: "transparent", color: "#C97A1A", cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "inherit" },
+  waFunilItemOn: { background: "rgba(99,102,241,0.08)" },
+  waFunilAvatar: { width: 26, height: 26, borderRadius: 8, background: "linear-gradient(135deg,#6366F1 0%,#7C5CF0 55%,#4F46E5 100%)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 700, fontSize: 12, flexShrink: 0 },
+  waFiltroAtivo: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 14px", fontSize: 12.5, color: "var(--text)", background: "rgba(99,102,241,0.06)", borderBottom: "1px solid var(--line)" },
+  waFiltroLimpar: { display: "inline-flex", alignItems: "center", gap: 3, border: "none", background: "transparent", color: "#4F46E5", cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "inherit" },
   waAtendenteTag: { fontSize: 10, fontWeight: 600, color: "var(--muted)", background: "var(--bg)", border: "1px solid var(--line)", borderRadius: 6, padding: "1px 6px", whiteSpace: "nowrap", maxWidth: 90, overflow: "hidden", textOverflow: "ellipsis" },
-  waConvoAtendente: { marginLeft: 8, color: "#C97A1A", fontWeight: 600 },
+  waConvoAtendente: { marginLeft: 8, color: "#4F46E5", fontWeight: 600 },
   // config multi-instância
   waCfgTitle: { display: "flex", alignItems: "center", gap: 8, fontSize: 14.5, fontWeight: 700, color: "var(--text)", marginBottom: 4 },
   waCfgHint: { fontSize: 12.5, color: "var(--muted)", lineHeight: 1.5 },
   waCfgRow: { display: "flex", gap: 12, alignItems: "flex-end", padding: "14px", borderRadius: 12, border: "1px solid var(--line)", background: "var(--bg)" },
   waCfgLabel: { display: "block", fontSize: 12, fontWeight: 600, color: "var(--muted)", marginBottom: 6 },
   waCfgDel: { width: 44, height: 44, borderRadius: 10, border: "1px solid #F3D7D8", background: "transparent", color: "#E5484D", cursor: "pointer", display: "grid", placeItems: "center", flexShrink: 0 },
-  waConnectBtn: { display: "inline-flex", alignItems: "center", gap: 6, background: "linear-gradient(120deg,#F39200,#E08200)", color: "#fff", border: "none", borderRadius: 10, padding: "0 14px", height: 44, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", flexShrink: 0 },
+  waConnectBtn: { display: "inline-flex", alignItems: "center", gap: 6, background: "linear-gradient(120deg,#6366F1 0%,#7C5CF0 55%,#4F46E5 100%)", color: "#fff", border: "none", borderRadius: 10, padding: "0 14px", height: 44, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", flexShrink: 0 },
   waDisconnectBtn: { display: "inline-flex", alignItems: "center", gap: 6, background: "transparent", color: "#E5484D", border: "1px solid #F3D7D8", borderRadius: 10, padding: "0 14px", height: 44, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", flexShrink: 0 },
   waStatusLine: { display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: "var(--muted)", marginTop: 6 },
   waStatusDot: { width: 8, height: 8, borderRadius: "50%", flexShrink: 0 },
@@ -2198,7 +2196,7 @@ const SX = {
   qrImg: { width: 260, height: 260, borderRadius: 12, background: "#fff", padding: 8, display: "block", margin: "0 auto" },
   qrLoading: { width: 260, height: 260, borderRadius: 12, background: "var(--bg)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", margin: "0 auto", color: "var(--muted)" },
   qrSuccessIcon: { width: 72, height: 72, borderRadius: "50%", background: "rgba(18,161,80,0.12)", color: "#12A150", display: "grid", placeItems: "center", margin: "0 auto" },
-  waNoInst: { display: "flex", alignItems: "center", gap: 10, padding: "14px 18px", background: "rgba(243,146,0,0.08)", border: "1px solid rgba(243,146,0,0.2)", borderRadius: 12, fontSize: 13.5, color: "var(--text)", marginBottom: 16 },
+  waNoInst: { display: "flex", alignItems: "center", gap: 10, padding: "14px 18px", background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.2)", borderRadius: 12, fontSize: 13.5, color: "var(--text)", marginBottom: 16 },
 };
 
 const CSS = `
@@ -2221,8 +2219,8 @@ body { margin: 0; }
   --table-head: rgba(255,255,255,0.03);
   --input-bg: rgba(255,255,255,0.04);
   --shadow: 0 18px 50px -12px rgba(0,0,0,0.6);
-  --mesh-1: rgba(243,146,0,0.14);
-  --mesh-2: rgba(255,160,60,0.07);
+  --mesh-1: rgba(99,102,241,0.16);
+  --mesh-2: rgba(139,92,246,0.09);
   --line: rgba(255,255,255,0.08);
   --muted: #A0A3AB;
   --wa-chat-bg: #0E0F13;
@@ -2230,25 +2228,25 @@ body { margin: 0; }
   --wa-bubble-them: #1E2025;
 }
 .theme-light {
-  --bg: #F7F6F3;
+  --bg: #F5F6FA;
   --bg-2: #FFFFFF;
   --card: #FFFFFF;
   --card-solid: #FFFFFF;
   --card-hi: #FFFFFF;
-  --border: #EBE9E4;
-  --border-hi: #DEDBD4;
-  --text: #1E2024;
-  --text-soft: #6B6F78;
-  --text-faint: #9CA0A8;
-  --table-head: #FAF9F7;
+  --border: #E6E8F0;
+  --border-hi: #D6D9E6;
+  --text: #161A23;
+  --text-soft: #5A6072;
+  --text-faint: #98A0B3;
+  --table-head: #F8F9FC;
   --input-bg: #FFFFFF;
-  --shadow: 0 14px 40px -16px rgba(60,55,45,0.18);
-  --mesh-1: rgba(243,146,0,0.10);
-  --mesh-2: rgba(255,160,60,0.05);
-  --line: #EBE9E4;
-  --muted: #6B6F78;
-  --wa-chat-bg: #EDE6DD;
-  --wa-chat-dot: rgba(120,100,70,0.06);
+  --shadow: 0 18px 50px -18px rgba(40,44,70,0.22);
+  --mesh-1: rgba(99,102,241,0.12);
+  --mesh-2: rgba(139,92,246,0.08);
+  --line: #E6E8F0;
+  --muted: #5A6072;
+  --wa-chat-bg: #EEF0F6;
+  --wa-chat-dot: rgba(80,90,130,0.07);
   --wa-bubble-them: #FFFFFF;
 }
 
@@ -2296,7 +2294,7 @@ main p { color: var(--text-soft); }
 }
 .card-hover { transition: transform .26s cubic-bezier(.2,.7,.3,1), box-shadow .26s, border-color .26s; }
 .card-hover:hover { transform: translateY(-3px); border-color: var(--border-hi) !important; }
-.theme-dark .card-hover:hover { box-shadow: 0 24px 60px -14px rgba(0,0,0,0.7), 0 0 0 1px rgba(243,146,0,0.12) !important; }
+.theme-dark .card-hover:hover { box-shadow: 0 24px 60px -14px rgba(0,0,0,0.7), 0 0 0 1px rgba(99,102,241,0.12) !important; }
 .theme-light .card-hover:hover { box-shadow: 0 22px 55px -16px rgba(60,55,45,0.24) !important; }
 
 /* inputs refinados */
@@ -2304,7 +2302,7 @@ main p { color: var(--text-soft); }
 .theme-light input, .theme-light select, .theme-light textarea { background: var(--input-bg) !important; border-color: var(--border) !important; color: var(--text) !important; }
 .theme-dark input::placeholder, .theme-dark textarea::placeholder { color: #5E626B !important; }
 input, select, textarea { border-radius: 12px !important; transition: all .18s !important; }
-input:focus, textarea:focus, select:focus { border-color: #F39200 !important; box-shadow: 0 0 0 3.5px rgba(243,146,0,0.16) !important; outline: none; }
+input:focus, textarea:focus, select:focus { border-color: #6366F1 !important; box-shadow: 0 0 0 3.5px rgba(99,102,241,0.16) !important; outline: none; }
 
 /* tabelas */
 .theme-dark table thead th { background: var(--table-head) !important; color: var(--text-soft) !important; border-color: var(--border) !important; }
@@ -2313,8 +2311,8 @@ input:focus, textarea:focus, select:focus { border-color: #F39200 !important; bo
 .theme-light .trow:hover td { background: var(--table-head); }
 
 /* botões */
-.btn-primary { border-radius: 13px !important; background: linear-gradient(120deg,#FF9D2E,#E07B00) !important; box-shadow: 0 6px 20px -4px rgba(243,146,0,0.5) !important; transition: all .22s cubic-bezier(.2,.7,.3,1) !important; }
-.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 12px 30px -6px rgba(243,146,0,0.6) !important; filter: brightness(1.05); }
+.btn-primary { border-radius: 13px !important; background: linear-gradient(120deg,#6366F1 0%,#7C5CF0 55%,#4F46E5 100%) !important; box-shadow: 0 6px 20px -4px rgba(99,102,241,0.5) !important; transition: all .22s cubic-bezier(.2,.7,.3,1) !important; }
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 12px 30px -6px rgba(99,102,241,0.6) !important; filter: brightness(1.05); }
 .theme-dark .btn-ghost { background: var(--card) !important; border: 1px solid var(--border) !important; color: var(--text-soft) !important; border-radius: 13px !important; }
 .theme-dark .btn-ghost:hover { background: rgba(255,255,255,0.06) !important; color: var(--text) !important; }
 .btn-ghost { border-radius: 13px !important; }
@@ -2323,7 +2321,7 @@ input:focus, textarea:focus, select:focus { border-color: #F39200 !important; bo
 /* chips de filtro */
 .filter-chip { border-radius: 13px !important; transition: all .18s !important; }
 .theme-dark .filter-chip { background: var(--card) !important; border: 1px solid var(--border) !important; color: var(--text-soft) !important; }
-.filter-chip:hover { border-color: #F39200 !important; color: #F39200 !important; }
+.filter-chip:hover { border-color: #6366F1 !important; color: #6366F1 !important; }
 
 /* tarefas */
 .theme-dark .task-card { background: var(--card) !important; border: 1px solid var(--border) !important; backdrop-filter: blur(14px); box-shadow: var(--shadow) !important; border-radius: 18px !important; }
@@ -2332,10 +2330,10 @@ input:focus, textarea:focus, select:focus { border-color: #F39200 !important; bo
 .task-check:hover { background: rgba(45,212,160,0.14) !important; color: #2DD4A0 !important; }
 
 /* IA */
-.theme-dark .ai-actions { background: linear-gradient(135deg, rgba(243,146,0,0.10), rgba(243,146,0,0.04)) !important; border: 1px solid rgba(243,146,0,0.2) !important; border-radius: 20px !important; }
+.theme-dark .ai-actions { background: linear-gradient(135deg, rgba(99,102,241,0.10), rgba(99,102,241,0.04)) !important; border: 1px solid rgba(99,102,241,0.2) !important; border-radius: 20px !important; }
 .theme-dark .ai-hl { background: rgba(255,255,255,0.035) !important; border-radius: 16px !important; }
 .theme-dark .ai-action-item { color: var(--text) !important; }
-.theme-dark .feedback-box { background: linear-gradient(135deg, rgba(243,146,0,0.10), rgba(243,146,0,0.05)) !important; border: 1px solid rgba(243,146,0,0.22) !important; border-radius: 20px !important; }
+.theme-dark .feedback-box { background: linear-gradient(135deg, rgba(99,102,241,0.10), rgba(99,102,241,0.05)) !important; border: 1px solid rgba(99,102,241,0.22) !important; border-radius: 20px !important; }
 .theme-dark .feedback-box p { color: #E9C9A0 !important; }
 .theme-dark .panel { color: var(--text); }
 
@@ -2350,10 +2348,10 @@ input:focus, textarea:focus, select:focus { border-color: #F39200 !important; bo
 .theme-dark ::-webkit-scrollbar-thumb { background: #2C2E34; border-radius: 8px; }
 .theme-light ::-webkit-scrollbar-thumb { background: #D6D4D0; border-radius: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb:hover { background: #F39200; }
+::-webkit-scrollbar-thumb:hover { background: #6366F1; }
 
 /* ======================= ANIMAÇÕES ======================= */
-.ai-dot { width: 7px; height: 7px; border-radius: 8px; background: linear-gradient(135deg,#FFB14E,#F39200); box-shadow: 0 0 10px rgba(243,146,0,0.9); animation: pulse 1.8s ease-in-out infinite; }
+.ai-dot { width: 7px; height: 7px; border-radius: 8px; background: linear-gradient(135deg,#FFB14E,#6366F1); box-shadow: 0 0 10px rgba(99,102,241,0.9); animation: pulse 1.8s ease-in-out infinite; }
 @keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.45; transform: scale(0.85); } }
 .pulse { animation: pulse 1.4s ease-in-out infinite; }
 .spin { display: inline-flex; animation: spin 1s linear infinite; }
