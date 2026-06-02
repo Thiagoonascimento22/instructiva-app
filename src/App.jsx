@@ -1195,6 +1195,60 @@ function WhatsAppConfig({ cfg, onBack }) {
     setInstancias((arr) => arr.filter((_, i) => i !== idx));
   }
 
+  // ---- conexão via QR ----
+  const [qrModal, setQrModal] = useState(null);   // { instance, qr, status }
+  const [qrLoading, setQrLoading] = useState(false);
+
+  async function conectar(nomeInstancia) {
+    const nome = (nomeInstancia || "").trim();
+    if (!nome) { alert("Preencha o nome da instância primeiro."); return; }
+    if (!url.trim()) { alert("Preencha o endereço da Evolution primeiro."); return; }
+    if (!cfg?.temApiKey && !apiKey.trim()) { alert("Preencha a chave da API primeiro."); return; }
+    // garante que a config (url/apiKey) está salva antes de conectar
+    setQrLoading(true);
+    setQrModal({ instance: nome, qr: null, status: "connecting" });
+    try {
+      // salva config primeiro (pra Evolution ter url/key/webhook)
+      const payloadCfg = { url, instancias: instancias.filter((i) => i.instance.trim()) };
+      if (apiKey.trim()) payloadCfg.apiKey = apiKey.trim();
+      await api.waSetConfig(payloadCfg);
+      // pede o QR
+      const r = await api.waConnectInstance(nome);
+      if (r.status === "open") {
+        setQrModal({ instance: nome, qr: null, status: "open" });
+      } else if (r.qr) {
+        setQrModal({ instance: nome, qr: r.qr, status: "connecting" });
+        iniciarChecagem(nome);
+      } else {
+        setQrModal({ instance: nome, qr: null, status: "connecting", aviso: r.aviso || "Aguardando QR…" });
+        // tenta de novo em 3s
+        setTimeout(() => conectar(nome), 3500);
+      }
+    } catch (e) {
+      alert(e.message);
+      setQrModal(null);
+    }
+    setQrLoading(false);
+  }
+
+  // fica checando se conectou; quando "open", fecha o modal
+  function iniciarChecagem(nome) {
+    let tentativas = 0;
+    const timer = setInterval(async () => {
+      tentativas++;
+      try {
+        const r = await api.waInstanceStatus(nome);
+        if (r.state === "open") {
+          clearInterval(timer);
+          setQrModal((m) => m ? { ...m, status: "open" } : m);
+        }
+      } catch {}
+      if (tentativas > 40) clearInterval(timer);  // ~2 min e para
+    }, 3000);
+  }
+
+  function fecharQr() { setQrModal(null); }
+
   async function salvar() {
     if (saving) return;
     setSaving(true);
@@ -1231,10 +1285,10 @@ function WhatsAppConfig({ cfg, onBack }) {
           {/* lista de WhatsApps (instâncias) */}
           <div>
             <div style={SX.waCfgTitle}>
-              <Phone size={15} /> WhatsApps conectados
+              <Phone size={15} /> WhatsApps das colaboradoras
             </div>
             <div style={SX.waCfgHint}>
-              Para cada WhatsApp, informe o nome da instância (igual ao criado na Evolution) e a colaboradora dona dele.
+              Para cada WhatsApp: escolha um nome (sem espaços, ex: <b>vitoria</b>), vincule a colaboradora e clique em <b>Conectar</b> para escanear o QR code.
             </div>
 
             <div style={{ display: "grid", gap: 12, marginTop: 14 }}>
@@ -1242,7 +1296,7 @@ function WhatsAppConfig({ cfg, onBack }) {
                 <div key={idx} style={SX.waCfgRow}>
                   <div style={{ flex: 1 }}>
                     <label style={SX.waCfgLabel}>Nome da instância</label>
-                    <input value={inst.instance} onChange={(e) => setInst(idx, "instance", e.target.value)} placeholder="ex: vitoria" style={SX.input} />
+                    <input value={inst.instance} onChange={(e) => setInst(idx, "instance", e.target.value.replace(/\s/g, ""))} placeholder="ex: vitoria" style={SX.input} />
                   </div>
                   <div style={{ flex: 1 }}>
                     <label style={SX.waCfgLabel}>Colaboradora</label>
@@ -1251,6 +1305,9 @@ function WhatsAppConfig({ cfg, onBack }) {
                       {colabs.map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
                     </select>
                   </div>
+                  <button onClick={() => conectar(inst.instance)} className="btn-primary" style={SX.waConnectBtn} title="Conectar / ver QR code">
+                    <MessageCircle size={15} /> Conectar
+                  </button>
                   {instancias.length > 1 && (
                     <button onClick={() => removeInst(idx)} style={SX.waCfgDel} title="Remover">
                       <Trash2 size={16} />
@@ -1273,15 +1330,54 @@ function WhatsAppConfig({ cfg, onBack }) {
 
           <div style={SX.waWebhookBox}>
             <div style={{ fontWeight: 600, marginBottom: 6, fontSize: 13 }}>
-              <Link2 size={14} style={{ verticalAlign: "middle" }} /> Endereço do Webhook
+              <CheckCircle2 size={14} style={{ verticalAlign: "middle", color: "#12A150" }} /> Webhook automático
             </div>
-            <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 8 }}>
-              Cole este endereço em <b>todas</b> as instâncias da sua Evolution (em Events → Webhook), marcando o evento <b>messages.upsert</b>:
+            <div style={{ fontSize: 12, opacity: 0.7 }}>
+              Quando você conecta um WhatsApp pelo botão acima, o sistema já configura tudo sozinho — não precisa mexer no painel da Evolution. 🎉
             </div>
-            <code style={SX.waCode}>{webhookUrl}</code>
           </div>
         </div>
       </div>
+
+      {/* MODAL DO QR CODE */}
+      {qrModal && (
+        <div style={SX.qrOverlay} onClick={(e) => { if (e.target === e.currentTarget) fecharQr(); }}>
+          <div style={SX.qrCard}>
+            <button onClick={fecharQr} style={SX.qrClose}><X size={18} /></button>
+            {qrModal.status === "open" ? (
+              <div style={{ textAlign: "center", padding: "20px 10px" }}>
+                <div style={SX.qrSuccessIcon}><CheckCircle2 size={40} /></div>
+                <h3 style={{ margin: "16px 0 6px", color: "var(--text)" }}>Conectado! 🎉</h3>
+                <p style={{ color: "var(--muted)", fontSize: 14, margin: 0 }}>
+                  O WhatsApp <b>{qrModal.instance}</b> foi conectado com sucesso.
+                </p>
+                <button onClick={fecharQr} className="btn-primary" style={{ ...SX.btnPrimary, marginTop: 20 }}>Fechar</button>
+              </div>
+            ) : (
+              <div style={{ textAlign: "center" }}>
+                <h3 style={{ margin: "0 0 4px", color: "var(--text)" }}>Conectar WhatsApp</h3>
+                <p style={{ color: "var(--muted)", fontSize: 13.5, marginTop: 0, marginBottom: 18 }}>
+                  Abra o WhatsApp no celular → <b>Aparelhos conectados</b> → <b>Conectar aparelho</b> → escaneie:
+                </p>
+                {qrModal.qr ? (
+                  <img src={qrModal.qr} alt="QR Code" style={SX.qrImg} />
+                ) : (
+                  <div style={SX.qrLoading}>
+                    <RefreshCw size={28} className="pulse" />
+                    <div style={{ marginTop: 10, fontSize: 13 }}>{qrModal.aviso || "Gerando QR code…"}</div>
+                  </div>
+                )}
+                <div style={{ marginTop: 16, fontSize: 12, color: "var(--muted)" }}>
+                  Esperando a leitura… isso atualiza sozinho quando conectar.
+                </div>
+                <button onClick={() => conectar(qrModal.instance)} className="btn-ghost" style={{ ...SX.btnGhost, marginTop: 14, height: 38 }}>
+                  <RefreshCw size={14} /> Gerar novo QR
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1564,6 +1660,14 @@ const SX = {
   waCfgRow: { display: "flex", gap: 12, alignItems: "flex-end", padding: "14px", borderRadius: 12, border: "1px solid var(--line)", background: "var(--bg)" },
   waCfgLabel: { display: "block", fontSize: 12, fontWeight: 600, color: "var(--muted)", marginBottom: 6 },
   waCfgDel: { width: 44, height: 44, borderRadius: 10, border: "1px solid #F3D7D8", background: "transparent", color: "#E5484D", cursor: "pointer", display: "grid", placeItems: "center", flexShrink: 0 },
+  waConnectBtn: { display: "inline-flex", alignItems: "center", gap: 6, background: "linear-gradient(120deg,#F39200,#E08200)", color: "#fff", border: "none", borderRadius: 10, padding: "0 14px", height: 44, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", flexShrink: 0 },
+  // modal QR
+  qrOverlay: { position: "fixed", inset: 0, background: "rgba(20,18,15,0.55)", backdropFilter: "blur(3px)", display: "grid", placeItems: "center", zIndex: 1000, padding: 20 },
+  qrCard: { position: "relative", background: "var(--card)", borderRadius: 20, padding: "32px 28px", maxWidth: 380, width: "100%", boxShadow: "0 30px 80px rgba(0,0,0,0.35)", border: "1px solid var(--line)" },
+  qrClose: { position: "absolute", top: 14, right: 14, width: 32, height: 32, borderRadius: 9, border: "none", background: "var(--bg)", color: "var(--muted)", cursor: "pointer", display: "grid", placeItems: "center" },
+  qrImg: { width: 260, height: 260, borderRadius: 12, background: "#fff", padding: 8, display: "block", margin: "0 auto" },
+  qrLoading: { width: 260, height: 260, borderRadius: 12, background: "var(--bg)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", margin: "0 auto", color: "var(--muted)" },
+  qrSuccessIcon: { width: 72, height: 72, borderRadius: "50%", background: "rgba(18,161,80,0.12)", color: "#12A150", display: "grid", placeItems: "center", margin: "0 auto" },
 };
 
 const CSS = `

@@ -543,6 +543,10 @@ app.put("/api/wa/config", requireAuth, (req, res) => {
   }
   // gera um token de webhook se ainda não tiver
   if (!db.waConfig.webhookToken) db.waConfig.webhookToken = crypto.randomBytes(12).toString("hex");
+  // guarda a URL pública do próprio sistema (para montar o webhook automaticamente)
+  const proto = req.headers["x-forwarded-proto"] || "https";
+  const host = req.headers["x-forwarded-host"] || req.headers.host;
+  if (host) db.waConfig.publicUrl = `${proto}://${host}`;
   saveDB(db);
   res.json({ ok: true, webhookToken: db.waConfig.webhookToken });
 });
@@ -575,6 +579,92 @@ app.get("/api/wa/chats/:numero", requireAuth, (req, res) => {
   chat.naoLidas = 0;
   saveDB(db);
   res.json({ chat });
+});
+
+// ---- criar instância + obter QR code (conecta um WhatsApp pelo sistema) ----
+app.post("/api/wa/instance/connect", requireAuth, async (req, res) => {
+  if (!req.isAdmin && !can(req, "gerir_usuarios")) return res.status(403).json({ error: "sem permissão" });
+  const { instance } = req.body;
+  const c = db.waConfig || {};
+  if (!c.url || !c.apiKey) return res.status(400).json({ error: "Configure a URL e a chave da Evolution primeiro" });
+  if (!instance || !String(instance).trim()) return res.status(400).json({ error: "informe o nome da instância" });
+  const nome = String(instance).trim();
+  // monta a URL do webhook (pra Evolution já avisar o sistema sozinha)
+  const base = c.publicUrl || "";
+  const webhookUrl = (base && c.webhookToken) ? `${base}/api/wa/webhook/${c.webhookToken}` : "";
+
+  try {
+    // 1) tenta criar a instância (se já existir, a Evolution retorna erro, e a gente segue pro connect)
+    const criarPayload = {
+      instanceName: nome,
+      integration: "WHATSAPP-BAILEYS",
+      qrcode: true,
+      groupsIgnore: true,
+    };
+    if (webhookUrl) {
+      criarPayload.webhook = { url: webhookUrl, byEvents: false, events: ["MESSAGES_UPSERT"] };
+    }
+    let createData = null;
+    const rc = await fetch(`${c.url}/instance/create`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "apikey": c.apiKey },
+      body: JSON.stringify(criarPayload),
+    });
+    createData = await rc.json().catch(() => ({}));
+    // se veio o QR já na criação, devolve direto
+    const qrFromCreate = createData?.qrcode?.base64 || null;
+    if (qrFromCreate) {
+      // garante o webhook setado (algumas versões ignoram no create)
+      if (webhookUrl) await setWebhook(c, nome, webhookUrl);
+      return res.json({ qr: qrFromCreate, status: "connecting" });
+    }
+
+    // 2) senão, chama o connect pra pegar o QR
+    if (webhookUrl) await setWebhook(c, nome, webhookUrl);
+    const rq = await fetch(`${c.url}/instance/connect/${nome}`, {
+      method: "GET",
+      headers: { "apikey": c.apiKey },
+    });
+    const qrData = await rq.json().catch(() => ({}));
+    const qr = qrData?.base64 || qrData?.qrcode?.base64 || null;
+    if (qr) return res.json({ qr, status: "connecting" });
+
+    // já conectado?
+    if (qrData?.instance?.state === "open" || createData?.instance?.state === "open") {
+      return res.json({ qr: null, status: "open" });
+    }
+    return res.json({ qr: null, status: "connecting", aviso: "QR não retornado ainda, tente novamente em alguns segundos." });
+  } catch (e) {
+    console.error("Erro ao conectar instância:", e.message);
+    res.status(502).json({ error: "não foi possível falar com a Evolution" });
+  }
+});
+
+// helper: configura o webhook de uma instância na Evolution
+async function setWebhook(c, nome, webhookUrl) {
+  try {
+    await fetch(`${c.url}/webhook/set/${nome}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "apikey": c.apiKey },
+      body: JSON.stringify({ webhook: { enabled: true, url: webhookUrl, webhookByEvents: false, events: ["MESSAGES_UPSERT"] } }),
+    });
+  } catch (e) { /* não bloqueia o fluxo */ }
+}
+
+// ---- checar status de conexão de uma instância ----
+app.get("/api/wa/instance/status/:nome", requireAuth, async (req, res) => {
+  const c = db.waConfig || {};
+  if (!c.url || !c.apiKey) return res.status(400).json({ error: "não configurado" });
+  try {
+    const r = await fetch(`${c.url}/instance/connectionState/${req.params.nome}`, {
+      method: "GET", headers: { "apikey": c.apiKey },
+    });
+    const data = await r.json().catch(() => ({}));
+    const state = data?.instance?.state || data?.state || "unknown";
+    res.json({ state });   // "open" = conectado, "connecting", "close"
+  } catch (e) {
+    res.json({ state: "unknown" });
+  }
 });
 
 // ---- enviar mensagem (pela Evolution) ----

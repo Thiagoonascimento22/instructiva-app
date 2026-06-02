@@ -54,4 +54,6 @@ export const api = {
   waListChats: (instance) => req("GET", "/wa/chats" + (instance ? "?instance=" + encodeURIComponent(instance) : "")),
   waGetChat: (numero) => req("GET", "/wa/chats/" + numero),
   waSend: (numero, texto) => req("POST", "/wa/send", { numero, texto }),
+  waConnectInstance: (instance) => req("POST", "/wa/instance/connect", { instance }),
+  waInstanceStatus: (nome) => req("GET", "/wa/instance/status/" + encodeURIComponent(nome)),
 };
