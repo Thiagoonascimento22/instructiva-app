@@ -51,7 +51,7 @@ export const api = {
   // whatsapp
   waGetConfig: () => req("GET", "/wa/config"),
   waSetConfig: (payload) => req("PUT", "/wa/config", payload),
-  waListChats: () => req("GET", "/wa/chats"),
+  waListChats: (instance) => req("GET", "/wa/chats" + (instance ? "?instance=" + encodeURIComponent(instance) : "")),
   waGetChat: (numero) => req("GET", "/wa/chats/" + numero),
   waSend: (numero, texto) => req("POST", "/wa/send", { numero, texto }),
 };

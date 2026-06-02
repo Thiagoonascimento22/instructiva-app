@@ -945,12 +945,16 @@ function WhatsApp({ me, isAdmin, can, goNovo }) {
   const [enviando, setEnviando] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
   const [cfg, setCfg] = useState(null);
+  const [busca, setBusca] = useState("");              // busca de aluno
+  const [filtroInst, setFiltroInst] = useState("");    // filtro por atendente (instância)
+  const [instancias, setInstancias] = useState([]);    // lista de atendentes p/ o filtro
   const podeConfigurar = isAdmin || can("gerir_usuarios");
 
   async function loadChats() {
     try {
-      const r = await api.waListChats();
+      const r = await api.waListChats();    // sempre traz todas; filtro é local
       setChats(r.chats || []);
+      setInstancias(r.instancias || []);
     } catch (e) { /* silencioso */ }
     setLoading(false);
   }
@@ -964,6 +968,18 @@ function WhatsApp({ me, isAdmin, can, goNovo }) {
     const t = setInterval(loadChats, 8000);   // atualiza a cada 8s
     return () => clearInterval(t);
   }, []);
+
+  // aplica filtro de atendente + busca de aluno (tudo local, instantâneo)
+  const chatsFiltrados = chats.filter((c) => {
+    if (filtroInst && c.instance !== filtroInst) return false;
+    if (busca.trim()) {
+      const q = busca.trim().toLowerCase();
+      const nome = (c.nome || "").toLowerCase();
+      const num = (c.numero || "").toLowerCase();
+      if (!nome.includes(q) && !num.includes(q)) return false;
+    }
+    return true;
+  });
 
   async function abrir(numero) {
     setSel(numero);
@@ -1015,21 +1031,50 @@ function WhatsApp({ me, isAdmin, can, goNovo }) {
         <div style={SX.waList}>
           <div style={SX.waListHead}>
             <MessageCircle size={16} /> Conversas
-            <span style={SX.waCount}>{chats.length}</span>
+            <span style={SX.waCount}>{chatsFiltrados.length}</span>
           </div>
+
+          {/* busca de aluno */}
+          <div style={SX.waSearchWrap}>
+            <Search size={15} style={{ color: "var(--muted)", flexShrink: 0 }} />
+            <input
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              placeholder="Buscar aluno por nome ou número…"
+              style={SX.waSearchInput}
+            />
+            {busca && <button onClick={() => setBusca("")} style={SX.waSearchClear}><X size={14} /></button>}
+          </div>
+
+          {/* filtro por atendente (só aparece se houver atendentes configurados) */}
+          {instancias.length > 0 && (
+            <div style={SX.waFilterWrap}>
+              <button onClick={() => setFiltroInst("")}
+                style={{ ...SX.waFilterChip, ...(filtroInst === "" ? SX.waFilterChipOn : {}) }}>
+                Todos
+              </button>
+              {instancias.map((i) => (
+                <button key={i.instance} onClick={() => setFiltroInst(i.instance)}
+                  style={{ ...SX.waFilterChip, ...(filtroInst === i.instance ? SX.waFilterChipOn : {}) }}>
+                  {i.colaboradoraNome || i.instance}
+                </button>
+              ))}
+            </div>
+          )}
+
           <div style={SX.waListScroll}>
             {loading ? (
               <div style={SX.waEmpty}>Carregando…</div>
-            ) : chats.length === 0 ? (
+            ) : chatsFiltrados.length === 0 ? (
               <div style={SX.waEmpty}>
                 <MessageCircle size={32} style={{ opacity: 0.3, marginBottom: 8 }} />
-                <div>Nenhuma conversa ainda.</div>
+                <div>{chats.length === 0 ? "Nenhuma conversa ainda." : "Nenhuma conversa encontrada."}</div>
                 <div style={{ fontSize: 12, opacity: 0.6, marginTop: 4 }}>
-                  As mensagens aparecem aqui quando os alunos escreverem.
+                  {chats.length === 0 ? "As mensagens aparecem aqui quando os alunos escreverem." : "Tente outro filtro ou busca."}
                 </div>
               </div>
             ) : (
-              chats.map((c) => (
+              chatsFiltrados.map((c) => (
                 <button key={c.numero} onClick={() => abrir(c.numero)}
                   className="wa-chat-item"
                   style={{ ...SX.waChatItem, ...(sel === c.numero ? SX.waChatItemActive : {}) }}>
@@ -1038,7 +1083,10 @@ function WhatsApp({ me, isAdmin, can, goNovo }) {
                     <div style={SX.waChatName}>{c.nome || c.numero}</div>
                     <div style={SX.waChatPreview}>{c.ultima || "—"}</div>
                   </div>
-                  {c.naoLidas > 0 && <span style={SX.waBadge}>{c.naoLidas}</span>}
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                    {c.naoLidas > 0 && <span style={SX.waBadge}>{c.naoLidas}</span>}
+                    {c.atendente && <span style={SX.waAtendenteTag}>{c.atendente}</span>}
+                  </div>
                 </button>
               ))
             )}
@@ -1058,7 +1106,14 @@ function WhatsApp({ me, isAdmin, can, goNovo }) {
                 <div style={SX.waAvatar}>{(chat.nome || chat.numero).slice(0, 2).toUpperCase()}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={SX.waChatName}>{chat.nome || chat.numero}</div>
-                  <div style={SX.waChatPreview}><Phone size={11} style={{ verticalAlign: "middle" }} /> {chat.numero}</div>
+                  <div style={SX.waChatPreview}>
+                    <Phone size={11} style={{ verticalAlign: "middle" }} /> {chat.numero}
+                    {(() => {
+                      const inst = instancias.find((i) => i.instance === chat.instance);
+                      const nomeAtendente = inst?.colaboradoraNome || chat.instance;
+                      return nomeAtendente ? <span style={SX.waConvoAtendente}>• Atendente: {nomeAtendente}</span> : null;
+                    })()}
+                  </div>
                 </div>
                 {can("registrar") && (
                   <button onClick={criarAtendimento} className="btn-primary" style={SX.btnPrimarySm}>
@@ -1102,24 +1157,54 @@ function WhatsApp({ me, isAdmin, can, goNovo }) {
   );
 }
 
-// tela de configuração da conexão WhatsApp
+// tela de configuração da conexão WhatsApp (múltiplas instâncias)
 function WhatsAppConfig({ cfg, onBack }) {
   const [url, setUrl] = useState(cfg?.url || "");
   const [apiKey, setApiKey] = useState("");
-  const [instance, setInstance] = useState(cfg?.instance || "");
   const [saving, setSaving] = useState(false);
   const [token, setToken] = useState(cfg?.webhookToken || "");
   const [salvo, setSalvo] = useState(false);
+  const [colabs, setColabs] = useState([]);          // colaboradoras do sistema
+  // lista de instâncias: cada uma com nome técnico + colaboradora vinculada
+  const [instancias, setInstancias] = useState(
+    (cfg?.instancias && cfg.instancias.length)
+      ? cfg.instancias.map((i) => ({ ...i }))
+      : [{ instance: "", colaboradoraId: "", colaboradoraNome: "" }]
+  );
+
+  useEffect(() => {
+    api.listUserNames().then((r) => setColabs(r.users || [])).catch(() => {});
+  }, []);
+
+  function setInst(idx, campo, valor) {
+    setInstancias((arr) => arr.map((it, i) => {
+      if (i !== idx) return it;
+      const novo = { ...it, [campo]: valor };
+      // se escolheu a colaboradora, guarda o nome dela junto
+      if (campo === "colaboradoraId") {
+        const c = colabs.find((u) => String(u.id) === String(valor));
+        novo.colaboradoraNome = c ? c.nome : "";
+      }
+      return novo;
+    }));
+  }
+  function addInst() {
+    setInstancias((arr) => [...arr, { instance: "", colaboradoraId: "", colaboradoraNome: "" }]);
+  }
+  function removeInst(idx) {
+    setInstancias((arr) => arr.filter((_, i) => i !== idx));
+  }
 
   async function salvar() {
     if (saving) return;
     setSaving(true);
     try {
-      const payload = { url, instance };
+      const payload = { url, instancias: instancias.filter((i) => i.instance.trim()) };
       if (apiKey.trim()) payload.apiKey = apiKey.trim();
       const r = await api.waSetConfig(payload);
       if (r.webhookToken) setToken(r.webhookToken);
       setSalvo(true);
+      setTimeout(() => setSalvo(false), 3000);
     } catch (e) { alert(e.message); }
     setSaving(false);
   }
@@ -1129,21 +1214,56 @@ function WhatsAppConfig({ cfg, onBack }) {
 
   return (
     <div>
-      <Header title="Configurar WhatsApp" subtitle="Conecte o sistema à sua Evolution API">
+      <Header title="Configurar WhatsApp" subtitle="Conecte os WhatsApps das colaboradoras">
         <button onClick={onBack} className="btn-ghost" style={SX.btnGhost}><ArrowLeft size={15} /> Voltar</button>
       </Header>
 
-      <div style={SX.formCard} className="rise panel" >
-        <div style={{ display: "grid", gap: 16, maxWidth: 620 }}>
+      <div style={SX.formCard} className="rise panel">
+        <div style={{ display: "grid", gap: 18, maxWidth: 720 }}>
+          {/* dados gerais da Evolution */}
           <F label="Endereço da Evolution (URL)" req>
             <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://evolution-api-production-xxxx.up.railway.app" style={SX.input} />
           </F>
           <F label="Chave da API (AUTHENTICATION_API_KEY)" req>
             <input value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder={cfg?.temApiKey ? "•••••• (já salva — preencha só para trocar)" : "cole a chave aqui"} style={SX.input} />
           </F>
-          <F label="Nome da instância" req>
-            <input value={instance} onChange={(e) => setInstance(e.target.value)} placeholder="thiago" style={SX.input} />
-          </F>
+
+          {/* lista de WhatsApps (instâncias) */}
+          <div>
+            <div style={SX.waCfgTitle}>
+              <Phone size={15} /> WhatsApps conectados
+            </div>
+            <div style={SX.waCfgHint}>
+              Para cada WhatsApp, informe o nome da instância (igual ao criado na Evolution) e a colaboradora dona dele.
+            </div>
+
+            <div style={{ display: "grid", gap: 12, marginTop: 14 }}>
+              {instancias.map((inst, idx) => (
+                <div key={idx} style={SX.waCfgRow}>
+                  <div style={{ flex: 1 }}>
+                    <label style={SX.waCfgLabel}>Nome da instância</label>
+                    <input value={inst.instance} onChange={(e) => setInst(idx, "instance", e.target.value)} placeholder="ex: vitoria" style={SX.input} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={SX.waCfgLabel}>Colaboradora</label>
+                    <select value={inst.colaboradoraId} onChange={(e) => setInst(idx, "colaboradoraId", e.target.value)} style={SX.input}>
+                      <option value="">— selecione —</option>
+                      {colabs.map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
+                    </select>
+                  </div>
+                  {instancias.length > 1 && (
+                    <button onClick={() => removeInst(idx)} style={SX.waCfgDel} title="Remover">
+                      <Trash2 size={16} />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <button onClick={addInst} className="btn-ghost" style={{ ...SX.btnGhost, marginTop: 12, height: 40 }}>
+              <PlusSquare size={15} /> Adicionar outro WhatsApp
+            </button>
+          </div>
 
           <button onClick={salvar} disabled={saving} className="btn-primary" style={SX.btnPrimary}>
             {saving ? "Salvando…" : "Salvar conexão"}
@@ -1156,7 +1276,7 @@ function WhatsAppConfig({ cfg, onBack }) {
               <Link2 size={14} style={{ verticalAlign: "middle" }} /> Endereço do Webhook
             </div>
             <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 8 }}>
-              Cole este endereço na sua Evolution (em Events → Webhook), marcando o evento <b>messages.upsert</b>:
+              Cole este endereço em <b>todas</b> as instâncias da sua Evolution (em Events → Webhook), marcando o evento <b>messages.upsert</b>:
             </div>
             <code style={SX.waCode}>{webhookUrl}</code>
           </div>
@@ -1429,6 +1549,21 @@ const SX = {
   waOk: { display: "inline-flex", alignItems: "center", gap: 7, color: "#12A150", fontSize: 14, fontWeight: 600 },
   waWebhookBox: { marginTop: 8, padding: "16px 18px", background: "rgba(243,146,0,0.05)", border: "1px solid rgba(243,146,0,0.16)", borderRadius: 14 },
   waCode: { display: "block", background: "#2C2D30", color: "#F8B14E", padding: "10px 13px", borderRadius: 9, fontSize: 12.5, fontFamily: "monospace", fontWeight: 600, wordBreak: "break-all", lineHeight: 1.5 },
+  // busca + filtro
+  waSearchWrap: { display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "1px solid var(--line)" },
+  waSearchInput: { flex: 1, border: "none", outline: "none", background: "transparent", fontSize: 13.5, fontFamily: "inherit", color: "var(--text)" },
+  waSearchClear: { border: "none", background: "transparent", color: "var(--muted)", cursor: "pointer", padding: 2, display: "grid", placeItems: "center" },
+  waFilterWrap: { display: "flex", flexWrap: "wrap", gap: 6, padding: "10px 14px", borderBottom: "1px solid var(--line)" },
+  waFilterChip: { fontSize: 12, fontWeight: 600, padding: "5px 11px", borderRadius: 8, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", cursor: "pointer", fontFamily: "inherit", transition: "all .12s" },
+  waFilterChipOn: { background: "rgba(243,146,0,0.12)", color: "#C97A1A", borderColor: "rgba(243,146,0,0.4)" },
+  waAtendenteTag: { fontSize: 10, fontWeight: 600, color: "var(--muted)", background: "var(--bg)", border: "1px solid var(--line)", borderRadius: 6, padding: "1px 6px", whiteSpace: "nowrap", maxWidth: 90, overflow: "hidden", textOverflow: "ellipsis" },
+  waConvoAtendente: { marginLeft: 8, color: "#C97A1A", fontWeight: 600 },
+  // config multi-instância
+  waCfgTitle: { display: "flex", alignItems: "center", gap: 8, fontSize: 14.5, fontWeight: 700, color: "var(--text)", marginBottom: 4 },
+  waCfgHint: { fontSize: 12.5, color: "var(--muted)", lineHeight: 1.5 },
+  waCfgRow: { display: "flex", gap: 12, alignItems: "flex-end", padding: "14px", borderRadius: 12, border: "1px solid var(--line)", background: "var(--bg)" },
+  waCfgLabel: { display: "block", fontSize: 12, fontWeight: 600, color: "var(--muted)", marginBottom: 6 },
+  waCfgDel: { width: 44, height: 44, borderRadius: 10, border: "1px solid #F3D7D8", background: "transparent", color: "#E5484D", cursor: "pointer", display: "grid", placeItems: "center", flexShrink: 0 },
 };
 
 const CSS = `

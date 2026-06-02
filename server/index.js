@@ -516,29 +516,55 @@ app.post("/api/wa/webhook/:token", (req, res) => {
 app.get("/api/wa/config", requireAuth, (req, res) => {
   if (!req.isAdmin && !can(req, "gerir_usuarios")) return res.status(403).json({ error: "sem permissão" });
   const c = db.waConfig || {};
-  // não devolve a apiKey inteira por segurança
-  res.json({ config: { url: c.url || "", instance: c.instance || "", webhookToken: c.webhookToken || "", temApiKey: !!c.apiKey, conectado: !!c.url } });
+  res.json({ config: {
+    url: c.url || "",
+    webhookToken: c.webhookToken || "",
+    temApiKey: !!c.apiKey,
+    conectado: !!c.url,
+    instancias: c.instancias || [],   // [{ instance, colaboradoraId, colaboradoraNome }]
+  } });
 });
 
 app.put("/api/wa/config", requireAuth, (req, res) => {
   if (!req.isAdmin && !can(req, "gerir_usuarios")) return res.status(403).json({ error: "sem permissão" });
-  const { url, apiKey, instance } = req.body;
+  const { url, apiKey, instancias } = req.body;
   db.waConfig = db.waConfig || {};
   if (url !== undefined) db.waConfig.url = String(url).trim().replace(/\/$/, "");
   if (apiKey !== undefined && apiKey) db.waConfig.apiKey = String(apiKey).trim();
-  if (instance !== undefined) db.waConfig.instance = String(instance).trim();
+  if (Array.isArray(instancias)) {
+    // limpa e normaliza a lista de instâncias
+    db.waConfig.instancias = instancias
+      .filter((i) => i && i.instance && String(i.instance).trim())
+      .map((i) => ({
+        instance: String(i.instance).trim(),
+        colaboradoraId: i.colaboradoraId || "",
+        colaboradoraNome: i.colaboradoraNome || "",
+      }));
+  }
   // gera um token de webhook se ainda não tiver
   if (!db.waConfig.webhookToken) db.waConfig.webhookToken = crypto.randomBytes(12).toString("hex");
   saveDB(db);
   res.json({ ok: true, webhookToken: db.waConfig.webhookToken });
 });
 
-// ---- listar conversas ----
+// ---- listar conversas (com filtro opcional por instância) ----
 app.get("/api/wa/chats", requireAuth, (req, res) => {
-  const chats = Object.values(db.waChats || {})
-    .map((c) => ({ numero: c.numero, nome: c.nome, instance: c.instance, atualizadoEm: c.atualizadoEm, naoLidas: c.naoLidas || 0, ultima: c.mensagens?.[c.mensagens.length - 1]?.texto || "" }))
+  const filtroInstance = req.query.instance || "";   // filtra por atendente
+  const instMap = {};
+  (db.waConfig?.instancias || []).forEach((i) => { instMap[i.instance] = i.colaboradoraNome || i.instance; });
+  let chats = Object.values(db.waChats || {})
+    .map((c) => ({
+      numero: c.numero,
+      nome: c.nome,
+      instance: c.instance,
+      atendente: instMap[c.instance] || c.instance || "",   // nome da colaboradora
+      atualizadoEm: c.atualizadoEm,
+      naoLidas: c.naoLidas || 0,
+      ultima: c.mensagens?.[c.mensagens.length - 1]?.texto || "",
+    }))
     .sort((a, b) => (b.atualizadoEm || 0) - (a.atualizadoEm || 0));
-  res.json({ chats });
+  if (filtroInstance) chats = chats.filter((c) => c.instance === filtroInstance);
+  res.json({ chats, instancias: db.waConfig?.instancias || [] });
 });
 
 // ---- ver mensagens de uma conversa ----
@@ -555,10 +581,14 @@ app.get("/api/wa/chats/:numero", requireAuth, (req, res) => {
 app.post("/api/wa/send", requireAuth, async (req, res) => {
   const { numero, texto } = req.body;
   const c = db.waConfig || {};
-  if (!c.url || !c.apiKey || !c.instance) return res.status(400).json({ error: "WhatsApp não configurado" });
+  if (!c.url || !c.apiKey) return res.status(400).json({ error: "WhatsApp não configurado" });
   if (!numero || !texto?.trim()) return res.status(400).json({ error: "número e texto obrigatórios" });
+  // descobre a instância: a da própria conversa, ou a primeira configurada
+  const chatExistente = db.waChats?.[numero];
+  const instance = chatExistente?.instance || (c.instancias?.[0]?.instance) || "";
+  if (!instance) return res.status(400).json({ error: "nenhuma instância configurada" });
   try {
-    const r = await fetch(`${c.url}/message/sendText/${c.instance}`, {
+    const r = await fetch(`${c.url}/message/sendText/${instance}`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "apikey": c.apiKey },
       body: JSON.stringify({ number: numero, text: texto.trim() }),
