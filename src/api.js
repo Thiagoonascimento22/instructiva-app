@@ -56,4 +56,5 @@ export const api = {
   waSend: (numero, texto) => req("POST", "/wa/send", { numero, texto }),
   waConnectInstance: (instance) => req("POST", "/wa/instance/connect", { instance }),
   waInstanceStatus: (nome) => req("GET", "/wa/instance/status/" + encodeURIComponent(nome)),
+  waMinhaInstancia: () => req("GET", "/wa/minha-instancia"),
 };

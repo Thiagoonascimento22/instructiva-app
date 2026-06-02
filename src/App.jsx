@@ -949,6 +949,8 @@ function WhatsApp({ me, isAdmin, can, goNovo }) {
   const [busca, setBusca] = useState("");              // busca de aluno
   const [filtroInst, setFiltroInst] = useState("");    // filtro por atendente (instância)
   const [instancias, setInstancias] = useState([]);    // lista de atendentes p/ o filtro
+  const [minhaInst, setMinhaInst] = useState(null);    // { configurado, instancias } da própria pessoa
+  const [meuQr, setMeuQr] = useState(null);            // modal de QR da colaboradora
   const podeConfigurar = isAdmin || can("gerir_whatsapp");
 
   async function loadChats() {
@@ -963,12 +965,43 @@ function WhatsApp({ me, isAdmin, can, goNovo }) {
     if (!podeConfigurar) return;
     try { const r = await api.waGetConfig(); setCfg(r.config); } catch {}
   }
+  async function loadMinhaInst() {
+    if (podeConfigurar) return;   // gerente usa a config completa
+    try { const r = await api.waMinhaInstancia(); setMinhaInst(r); } catch {}
+  }
 
   useEffect(() => {
-    loadChats(); loadCfg();
+    loadChats(); loadCfg(); loadMinhaInst();
     const t = setInterval(loadChats, 8000);   // atualiza a cada 8s
     return () => clearInterval(t);
   }, []);
+
+  // colaboradora conecta o próprio WhatsApp
+  async function conectarMeu() {
+    const inst = minhaInst?.instancias?.[0]?.instance;
+    if (!inst) return;
+    setMeuQr({ instance: inst, qr: null, status: "connecting" });
+    try {
+      const r = await api.waConnectInstance(inst);
+      if (r.status === "open") setMeuQr({ instance: inst, qr: null, status: "open" });
+      else if (r.qr) {
+        setMeuQr({ instance: inst, qr: r.qr, status: "connecting" });
+        // fica checando status
+        let n = 0;
+        const timer = setInterval(async () => {
+          n++;
+          try {
+            const s = await api.waInstanceStatus(inst);
+            if (s.state === "open") { clearInterval(timer); setMeuQr((m) => m ? { ...m, status: "open" } : m); loadChats(); }
+          } catch {}
+          if (n > 40) clearInterval(timer);
+        }, 3000);
+      } else {
+        setMeuQr({ instance: inst, qr: null, status: "connecting", aviso: r.aviso || "Aguardando QR…" });
+        setTimeout(conectarMeu, 3500);
+      }
+    } catch (e) { alert(e.message); setMeuQr(null); }
+  }
 
   // aplica filtro de atendente + busca de aluno (tudo local, instantâneo)
   const chatsFiltrados = chats.filter((c) => {
@@ -1020,12 +1053,26 @@ function WhatsApp({ me, isAdmin, can, goNovo }) {
         <button onClick={loadChats} className="btn-ghost" style={SX.btnGhost} title="Atualizar">
           <RefreshCw size={15} /> Atualizar
         </button>
+        {/* colaboradora: conectar o próprio WhatsApp */}
+        {!podeConfigurar && minhaInst?.instancias?.length > 0 && (
+          <button onClick={conectarMeu} className="btn-primary" style={SX.btnPrimary}>
+            <MessageCircle size={15} /> Conectar meu WhatsApp
+          </button>
+        )}
         {podeConfigurar && (
           <button onClick={() => setShowConfig(true)} className="btn-ghost" style={SX.btnGhost}>
             <Link2 size={15} /> Configurar conexão
           </button>
         )}
       </Header>
+
+      {/* aviso para colaboradora sem instância vinculada */}
+      {!podeConfigurar && minhaInst && minhaInst.instancias.length === 0 && (
+        <div style={SX.waNoInst}>
+          <AlertCircle size={16} style={{ color: "#C97A1A", flexShrink: 0 }} />
+          <span>Seu WhatsApp ainda não foi configurado pela gerente. Peça para ela vincular seu número.</span>
+        </div>
+      )}
 
       <div style={SX.waWrap} className="panel">
         {/* LISTA DE CONVERSAS */}
@@ -1154,6 +1201,44 @@ function WhatsApp({ me, isAdmin, can, goNovo }) {
           )}
         </div>
       </div>
+
+      {/* MODAL QR DA COLABORADORA */}
+      {meuQr && (
+        <div style={SX.qrOverlay} onClick={(e) => { if (e.target === e.currentTarget) setMeuQr(null); }}>
+          <div style={SX.qrCard}>
+            <button onClick={() => setMeuQr(null)} style={SX.qrClose}><X size={18} /></button>
+            {meuQr.status === "open" ? (
+              <div style={{ textAlign: "center", padding: "20px 10px" }}>
+                <div style={SX.qrSuccessIcon}><CheckCircle2 size={40} /></div>
+                <h3 style={{ margin: "16px 0 6px", color: "var(--text)" }}>Conectado! 🎉</h3>
+                <p style={{ color: "var(--muted)", fontSize: 14, margin: 0 }}>Seu WhatsApp foi conectado com sucesso.</p>
+                <button onClick={() => setMeuQr(null)} className="btn-primary" style={{ ...SX.btnPrimary, marginTop: 20 }}>Fechar</button>
+              </div>
+            ) : (
+              <div style={{ textAlign: "center" }}>
+                <h3 style={{ margin: "0 0 4px", color: "var(--text)" }}>Conectar meu WhatsApp</h3>
+                <p style={{ color: "var(--muted)", fontSize: 13.5, marginTop: 0, marginBottom: 18 }}>
+                  Abra o WhatsApp no celular → <b>Aparelhos conectados</b> → <b>Conectar aparelho</b> → escaneie:
+                </p>
+                {meuQr.qr ? (
+                  <img src={meuQr.qr} alt="QR Code" style={SX.qrImg} />
+                ) : (
+                  <div style={SX.qrLoading}>
+                    <RefreshCw size={28} className="pulse" />
+                    <div style={{ marginTop: 10, fontSize: 13 }}>{meuQr.aviso || "Gerando QR code…"}</div>
+                  </div>
+                )}
+                <div style={{ marginTop: 16, fontSize: 12, color: "var(--muted)" }}>
+                  Esperando a leitura… atualiza sozinho quando conectar.
+                </div>
+                <button onClick={conectarMeu} className="btn-ghost" style={{ ...SX.btnGhost, marginTop: 14, height: 38 }}>
+                  <RefreshCw size={14} /> Gerar novo QR
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1669,6 +1754,7 @@ const SX = {
   qrImg: { width: 260, height: 260, borderRadius: 12, background: "#fff", padding: 8, display: "block", margin: "0 auto" },
   qrLoading: { width: 260, height: 260, borderRadius: 12, background: "var(--bg)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", margin: "0 auto", color: "var(--muted)" },
   qrSuccessIcon: { width: 72, height: 72, borderRadius: "50%", background: "rgba(18,161,80,0.12)", color: "#12A150", display: "grid", placeItems: "center", margin: "0 auto" },
+  waNoInst: { display: "flex", alignItems: "center", gap: 10, padding: "14px 18px", background: "rgba(243,146,0,0.08)", border: "1px solid rgba(243,146,0,0.2)", borderRadius: 12, fontSize: 13.5, color: "var(--text)", marginBottom: 16 },
 };
 
 const CSS = `

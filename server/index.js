@@ -602,14 +602,31 @@ app.get("/api/wa/chats/:numero", requireAuth, (req, res) => {
   res.json({ chat });
 });
 
+// ---- minha instância (para a colaboradora conectar o próprio WhatsApp) ----
+app.get("/api/wa/minha-instancia", requireAuth, (req, res) => {
+  const c = db.waConfig || {};
+  const minhas = (c.instancias || []).filter((i) => String(i.colaboradoraId) === String(req.user.id));
+  res.json({
+    configurado: !!(c.url && c.apiKey),    // a gerente já configurou a Evolution?
+    instancias: minhas,                      // normalmente 1, mas pode ter mais
+  });
+});
+
 // ---- criar instância + obter QR code (conecta um WhatsApp pelo sistema) ----
 app.post("/api/wa/instance/connect", requireAuth, async (req, res) => {
-  if (!req.isAdmin && !can(req, "gerir_whatsapp")) return res.status(403).json({ error: "sem permissão" });
   const { instance } = req.body;
   const c = db.waConfig || {};
-  if (!c.url || !c.apiKey) return res.status(400).json({ error: "Configure a URL e a chave da Evolution primeiro" });
+  if (!c.url || !c.apiKey) return res.status(400).json({ error: "A conexão ainda não foi configurada pela gerente." });
   if (!instance || !String(instance).trim()) return res.status(400).json({ error: "informe o nome da instância" });
   const nome = String(instance).trim();
+  // PERMISSÃO: gerente conecta qualquer uma; colaboradora só a dela
+  const ehGerente = req.isAdmin || can(req, "gerir_whatsapp");
+  if (!ehGerente) {
+    const minhas = (c.instancias || []).filter((i) => String(i.colaboradoraId) === String(req.user.id)).map((i) => i.instance);
+    if (!minhas.includes(nome)) {
+      return res.status(403).json({ error: "você só pode conectar o seu próprio WhatsApp" });
+    }
+  }
   // monta a URL do webhook (pra Evolution já avisar o sistema sozinha)
   const base = c.publicUrl || "";
   const webhookUrl = (base && c.webhookToken) ? `${base}/api/wa/webhook/${c.webhookToken}` : "";
