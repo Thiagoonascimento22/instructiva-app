@@ -1059,7 +1059,12 @@ function WhatsApp({ me, isAdmin, can, goNovo }) {
 
   // rola até a última mensagem sempre que a conversa muda/cresce
   useEffect(() => {
-    if (msgEndRef.current) msgEndRef.current.scrollIntoView({ behavior: "auto", block: "end" });
+    const t = setTimeout(() => {
+      if (msgScrollRef.current) {
+        msgScrollRef.current.scrollTop = msgScrollRef.current.scrollHeight;
+      }
+    }, 80);
+    return () => clearTimeout(t);
   }, [chat?.numero, chat?.mensagens?.length]);
 
   // adiciona um emoji ao texto
@@ -1119,8 +1124,8 @@ function WhatsApp({ me, isAdmin, can, goNovo }) {
             {busca && <button onClick={() => setBusca("")} style={SX.waSearchClear}><X size={14} /></button>}
           </div>
 
-          {/* filtro por atendente (só faz sentido com mais de um WhatsApp) */}
-          {instancias.length > 1 && (
+          {/* filtro por atendente */}
+          {instancias.length >= 1 && (
             <div style={SX.waFilterWrap}>
               <button onClick={() => setFiltroInst("")}
                 style={{ ...SX.waFilterChip, ...(filtroInst === "" ? SX.waFilterChipOn : {}) }}>
@@ -1815,10 +1820,10 @@ const SX = {
   waChatName: { fontSize: 14, fontWeight: 700, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
   waChatPreview: { fontSize: 12.5, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginTop: 2 },
   waBadge: { fontSize: 11, fontWeight: 700, color: "#fff", background: "#12A150", borderRadius: 20, padding: "1px 7px", flexShrink: 0 },
-  waConvo: { display: "flex", flexDirection: "column", minWidth: 0, background: "var(--bg)" },
+  waConvo: { display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0, height: "100%", overflow: "hidden", background: "var(--bg)" },
   waConvoEmpty: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "var(--muted)", fontSize: 14 },
   waConvoHead: { display: "flex", alignItems: "center", gap: 12, padding: "14px 18px", borderBottom: "1px solid var(--line)", background: "var(--card)" },
-  waMessages: { flex: 1, overflowY: "auto", padding: "20px 28px", display: "flex", flexDirection: "column", backgroundColor: "var(--wa-chat-bg)", backgroundImage: "radial-gradient(var(--wa-chat-dot) 1px, transparent 1px)", backgroundSize: "22px 22px" },
+  waMessages: { flex: 1, minHeight: 0, overflowY: "auto", padding: "20px 28px", display: "flex", flexDirection: "column", backgroundColor: "var(--wa-chat-bg)", backgroundImage: "radial-gradient(var(--wa-chat-dot) 1px, transparent 1px)", backgroundSize: "22px 22px" },
   waBubbleRow: { display: "flex", width: "100%" },
   waBubble: { position: "relative", maxWidth: "65%", padding: "7px 11px 7px 12px", borderRadius: 12, fontSize: 14.2, lineHeight: 1.4, wordBreak: "break-word", boxShadow: "0 1px 1px rgba(0,0,0,0.08)", display: "flex", alignItems: "flex-end", gap: 8 },
   waBubbleText: { whiteSpace: "pre-wrap" },

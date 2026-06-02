@@ -580,10 +580,23 @@ app.get("/api/wa/chats", requireAuth, (req, res) => {
   // PRIVACIDADE: colaboradora só vê conversas das instâncias dela
   if (permitidas !== null) chats = chats.filter((c) => permitidas.includes(c.instance));
   if (filtroInstance) chats = chats.filter((c) => c.instance === filtroInstance);
-  // a colaboradora só vê suas instâncias no filtro também
-  const instParaFiltro = (permitidas === null)
-    ? (db.waConfig?.instancias || [])
-    : (db.waConfig?.instancias || []).filter((i) => permitidas.includes(i.instance));
+  // monta a lista de instâncias para o filtro
+  let instParaFiltro;
+  if (permitidas === null) {
+    // gerente: junta as instâncias cadastradas + as que aparecem em conversas (mesmo sem cadastro)
+    const cadastradas = db.waConfig?.instancias || [];
+    const jaListadas = new Set(cadastradas.map((i) => i.instance));
+    const extras = [];
+    Object.values(db.waChats || {}).forEach((c) => {
+      if (c.instance && !jaListadas.has(c.instance)) {
+        jaListadas.add(c.instance);
+        extras.push({ instance: c.instance, colaboradoraNome: c.instance });
+      }
+    });
+    instParaFiltro = [...cadastradas, ...extras];
+  } else {
+    instParaFiltro = (db.waConfig?.instancias || []).filter((i) => permitidas.includes(i.instance));
+  }
   res.json({ chats, instancias: instParaFiltro });
 });
 
