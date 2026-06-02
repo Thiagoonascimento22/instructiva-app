@@ -1959,9 +1959,9 @@ const SX = {
   bgGlow: { position: "fixed", top: -180, right: -120, width: 520, height: 520, background: "radial-gradient(circle, rgba(99,102,241,0.09), transparent 70%)", pointerEvents: "none", zIndex: 0 },
 
   sidebar: { width: 262, background: "linear-gradient(180deg,#1E2235 0%,#171A28 100%)", display: "flex", flexDirection: "column", padding: "28px 16px 20px", position: "sticky", top: 0, height: "100vh", zIndex: 2, boxShadow: "1px 0 0 rgba(255,255,255,0.04), 8px 0 40px rgba(15,18,30,0.35)", borderRight: "1px solid rgba(255,255,255,0.05)" },
-  brand: { padding: "0 8px", marginBottom: 4 },
-  brandLogo: { width: 150, display: "block" },
-  brandTag: { color: "#9A9CA0", fontSize: 11.5, fontWeight: 600, padding: "0 10px", marginBottom: 30, letterSpacing: "0.3px" },
+  brand: { padding: "0 6px", marginBottom: 6 },
+  brandLogo: { width: "100%", maxWidth: 188, display: "block" },
+  brandTag: { color: "#9A9CA0", fontSize: 11.5, fontWeight: 600, padding: "0 8px", marginBottom: 30, letterSpacing: "0.3px" },
   nav: { display: "flex", flexDirection: "column", gap: 4, flex: 1 },
   navBtn: { display: "flex", alignItems: "center", gap: 12, padding: "11px 14px", borderRadius: 12, border: "none", background: "transparent", color: "#B4B6BA", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", transition: "all .2s", position: "relative" },
   navBtnActive: { background: "linear-gradient(100deg,rgba(99,102,241,0.95),rgba(79,70,229,0.9))", color: "#fff", boxShadow: "0 4px 14px rgba(99,102,241,0.35)" },
