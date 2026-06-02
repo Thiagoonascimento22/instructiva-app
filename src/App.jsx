@@ -1532,6 +1532,9 @@ function WhatsAppConfig({ cfg, onBack }) {
   const [token, setToken] = useState(cfg?.webhookToken || "");
   const [salvo, setSalvo] = useState(false);
   const [colabs, setColabs] = useState([]);          // colaboradoras do sistema
+  const [instEvolution, setInstEvolution] = useState([]);  // instâncias reais na Evolution
+  const [limpando, setLimpando] = useState(false);
+  const [excluindo, setExcluindo] = useState("");
   // lista de instâncias: cada uma com nome técnico + colaboradora vinculada
   const [instancias, setInstancias] = useState(
     (cfg?.instancias && cfg.instancias.length)
@@ -1541,7 +1544,34 @@ function WhatsAppConfig({ cfg, onBack }) {
 
   useEffect(() => {
     api.listUserNames().then((r) => setColabs(r.users || [])).catch(() => {});
+    carregarInstEvolution();
   }, []);
+
+  function carregarInstEvolution() {
+    api.waInstanciasEvolution().then((r) => setInstEvolution(r.instancias || [])).catch(() => {});
+  }
+
+  async function excluirInstancia(nome) {
+    if (!confirm(`Desconectar e excluir o WhatsApp "${nome}"? O celular será desconectado.`)) return;
+    setExcluindo(nome);
+    try {
+      await api.waDeleteInstance(nome);
+      carregarInstEvolution();
+      // tira da lista de edição também
+      setInstancias((arr) => arr.filter((i) => i.instance !== nome));
+    } catch (e) { alert(e.message); }
+    setExcluindo("");
+  }
+
+  async function limparTodasConversas() {
+    if (!confirm("Apagar TODAS as conversas do sistema? Isso não dá pra desfazer. (Não desconecta os WhatsApps, só limpa o histórico de conversas.)")) return;
+    setLimpando(true);
+    try {
+      await api.waLimparConversas();
+      alert("Conversas apagadas! ✅");
+    } catch (e) { alert(e.message); }
+    setLimpando(false);
+  }
 
   function setInst(idx, campo, valor) {
     setInstancias((arr) => arr.map((it, i) => {
@@ -1757,6 +1787,56 @@ function WhatsAppConfig({ cfg, onBack }) {
             </div>
             <div style={{ fontSize: 12, opacity: 0.7 }}>
               Quando você conecta um WhatsApp pelo botão acima, o sistema já configura tudo sozinho — não precisa mexer no painel da Evolution. 🎉
+            </div>
+          </div>
+
+          {/* ZONA DE LIMPEZA */}
+          <div style={SX.waZonaLimpeza}>
+            <div style={{ fontWeight: 700, fontSize: 14, color: "#C0392B", marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
+              <AlertCircle size={16} /> Zona de limpeza
+            </div>
+            <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 16 }}>
+              Desconecte WhatsApps de teste ou apague o histórico de conversas. Use com cuidado.
+            </div>
+
+            {/* WhatsApps conectados na Evolution */}
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text)", marginBottom: 8 }}>
+              WhatsApps conectados:
+            </div>
+            {instEvolution.length === 0 ? (
+              <div style={{ fontSize: 12.5, color: "var(--muted)", padding: "8px 0 14px" }}>
+                Nenhum WhatsApp conectado no momento.
+              </div>
+            ) : (
+              <div style={{ display: "grid", gap: 8, marginBottom: 16 }}>
+                {instEvolution.map((i) => (
+                  <div key={i.instance} style={SX.waInstRow}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                      <span style={{ ...SX.waInstDot, background: i.state === "open" ? "#12A150" : "#E5A100" }} />
+                      <span style={{ fontWeight: 600, fontSize: 13.5, color: "var(--text)" }}>{i.instance}</span>
+                      <span style={{ fontSize: 11.5, color: "var(--muted)" }}>
+                        {i.state === "open" ? "conectado" : i.state === "connecting" ? "conectando" : "desconectado"}
+                      </span>
+                    </div>
+                    <button onClick={() => excluirInstancia(i.instance)} disabled={excluindo === i.instance} style={SX.waInstDel}>
+                      {excluindo === i.instance ? "Excluindo…" : <><Power size={13} /> Desconectar</>}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button onClick={carregarInstEvolution} style={SX.waRefreshInst} type="button">
+              <RefreshCw size={13} /> Atualizar lista
+            </button>
+
+            {/* apagar conversas */}
+            <div style={{ borderTop: "1px solid rgba(192,57,43,0.18)", marginTop: 16, paddingTop: 16 }}>
+              <button onClick={limparTodasConversas} disabled={limpando} style={SX.waLimparConv}>
+                {limpando ? "Apagando…" : "🗑️ Apagar todas as conversas do sistema"}
+              </button>
+              <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 7 }}>
+                Limpa só o histórico de conversas no sistema. Não desconecta os WhatsApps.
+              </div>
             </div>
           </div>
         </div>
@@ -2083,6 +2163,12 @@ const SX = {
   waSearchClear: { border: "none", background: "transparent", color: "var(--muted)", cursor: "pointer", padding: 2, display: "grid", placeItems: "center" },
   waFunil: { position: "relative", width: 34, height: 34, borderRadius: 9, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", cursor: "pointer", display: "grid", placeItems: "center", padding: 0 },
   waNovaBtn: { width: 34, height: 34, borderRadius: 9, border: "none", background: "linear-gradient(135deg,#F39200,#E08200)", color: "#fff", cursor: "pointer", display: "grid", placeItems: "center", padding: 0, boxShadow: "0 3px 10px rgba(243,146,0,0.3)" },
+  waZonaLimpeza: { marginTop: 20, padding: 18, borderRadius: 14, border: "1px solid rgba(192,57,43,0.25)", background: "rgba(192,57,43,0.035)" },
+  waInstRow: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", background: "var(--card)" },
+  waInstDot: { width: 9, height: 9, borderRadius: "50%", flexShrink: 0 },
+  waInstDel: { display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 12px", borderRadius: 8, border: "1px solid rgba(192,57,43,0.3)", background: "transparent", color: "#C0392B", cursor: "pointer", fontSize: 12.5, fontWeight: 600, fontFamily: "inherit", flexShrink: 0 },
+  waRefreshInst: { display: "inline-flex", alignItems: "center", gap: 5, border: "none", background: "transparent", color: "var(--muted)", cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: "inherit", padding: 0 },
+  waLimparConv: { width: "100%", padding: "11px", borderRadius: 10, border: "1px solid rgba(192,57,43,0.35)", background: "rgba(192,57,43,0.06)", color: "#C0392B", cursor: "pointer", fontSize: 13.5, fontWeight: 700, fontFamily: "inherit" },
   waFunilOn: { background: "rgba(243,146,0,0.12)", color: "#C97A1A", borderColor: "rgba(243,146,0,0.4)" },
   waFunilDot: { position: "absolute", top: -3, right: -3, width: 9, height: 9, borderRadius: "50%", background: "#F39200", border: "2px solid var(--card)" },
   waFunilBackdrop: { position: "fixed", inset: 0, zIndex: 40 },

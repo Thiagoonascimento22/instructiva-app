@@ -64,4 +64,6 @@ export const api = {
   waLimparFantasmas: () => req("POST", "/wa/limpar-fantasmas"),
   waBaixarMidia: (id, mediaMsgId) => req("POST", "/wa/media", { id, mediaMsgId }),
   waNovaConversa: (instance, numero, texto) => req("POST", "/wa/nova-conversa", { instance, numero, texto }),
+  waInstanciasEvolution: () => req("GET", "/wa/instancias-evolution"),
+  waLimparConversas: () => req("POST", "/wa/limpar-conversas"),
 };

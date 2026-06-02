@@ -908,6 +908,38 @@ app.delete("/api/wa/instance/:nome", requireAuth, async (req, res) => {
   }
 });
 
+// ---- listar TODAS as instâncias que existem na Evolution (não só as da config) ----
+app.get("/api/wa/instancias-evolution", requireAuth, async (req, res) => {
+  if (!req.isAdmin && !can(req, "gerir_whatsapp")) return res.status(403).json({ error: "sem permissão" });
+  const c = db.waConfig || {};
+  if (!c.url || !c.apiKey) return res.json({ instancias: [] });
+  try {
+    const r = await fetch(`${c.url}/instance/fetchInstances`, {
+      method: "GET", headers: { "apikey": c.apiKey },
+    });
+    const data = await r.json().catch(() => []);
+    // a Evolution pode devolver formatos diferentes; normaliza
+    const lista = (Array.isArray(data) ? data : (data?.instances || [])).map((it) => {
+      const inst = it.instance || it;
+      const nome = inst.instanceName || inst.name || it.name || "";
+      const estado = inst.state || inst.connectionStatus || it.connectionStatus || "unknown";
+      return { instance: nome, state: estado };
+    }).filter((i) => i.instance);
+    res.json({ instancias: lista });
+  } catch (e) {
+    console.error("Erro ao listar instâncias da Evolution:", e.message);
+    res.json({ instancias: [] });
+  }
+});
+
+// ---- apagar TODAS as conversas do sistema (não mexe na Evolution) ----
+app.post("/api/wa/limpar-conversas", requireAuth, (req, res) => {
+  if (!req.isAdmin && !can(req, "gerir_whatsapp")) return res.status(403).json({ error: "sem permissão" });
+  db.waChats = {};
+  saveDB(db);
+  res.json({ ok: true });
+});
+
 // ---- enviar mensagem (pela Evolution) ----
 app.post("/api/wa/send", requireAuth, async (req, res) => {
   const { id, numero, texto } = req.body;
