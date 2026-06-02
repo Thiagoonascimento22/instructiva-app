@@ -53,8 +53,29 @@ function loadDB() {
       if (!d.records) d.records = [];
       if (!d.tasks) d.tasks = [];
       if (!d.sessions) d.sessions = {};
-      if (!d.waChats) d.waChats = {};       // conversas do WhatsApp por número
+      if (!d.waChats) d.waChats = {};       // conversas do WhatsApp
       if (!d.waConfig) d.waConfig = {};      // config da conexão (url, key, instâncias)
+      // MIGRAÇÃO: conversas antigas usavam a chave = número. Agora é "instancia::numero".
+      // Converte as que ainda estão no formato velho (sem o campo id ou chave sem "::").
+      const novasChaves = {};
+      let migrou = false;
+      for (const [chave, chat] of Object.entries(d.waChats)) {
+        if (chave.includes("::") && chat.id) {
+          novasChaves[chave] = chat;   // já está no formato novo
+        } else {
+          // formato antigo: monta a chave nova
+          const inst = chat.instance || "?";
+          const numero = chat.numero || chave;
+          const novaChave = `${inst}::${numero}`;
+          chat.id = novaChave;
+          chat.numero = numero;
+          if (chat.ehGrupo === undefined) chat.ehGrupo = false;
+          novasChaves[novaChave] = chat;
+          migrou = true;
+        }
+      }
+      d.waChats = novasChaves;
+      if (migrou) { try { fs.writeFileSync(DB_PATH, JSON.stringify(d, null, 2)); } catch {} }
       return d;
     }
   } catch (e) { console.error("Erro ao ler banco:", e.message); }
@@ -615,7 +636,11 @@ app.get("/api/wa/chats", requireAuth, (req, res) => {
 // ---- ver mensagens de uma conversa (pela chave id = instancia::numero) ----
 app.get("/api/wa/chats/:id", requireAuth, (req, res) => {
   const id = decodeURIComponent(req.params.id);
-  const chat = db.waChats?.[id];
+  let chat = db.waChats?.[id];
+  // fallback: se não achou pela chave exata, tenta pelo id interno ou pelo número
+  if (!chat) {
+    chat = Object.values(db.waChats || {}).find((c) => c.id === id || c.numero === id);
+  }
   if (!chat) return res.status(404).json({ error: "conversa não encontrada" });
   // PRIVACIDADE: bloqueia abrir conversa de instância que não é da pessoa
   const permitidas = instanciasVisiveis(req);

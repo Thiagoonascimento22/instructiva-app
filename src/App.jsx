@@ -951,6 +951,7 @@ function WhatsApp({ me, isAdmin, can, goNovo }) {
   const [cfg, setCfg] = useState(null);
   const [busca, setBusca] = useState("");              // busca de aluno
   const [filtroInst, setFiltroInst] = useState("");    // filtro por atendente (instância)
+  const [showFiltro, setShowFiltro] = useState(false); // menu do funil de filtro
   const [instancias, setInstancias] = useState([]);    // lista de atendentes p/ o filtro
   const [minhaInst, setMinhaInst] = useState(null);    // { configurado, instancias } da própria pessoa
   const [meuQr, setMeuQr] = useState(null);            // modal de QR da colaboradora
@@ -1186,7 +1187,47 @@ function WhatsApp({ me, isAdmin, can, goNovo }) {
           <div style={SX.waListHead}>
             <MessageCircle size={16} /> Conversas
             <span style={SX.waCount}>{chatsFiltrados.length}</span>
+            {/* FUNIL de filtro por atendente */}
+            {instancias.length >= 1 && (
+              <div style={{ position: "relative", marginLeft: "auto" }}>
+                <button onClick={() => setShowFiltro((v) => !v)}
+                  style={{ ...SX.waFunil, ...(filtroInst ? SX.waFunilOn : {}) }}
+                  title="Filtrar por atendente">
+                  <Filter size={16} />
+                  {filtroInst && <span style={SX.waFunilDot} />}
+                </button>
+                {showFiltro && (
+                  <>
+                    <div style={SX.waFunilBackdrop} onClick={() => setShowFiltro(false)} />
+                    <div style={SX.waFunilMenu}>
+                      <div style={SX.waFunilTitle}>Ver conversas de:</div>
+                      <button onClick={() => { setFiltroInst(""); setShowFiltro(false); }}
+                        style={{ ...SX.waFunilItem, ...(filtroInst === "" ? SX.waFunilItemOn : {}) }}>
+                        <Users size={15} /> Todos os atendentes
+                        {filtroInst === "" && <CheckCircle2 size={15} style={{ marginLeft: "auto", color: "#F39200" }} />}
+                      </button>
+                      {instancias.map((i) => (
+                        <button key={i.instance} onClick={() => { setFiltroInst(i.instance); setShowFiltro(false); }}
+                          style={{ ...SX.waFunilItem, ...(filtroInst === i.instance ? SX.waFunilItemOn : {}) }}>
+                          <div style={SX.waFunilAvatar}>{(i.colaboradoraNome || i.instance).slice(0, 1).toUpperCase()}</div>
+                          {i.colaboradoraNome || i.instance}
+                          {filtroInst === i.instance && <CheckCircle2 size={15} style={{ marginLeft: "auto", color: "#F39200" }} />}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
+
+          {/* etiqueta do filtro ativo */}
+          {filtroInst && (
+            <div style={SX.waFiltroAtivo}>
+              <span>Mostrando: <b>{instancias.find((i) => i.instance === filtroInst)?.colaboradoraNome || filtroInst}</b></span>
+              <button onClick={() => setFiltroInst("")} style={SX.waFiltroLimpar} title="Limpar filtro"><X size={13} /> limpar</button>
+            </div>
+          )}
 
           {/* busca de aluno */}
           <div style={SX.waSearchWrap}>
@@ -1199,22 +1240,6 @@ function WhatsApp({ me, isAdmin, can, goNovo }) {
             />
             {busca && <button onClick={() => setBusca("")} style={SX.waSearchClear}><X size={14} /></button>}
           </div>
-
-          {/* filtro por atendente */}
-          {instancias.length >= 1 && (
-            <div style={SX.waFilterWrap}>
-              <button onClick={() => setFiltroInst("")}
-                style={{ ...SX.waFilterChip, ...(filtroInst === "" ? SX.waFilterChipOn : {}) }}>
-                Todos
-              </button>
-              {instancias.map((i) => (
-                <button key={i.instance} onClick={() => setFiltroInst(i.instance)}
-                  style={{ ...SX.waFilterChip, ...(filtroInst === i.instance ? SX.waFilterChipOn : {}) }}>
-                  {i.colaboradoraNome || i.instance}
-                </button>
-              ))}
-            </div>
-          )}
 
           <div style={SX.waListScroll}>
             {loading ? (
@@ -1946,9 +1971,17 @@ const SX = {
   waSearchWrap: { display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "1px solid var(--line)" },
   waSearchInput: { flex: 1, border: "none", outline: "none", background: "transparent", fontSize: 13.5, fontFamily: "inherit", color: "var(--text)" },
   waSearchClear: { border: "none", background: "transparent", color: "var(--muted)", cursor: "pointer", padding: 2, display: "grid", placeItems: "center" },
-  waFilterWrap: { display: "flex", flexWrap: "wrap", gap: 6, padding: "10px 14px", borderBottom: "1px solid var(--line)" },
-  waFilterChip: { fontSize: 12, fontWeight: 600, padding: "5px 11px", borderRadius: 8, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", cursor: "pointer", fontFamily: "inherit", transition: "all .12s" },
-  waFilterChipOn: { background: "rgba(243,146,0,0.12)", color: "#C97A1A", borderColor: "rgba(243,146,0,0.4)" },
+  waFunil: { position: "relative", width: 34, height: 34, borderRadius: 9, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", cursor: "pointer", display: "grid", placeItems: "center", padding: 0 },
+  waFunilOn: { background: "rgba(243,146,0,0.12)", color: "#C97A1A", borderColor: "rgba(243,146,0,0.4)" },
+  waFunilDot: { position: "absolute", top: -3, right: -3, width: 9, height: 9, borderRadius: "50%", background: "#F39200", border: "2px solid var(--card)" },
+  waFunilBackdrop: { position: "fixed", inset: 0, zIndex: 40 },
+  waFunilMenu: { position: "absolute", top: "calc(100% + 8px)", right: 0, width: 250, background: "var(--card)", border: "1px solid var(--line)", borderRadius: 14, boxShadow: "0 16px 44px -10px rgba(0,0,0,0.3)", padding: 8, zIndex: 41 },
+  waFunilTitle: { fontSize: 11.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.4px", padding: "6px 10px 8px" },
+  waFunilItem: { display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "9px 10px", border: "none", background: "transparent", color: "var(--text)", cursor: "pointer", fontFamily: "inherit", fontSize: 13.5, fontWeight: 600, borderRadius: 9, textAlign: "left" },
+  waFunilItemOn: { background: "rgba(243,146,0,0.08)" },
+  waFunilAvatar: { width: 26, height: 26, borderRadius: 8, background: "linear-gradient(135deg,#F39200,#C97A1A)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 700, fontSize: 12, flexShrink: 0 },
+  waFiltroAtivo: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 14px", fontSize: 12.5, color: "var(--text)", background: "rgba(243,146,0,0.06)", borderBottom: "1px solid var(--line)" },
+  waFiltroLimpar: { display: "inline-flex", alignItems: "center", gap: 3, border: "none", background: "transparent", color: "#C97A1A", cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "inherit" },
   waAtendenteTag: { fontSize: 10, fontWeight: 600, color: "var(--muted)", background: "var(--bg)", border: "1px solid var(--line)", borderRadius: 6, padding: "1px 6px", whiteSpace: "nowrap", maxWidth: 90, overflow: "hidden", textOverflow: "ellipsis" },
   waConvoAtendente: { marginLeft: 8, color: "#C97A1A", fontWeight: 600 },
   // config multi-instância
