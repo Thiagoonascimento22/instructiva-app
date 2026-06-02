@@ -32,6 +32,7 @@ const PERM_LABELS = {
   exportar: "Exportar dados (CSV)",
   ia: "Acessar análise por IA",
   gerir_usuarios: "Gerenciar usuários",
+  gerir_whatsapp: "Gerenciar conexões WhatsApp",
 };
 
 // =============================================================================
@@ -948,7 +949,7 @@ function WhatsApp({ me, isAdmin, can, goNovo }) {
   const [busca, setBusca] = useState("");              // busca de aluno
   const [filtroInst, setFiltroInst] = useState("");    // filtro por atendente (instância)
   const [instancias, setInstancias] = useState([]);    // lista de atendentes p/ o filtro
-  const podeConfigurar = isAdmin || can("gerir_usuarios");
+  const podeConfigurar = isAdmin || can("gerir_whatsapp");
 
   async function loadChats() {
     try {
@@ -1046,8 +1047,8 @@ function WhatsApp({ me, isAdmin, can, goNovo }) {
             {busca && <button onClick={() => setBusca("")} style={SX.waSearchClear}><X size={14} /></button>}
           </div>
 
-          {/* filtro por atendente (só aparece se houver atendentes configurados) */}
-          {instancias.length > 0 && (
+          {/* filtro por atendente (só faz sentido com mais de um WhatsApp) */}
+          {instancias.length > 1 && (
             <div style={SX.waFilterWrap}>
               <button onClick={() => setFiltroInst("")}
                 style={{ ...SX.waFilterChip, ...(filtroInst === "" ? SX.waFilterChipOn : {}) }}>

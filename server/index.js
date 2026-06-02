@@ -514,7 +514,7 @@ app.post("/api/wa/webhook/:token", (req, res) => {
 
 // ---- CONFIG: salvar dados da conexão (admin) ----
 app.get("/api/wa/config", requireAuth, (req, res) => {
-  if (!req.isAdmin && !can(req, "gerir_usuarios")) return res.status(403).json({ error: "sem permissão" });
+  if (!req.isAdmin && !can(req, "gerir_whatsapp")) return res.status(403).json({ error: "sem permissão" });
   const c = db.waConfig || {};
   res.json({ config: {
     url: c.url || "",
@@ -526,7 +526,7 @@ app.get("/api/wa/config", requireAuth, (req, res) => {
 });
 
 app.put("/api/wa/config", requireAuth, (req, res) => {
-  if (!req.isAdmin && !can(req, "gerir_usuarios")) return res.status(403).json({ error: "sem permissão" });
+  if (!req.isAdmin && !can(req, "gerir_whatsapp")) return res.status(403).json({ error: "sem permissão" });
   const { url, apiKey, instancias } = req.body;
   db.waConfig = db.waConfig || {};
   if (url !== undefined) db.waConfig.url = String(url).trim().replace(/\/$/, "");
@@ -551,9 +551,19 @@ app.put("/api/wa/config", requireAuth, (req, res) => {
   res.json({ ok: true, webhookToken: db.waConfig.webhookToken });
 });
 
+// helper: quais instâncias o usuário logado pode ver
+// - admin (gerente) ou quem gerencia whatsapp: vê todas
+// - colaboradora comum: só as instâncias vinculadas a ela
+function instanciasVisiveis(req) {
+  const todas = db.waConfig?.instancias || [];
+  if (req.isAdmin || can(req, "gerir_whatsapp")) return null; // null = todas
+  return todas.filter((i) => String(i.colaboradoraId) === String(req.user.id)).map((i) => i.instance);
+}
+
 // ---- listar conversas (com filtro opcional por instância) ----
 app.get("/api/wa/chats", requireAuth, (req, res) => {
   const filtroInstance = req.query.instance || "";   // filtra por atendente
+  const permitidas = instanciasVisiveis(req);          // null = todas
   const instMap = {};
   (db.waConfig?.instancias || []).forEach((i) => { instMap[i.instance] = i.colaboradoraNome || i.instance; });
   let chats = Object.values(db.waChats || {})
@@ -567,14 +577,25 @@ app.get("/api/wa/chats", requireAuth, (req, res) => {
       ultima: c.mensagens?.[c.mensagens.length - 1]?.texto || "",
     }))
     .sort((a, b) => (b.atualizadoEm || 0) - (a.atualizadoEm || 0));
+  // PRIVACIDADE: colaboradora só vê conversas das instâncias dela
+  if (permitidas !== null) chats = chats.filter((c) => permitidas.includes(c.instance));
   if (filtroInstance) chats = chats.filter((c) => c.instance === filtroInstance);
-  res.json({ chats, instancias: db.waConfig?.instancias || [] });
+  // a colaboradora só vê suas instâncias no filtro também
+  const instParaFiltro = (permitidas === null)
+    ? (db.waConfig?.instancias || [])
+    : (db.waConfig?.instancias || []).filter((i) => permitidas.includes(i.instance));
+  res.json({ chats, instancias: instParaFiltro });
 });
 
 // ---- ver mensagens de uma conversa ----
 app.get("/api/wa/chats/:numero", requireAuth, (req, res) => {
   const chat = db.waChats?.[req.params.numero];
   if (!chat) return res.status(404).json({ error: "conversa não encontrada" });
+  // PRIVACIDADE: bloqueia abrir conversa de instância que não é da pessoa
+  const permitidas = instanciasVisiveis(req);
+  if (permitidas !== null && !permitidas.includes(chat.instance)) {
+    return res.status(403).json({ error: "sem acesso a esta conversa" });
+  }
   // zera não-lidas ao abrir
   chat.naoLidas = 0;
   saveDB(db);
@@ -583,7 +604,7 @@ app.get("/api/wa/chats/:numero", requireAuth, (req, res) => {
 
 // ---- criar instância + obter QR code (conecta um WhatsApp pelo sistema) ----
 app.post("/api/wa/instance/connect", requireAuth, async (req, res) => {
-  if (!req.isAdmin && !can(req, "gerir_usuarios")) return res.status(403).json({ error: "sem permissão" });
+  if (!req.isAdmin && !can(req, "gerir_whatsapp")) return res.status(403).json({ error: "sem permissão" });
   const { instance } = req.body;
   const c = db.waConfig || {};
   if (!c.url || !c.apiKey) return res.status(400).json({ error: "Configure a URL e a chave da Evolution primeiro" });
@@ -677,6 +698,11 @@ app.post("/api/wa/send", requireAuth, async (req, res) => {
   const chatExistente = db.waChats?.[numero];
   const instance = chatExistente?.instance || (c.instancias?.[0]?.instance) || "";
   if (!instance) return res.status(400).json({ error: "nenhuma instância configurada" });
+  // PRIVACIDADE: colaboradora só pode enviar por instância dela
+  const permitidas = instanciasVisiveis(req);
+  if (permitidas !== null && !permitidas.includes(instance)) {
+    return res.status(403).json({ error: "sem acesso a esta conversa" });
+  }
   try {
     const r = await fetch(`${c.url}/message/sendText/${instance}`, {
       method: "POST",
