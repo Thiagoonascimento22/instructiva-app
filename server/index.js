@@ -10,7 +10,7 @@ const ROOT = join(__dirname, "..");
 
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({ limit: "25mb" }));
 
 // ---------------------------------------------------------------------------
 // Armazenamento em arquivo JSON (JavaScript puro — sem compilação nativa).
@@ -475,7 +475,9 @@ app.post("/api/wa/webhook/:token", (req, res) => {
       const key = data.key || {};
       const remoteJid = key.remoteJid || "";
       const numero = normalizeJid(remoteJid);
-      if (numero && !remoteJid.includes("@g.us")) {  // ignora grupos por enquanto
+      const ehGrupo = remoteJid.includes("@g.us");
+      // ignora status/broadcast
+      if (numero && !remoteJid.includes("status@broadcast")) {
         const fromMe = !!key.fromMe;
         // extrai o texto da mensagem (vários formatos possíveis)
         const msg = data.message || {};
@@ -484,19 +486,25 @@ app.post("/api/wa/webhook/:token", (req, res) => {
           msg.extendedTextMessage?.text ||
           msg.imageMessage?.caption ||
           msg.videoMessage?.caption ||
-          (msg.audioMessage ? "[áudio]" : "") ||
-          (msg.imageMessage ? "[imagem]" : "") ||
-          (msg.documentMessage ? "[documento]" : "") ||
+          (msg.audioMessage ? "🎤 Áudio" : "") ||
+          (msg.imageMessage ? "📷 Imagem" : "") ||
+          (msg.videoMessage ? "🎥 Vídeo" : "") ||
+          (msg.documentMessage ? "📄 Documento" : "") ||
+          (msg.stickerMessage ? "Figurinha" : "") ||
           "";
         const pushName = data.pushName || "";
         const ts = (data.messageTimestamp ? Number(data.messageTimestamp) * 1000 : Date.now());
+        // chave única: junta instância + número (mesma pessoa em WhatsApps diferentes = conversas separadas)
+        const chaveId = `${instance || "?"}::${numero}`;
 
-        if (!db.waChats[numero]) {
-          db.waChats[numero] = { numero, nome: pushName || numero, instance, mensagens: [], atualizadoEm: ts, naoLidas: 0 };
+        if (!db.waChats[chaveId]) {
+          db.waChats[chaveId] = { id: chaveId, numero, nome: pushName || numero, instance, ehGrupo, mensagens: [], atualizadoEm: ts, naoLidas: 0 };
         }
-        const chat = db.waChats[numero];
+        const chat = db.waChats[chaveId];
         if (pushName && !fromMe) chat.nome = pushName;
         chat.instance = instance || chat.instance;
+        chat.ehGrupo = ehGrupo;
+        chat.numero = numero;
         chat.mensagens.push({ id: key.id || (Date.now() + "-" + Math.random()), fromMe, texto, ts });
         // mantém só as últimas 200 mensagens por conversa (evita crescer demais)
         if (chat.mensagens.length > 200) chat.mensagens = chat.mensagens.slice(-200);
@@ -568,9 +576,11 @@ app.get("/api/wa/chats", requireAuth, (req, res) => {
   (db.waConfig?.instancias || []).forEach((i) => { instMap[i.instance] = i.colaboradoraNome || i.instance; });
   let chats = Object.values(db.waChats || {})
     .map((c) => ({
+      id: c.id || `${c.instance || "?"}::${c.numero}`,
       numero: c.numero,
       nome: c.nome,
       instance: c.instance,
+      ehGrupo: !!c.ehGrupo,
       atendente: instMap[c.instance] || c.instance || "",   // nome da colaboradora
       atualizadoEm: c.atualizadoEm,
       naoLidas: c.naoLidas || 0,
@@ -583,26 +593,29 @@ app.get("/api/wa/chats", requireAuth, (req, res) => {
   // monta a lista de instâncias para o filtro
   let instParaFiltro;
   if (permitidas === null) {
-    // gerente: junta as instâncias cadastradas + as que aparecem em conversas (mesmo sem cadastro)
+    // gerente: mostra só instâncias cadastradas na config + as que REALMENTE têm conversa
     const cadastradas = db.waConfig?.instancias || [];
-    const jaListadas = new Set(cadastradas.map((i) => i.instance));
-    const extras = [];
-    Object.values(db.waChats || {}).forEach((c) => {
-      if (c.instance && !jaListadas.has(c.instance)) {
-        jaListadas.add(c.instance);
-        extras.push({ instance: c.instance, colaboradoraNome: c.instance });
-      }
+    const instComConversa = new Set(Object.values(db.waChats || {}).map((c) => c.instance).filter(Boolean));
+    const jaListadas = new Set();
+    instParaFiltro = [];
+    // primeiro as cadastradas (com nome bonito)
+    cadastradas.forEach((i) => {
+      if (!jaListadas.has(i.instance)) { jaListadas.add(i.instance); instParaFiltro.push(i); }
     });
-    instParaFiltro = [...cadastradas, ...extras];
+    // depois as que têm conversa mas não estão cadastradas
+    instComConversa.forEach((inst) => {
+      if (!jaListadas.has(inst)) { jaListadas.add(inst); instParaFiltro.push({ instance: inst, colaboradoraNome: inst }); }
+    });
   } else {
     instParaFiltro = (db.waConfig?.instancias || []).filter((i) => permitidas.includes(i.instance));
   }
   res.json({ chats, instancias: instParaFiltro });
 });
 
-// ---- ver mensagens de uma conversa ----
-app.get("/api/wa/chats/:numero", requireAuth, (req, res) => {
-  const chat = db.waChats?.[req.params.numero];
+// ---- ver mensagens de uma conversa (pela chave id = instancia::numero) ----
+app.get("/api/wa/chats/:id", requireAuth, (req, res) => {
+  const id = decodeURIComponent(req.params.id);
+  const chat = db.waChats?.[id];
   if (!chat) return res.status(404).json({ error: "conversa não encontrada" });
   // PRIVACIDADE: bloqueia abrir conversa de instância que não é da pessoa
   const permitidas = instanciasVisiveis(req);
@@ -613,6 +626,18 @@ app.get("/api/wa/chats/:numero", requireAuth, (req, res) => {
   chat.naoLidas = 0;
   saveDB(db);
   res.json({ chat });
+});
+
+// ---- limpar instâncias "fantasmas" do filtro (que não têm conversa nem estão conectadas) ----
+app.post("/api/wa/limpar-fantasmas", requireAuth, (req, res) => {
+  if (!req.isAdmin && !can(req, "gerir_whatsapp")) return res.status(403).json({ error: "sem permissão" });
+  // remove da config as instâncias que não têm nenhuma conversa
+  const comConversa = new Set(Object.values(db.waChats || {}).map((c) => c.instance).filter(Boolean));
+  if (db.waConfig?.instancias) {
+    db.waConfig.instancias = db.waConfig.instancias.filter((i) => comConversa.has(i.instance));
+    saveDB(db);
+  }
+  res.json({ ok: true });
 });
 
 // ---- minha instância (para a colaboradora conectar o próprio WhatsApp) ----
@@ -764,37 +789,115 @@ app.delete("/api/wa/instance/:nome", requireAuth, async (req, res) => {
 
 // ---- enviar mensagem (pela Evolution) ----
 app.post("/api/wa/send", requireAuth, async (req, res) => {
-  const { numero, texto } = req.body;
+  const { id, numero, texto } = req.body;
   const c = db.waConfig || {};
   if (!c.url || !c.apiKey) return res.status(400).json({ error: "WhatsApp não configurado" });
-  if (!numero || !texto?.trim()) return res.status(400).json({ error: "número e texto obrigatórios" });
-  // descobre a instância: a da própria conversa, ou a primeira configurada
-  const chatExistente = db.waChats?.[numero];
+  if (!texto?.trim()) return res.status(400).json({ error: "texto obrigatório" });
+  // localiza a conversa pela chave id (instancia::numero)
+  const chatExistente = id ? db.waChats?.[id] : null;
+  const numeroDestino = chatExistente?.numero || numero;
   const instance = chatExistente?.instance || (c.instancias?.[0]?.instance) || "";
+  if (!numeroDestino) return res.status(400).json({ error: "número não encontrado" });
   if (!instance) return res.status(400).json({ error: "nenhuma instância configurada" });
   // PRIVACIDADE: colaboradora só pode enviar por instância dela
   const permitidas = instanciasVisiveis(req);
   if (permitidas !== null && !permitidas.includes(instance)) {
     return res.status(403).json({ error: "sem acesso a esta conversa" });
   }
+  // para grupos, o "número" precisa do sufixo @g.us
+  const ehGrupo = chatExistente?.ehGrupo;
+  const destinoFinal = ehGrupo ? `${numeroDestino}@g.us` : numeroDestino;
   try {
     const r = await fetch(`${c.url}/message/sendText/${instance}`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "apikey": c.apiKey },
-      body: JSON.stringify({ number: numero, text: texto.trim() }),
+      body: JSON.stringify({ number: destinoFinal, text: texto.trim() }),
     });
     const data = await r.json();
     if (!r.ok) return res.status(502).json({ error: data?.message || "falha ao enviar" });
     // registra na conversa
-    if (db.waChats[numero]) {
-      db.waChats[numero].mensagens.push({ id: Date.now() + "-out", fromMe: true, texto: texto.trim(), ts: Date.now() });
-      db.waChats[numero].atualizadoEm = Date.now();
+    if (chatExistente) {
+      chatExistente.mensagens.push({ id: Date.now() + "-out", fromMe: true, texto: texto.trim(), ts: Date.now() });
+      chatExistente.atualizadoEm = Date.now();
       saveDB(db);
     }
     res.json({ ok: true });
   } catch (e) {
     console.error("Erro ao enviar WA:", e.message);
     res.status(502).json({ error: "não foi possível enviar agora" });
+  }
+});
+
+// ---- enviar mídia (imagem / documento / vídeo) em base64 ----
+app.post("/api/wa/send-media", requireAuth, async (req, res) => {
+  const { id, base64, mediatype, mimetype, filename, caption } = req.body;
+  const c = db.waConfig || {};
+  if (!c.url || !c.apiKey) return res.status(400).json({ error: "WhatsApp não configurado" });
+  const chatExistente = id ? db.waChats?.[id] : null;
+  if (!chatExistente) return res.status(400).json({ error: "conversa não encontrada" });
+  const instance = chatExistente.instance;
+  const permitidas = instanciasVisiveis(req);
+  if (permitidas !== null && !permitidas.includes(instance)) {
+    return res.status(403).json({ error: "sem acesso a esta conversa" });
+  }
+  const destino = chatExistente.ehGrupo ? `${chatExistente.numero}@g.us` : chatExistente.numero;
+  // base64 pode vir como "data:image/png;base64,XXXX" — tira o prefixo
+  const b64 = String(base64 || "").includes(",") ? String(base64).split(",")[1] : base64;
+  try {
+    const r = await fetch(`${c.url}/message/sendMedia/${instance}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "apikey": c.apiKey },
+      body: JSON.stringify({
+        number: destino,
+        mediatype: mediatype || "document",   // image | video | document
+        mimetype: mimetype || "application/octet-stream",
+        media: b64,
+        fileName: filename || "arquivo",
+        caption: caption || "",
+      }),
+    });
+    const data = await r.json();
+    if (!r.ok) return res.status(502).json({ error: data?.message || "falha ao enviar arquivo" });
+    const rotulo = mediatype === "image" ? "📷 Imagem" : mediatype === "video" ? "🎥 Vídeo" : "📄 " + (filename || "Documento");
+    chatExistente.mensagens.push({ id: Date.now() + "-media", fromMe: true, texto: caption ? `${rotulo} — ${caption}` : rotulo, ts: Date.now() });
+    chatExistente.atualizadoEm = Date.now();
+    saveDB(db);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("Erro ao enviar mídia:", e.message);
+    res.status(502).json({ error: "não foi possível enviar o arquivo" });
+  }
+});
+
+// ---- enviar áudio (gravação) em base64 ----
+app.post("/api/wa/send-audio", requireAuth, async (req, res) => {
+  const { id, base64 } = req.body;
+  const c = db.waConfig || {};
+  if (!c.url || !c.apiKey) return res.status(400).json({ error: "WhatsApp não configurado" });
+  const chatExistente = id ? db.waChats?.[id] : null;
+  if (!chatExistente) return res.status(400).json({ error: "conversa não encontrada" });
+  const instance = chatExistente.instance;
+  const permitidas = instanciasVisiveis(req);
+  if (permitidas !== null && !permitidas.includes(instance)) {
+    return res.status(403).json({ error: "sem acesso a esta conversa" });
+  }
+  const destino = chatExistente.ehGrupo ? `${chatExistente.numero}@g.us` : chatExistente.numero;
+  const b64 = String(base64 || "").includes(",") ? String(base64).split(",")[1] : base64;
+  try {
+    const r = await fetch(`${c.url}/message/sendWhatsAppAudio/${instance}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "apikey": c.apiKey },
+      body: JSON.stringify({ number: destino, audio: b64 }),
+    });
+    const data = await r.json();
+    if (!r.ok) return res.status(502).json({ error: data?.message || "falha ao enviar áudio" });
+    chatExistente.mensagens.push({ id: Date.now() + "-audio", fromMe: true, texto: "🎤 Áudio", ts: Date.now() });
+    chatExistente.atualizadoEm = Date.now();
+    saveDB(db);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("Erro ao enviar áudio:", e.message);
+    res.status(502).json({ error: "não foi possível enviar o áudio" });
   }
 });
 

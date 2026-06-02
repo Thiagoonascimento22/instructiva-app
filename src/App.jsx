@@ -9,7 +9,7 @@ import {
   Shield, UserPlus, Lock, Eye, EyeOff, Settings, TrendingUp, Award,
   Crown, ChevronRight, Activity, Zap, Target, Brain, Star, AlertTriangle,
   Sun, Moon, ListTodo, CalendarClock, Flag, Circle, ArrowLeft, UserCircle,
-  MessageCircle, Send, Link2, RefreshCw, Phone, PlusSquare, Power, Smile,
+  MessageCircle, Send, Link2, RefreshCw, Phone, PlusSquare, Power, Smile, Paperclip, Mic, Square,
 } from "lucide-react";
 import { LOGO_FULL, LOGO_CLARO, LOGO_ICONE } from "./logos";
 import { api } from "./api";
@@ -152,8 +152,8 @@ export default function App() {
         </div>
       </aside>
 
-      <main style={SX.main}>
-        <div className="fade-in" key={view}>
+      <main style={view === "whatsapp" ? SX.mainWide : SX.main}>
+        <div className="fade-in" key={view} style={view === "whatsapp" ? { height: "100%" } : undefined}>
           {view === "dashboard" && <Dashboard records={visibleRecords} users={users} me={me} isAdmin={isAdmin} />}
           {view === "lista" && <Lista records={visibleRecords} users={users} can={can} refresh={refreshData} goNew={() => setView("novo")} />}
           {view === "novo" && can("registrar") && <NovoRegistro me={me} isAdmin={isAdmin} users={users} refresh={refreshData} prefill={waPrefill} onDone={() => { setWaPrefill(null); setView("lista"); }} />}
@@ -955,8 +955,13 @@ function WhatsApp({ me, isAdmin, can, goNovo }) {
   const [minhaInst, setMinhaInst] = useState(null);    // { configurado, instancias } da própria pessoa
   const [meuQr, setMeuQr] = useState(null);            // modal de QR da colaboradora
   const [showEmoji, setShowEmoji] = useState(false);   // seletor de emoji
+  const [gravando, setGravando] = useState(false);     // gravando áudio
+  const [enviandoMidia, setEnviandoMidia] = useState(false);
   const msgEndRef = useRef(null);                      // âncora p/ rolar até o fim
   const msgScrollRef = useRef(null);                   // container das mensagens
+  const fileRef = useRef(null);                        // input de arquivo escondido
+  const mediaRecRef = useRef(null);                    // MediaRecorder
+  const audioChunksRef = useRef([]);                   // pedaços do áudio
   const podeConfigurar = isAdmin || can("gerir_whatsapp");
 
   async function loadChats() {
@@ -1021,15 +1026,16 @@ function WhatsApp({ me, isAdmin, can, goNovo }) {
     return true;
   });
 
-  async function abrir(numero) {
-    setSel(numero);
+  async function abrir(chatId) {
+    setSel(chatId);
     try {
-      const r = await api.waGetChat(numero);
+      const r = await api.waGetChat(chatId);
       setChat(r.chat);
-      // atualiza contador de não-lidas na lista
-      setChats((cs) => cs.map((c) => c.numero === numero ? { ...c, naoLidas: 0 } : c));
+      setChats((cs) => cs.map((c) => c.id === chatId ? { ...c, naoLidas: 0 } : c));
     } catch (e) { alert(e.message); }
   }
+
+  function fecharConversa() { setSel(null); setChat(null); }
 
   async function enviar() {
     if (!texto.trim() || enviando || !sel) return;
@@ -1043,10 +1049,80 @@ function WhatsApp({ me, isAdmin, can, goNovo }) {
     setEnviando(false);
   }
 
+  // anexar arquivo (imagem/documento/vídeo)
+  function escolherArquivo() { if (fileRef.current) fileRef.current.click(); }
+  async function enviarArquivo(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";   // permite re-selecionar o mesmo arquivo depois
+    if (!file || !sel) return;
+    if (file.size > 16 * 1024 * 1024) { alert("Arquivo muito grande (máx. 16MB)."); return; }
+    setEnviandoMidia(true);
+    try {
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const tipo = file.type.startsWith("image/") ? "image" : file.type.startsWith("video/") ? "video" : "document";
+      await api.waSendMedia({ id: sel, base64, mediatype: tipo, mimetype: file.type, filename: file.name });
+      const r = await api.waGetChat(sel);
+      setChat(r.chat);
+    } catch (err) { alert(err.message || "falha ao enviar arquivo"); }
+    setEnviandoMidia(false);
+  }
+
+  // gravar áudio
+  async function toggleGravacao() {
+    if (gravando) {
+      // parar
+      try { mediaRecRef.current?.stop(); } catch {}
+      return;
+    }
+    if (!sel) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const rec = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+      rec.ondataavailable = (ev) => { if (ev.data.size > 0) audioChunksRef.current.push(ev.data); };
+      rec.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        setGravando(false);
+        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        if (blob.size < 1000) return;  // gravação vazia
+        setEnviandoMidia(true);
+        try {
+          const base64 = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+          await api.waSendAudio(sel, base64);
+          const r = await api.waGetChat(sel);
+          setChat(r.chat);
+        } catch (err) { alert(err.message || "falha ao enviar áudio"); }
+        setEnviandoMidia(false);
+      };
+      mediaRecRef.current = rec;
+      rec.start();
+      setGravando(true);
+    } catch (err) {
+      alert("Não consegui acessar o microfone. Verifique a permissão do navegador.");
+    }
+  }
+
   function criarAtendimento() {
     if (!chat) return;
     goNovo({ telefone: chat.numero, nome: chat.nome !== chat.numero ? chat.nome : "" });
   }
+
+  // tecla ESC fecha a conversa aberta
+  useEffect(() => {
+    function onKey(e) { if (e.key === "Escape") fecharConversa(); }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   // auto-atualiza a conversa aberta (novas mensagens) a cada 5s
   useEffect(() => {
@@ -1065,7 +1141,7 @@ function WhatsApp({ me, isAdmin, can, goNovo }) {
       }
     }, 80);
     return () => clearTimeout(t);
-  }, [chat?.numero, chat?.mensagens?.length]);
+  }, [chat?.id, chat?.mensagens?.length]);
 
   // adiciona um emoji ao texto
   function addEmoji(e) {
@@ -1153,12 +1229,14 @@ function WhatsApp({ me, isAdmin, can, goNovo }) {
               </div>
             ) : (
               chatsFiltrados.map((c) => (
-                <button key={c.numero} onClick={() => abrir(c.numero)}
+                <button key={c.id} onClick={() => abrir(c.id)}
                   className="wa-chat-item"
-                  style={{ ...SX.waChatItem, ...(sel === c.numero ? SX.waChatItemActive : {}) }}>
-                  <div style={SX.waAvatar}>{(c.nome || c.numero).slice(0, 2).toUpperCase()}</div>
+                  style={{ ...SX.waChatItem, ...(sel === c.id ? SX.waChatItemActive : {}) }}>
+                  <div style={{ ...SX.waAvatar, background: c.ehGrupo ? "linear-gradient(135deg,#5B8DB8,#3E6A92)" : "linear-gradient(135deg,#F39200,#C97A1A)" }}>
+                    {c.ehGrupo ? <Users size={20} /> : (c.nome || c.numero).slice(0, 2).toUpperCase()}
+                  </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={SX.waChatName}>{c.nome || c.numero}</div>
+                    <div style={SX.waChatName}>{c.ehGrupo ? "👥 " : ""}{c.nome || c.numero}</div>
                     <div style={SX.waChatPreview}>{c.ultima || "—"}</div>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
@@ -1198,6 +1276,9 @@ function WhatsApp({ me, isAdmin, can, goNovo }) {
                     <PlusSquare size={15} /> Registrar atendimento
                   </button>
                 )}
+                <button onClick={fecharConversa} style={SX.waCloseConvo} title="Fechar (ESC)" type="button">
+                  <X size={18} />
+                </button>
               </div>
 
               <div style={SX.waMessages} className="wa-messages" ref={msgScrollRef}>
@@ -1232,19 +1313,36 @@ function WhatsApp({ me, isAdmin, can, goNovo }) {
 
               <div style={SX.waInputBar}>
                 <button onClick={() => setShowEmoji((v) => !v)} style={SX.waIconBtn} title="Emojis" type="button">
-                  <Smile size={20} />
+                  <Smile size={22} />
                 </button>
+                <button onClick={escolherArquivo} disabled={enviandoMidia} style={SX.waIconBtn} title="Anexar arquivo" type="button">
+                  <Paperclip size={21} />
+                </button>
+                <input ref={fileRef} type="file" onChange={enviarArquivo} style={{ display: "none" }}
+                  accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt,.zip" />
                 <input
                   value={texto}
                   onChange={(e) => setTexto(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") { enviar(); setShowEmoji(false); } }}
-                  placeholder="Escreva uma mensagem…"
+                  placeholder={gravando ? "Gravando áudio…" : enviandoMidia ? "Enviando…" : "Escreva uma mensagem…"}
+                  disabled={gravando}
                   style={SX.waInput}
                 />
-                <button onClick={() => { enviar(); setShowEmoji(false); }} disabled={enviando || !texto.trim()} style={SX.waSendBtn} title="Enviar">
-                  <Send size={18} />
-                </button>
+                {texto.trim() ? (
+                  <button onClick={() => { enviar(); setShowEmoji(false); }} disabled={enviando} style={SX.waSendBtn} title="Enviar">
+                    <Send size={18} />
+                  </button>
+                ) : (
+                  <button onClick={toggleGravacao} disabled={enviandoMidia} style={{ ...SX.waSendBtn, ...(gravando ? SX.waRecBtn : {}) }} title={gravando ? "Parar e enviar" : "Gravar áudio"}>
+                    {gravando ? <Square size={18} /> : <Mic size={20} />}
+                  </button>
+                )}
               </div>
+              {gravando && (
+                <div style={SX.waRecBar}>
+                  <span style={SX.waRecDot} /> Gravando… toque no quadrado pra enviar
+                </div>
+              )}
             </>
           )}
         </div>
@@ -1662,6 +1760,7 @@ const SX = {
   logoutBtn: { width: 32, height: 32, borderRadius: 9, border: "none", background: "rgba(255,255,255,0.06)", color: "#B4B6BA", cursor: "pointer", display: "grid", placeItems: "center", flexShrink: 0, transition: "all .15s" },
 
   main: { flex: 1, padding: "36px 44px 70px", maxWidth: 1340, margin: "0 auto", width: "100%", position: "relative", zIndex: 1, overflowY: "auto", height: "100vh" },
+  mainWide: { flex: 1, padding: "28px 32px", width: "100%", position: "relative", zIndex: 1, height: "100vh", overflow: "hidden", display: "flex", flexDirection: "column" },
   header: { display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 26, flexWrap: "wrap", gap: 16 },
   h1: { margin: 0, fontSize: 29, fontWeight: 800, letterSpacing: "-0.6px", color: "#2A2B2E" },
   sub: { margin: "5px 0 0", color: "#82848A", fontSize: 14.5, fontWeight: 500 },
@@ -1808,7 +1907,7 @@ const SX = {
 
   // ---- WhatsApp ----
   btnPrimarySm: { display: "inline-flex", alignItems: "center", gap: 7, background: "linear-gradient(120deg,#F39200,#E08200)", color: "#fff", border: "none", borderRadius: 10, padding: "0 14px", height: 38, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 4px 12px rgba(243,146,0,0.3)", whiteSpace: "nowrap" },
-  waWrap: { display: "grid", gridTemplateColumns: "320px 1fr", height: "calc(100vh - 200px)", minHeight: 480, borderRadius: 18, overflow: "hidden", border: "1px solid var(--line)", background: "var(--card)" },
+  waWrap: { display: "grid", gridTemplateColumns: "360px 1fr", height: "calc(100vh - 116px)", minHeight: 480, borderRadius: 16, overflow: "hidden", border: "1px solid var(--line)", background: "var(--card)", boxShadow: "0 10px 40px -12px rgba(0,0,0,0.18)" },
   waList: { display: "flex", flexDirection: "column", borderRight: "1px solid var(--line)", minWidth: 0, background: "var(--card)" },
   waListHead: { display: "flex", alignItems: "center", gap: 8, padding: "16px 18px", fontWeight: 700, fontSize: 14, color: "var(--text)", borderBottom: "1px solid var(--line)" },
   waCount: { marginLeft: "auto", fontSize: 12, fontWeight: 700, color: "#fff", background: "#F39200", borderRadius: 20, padding: "1px 9px" },
@@ -1834,6 +1933,10 @@ const SX = {
   waIconBtn: { width: 42, height: 42, borderRadius: 12, border: "none", background: "transparent", color: "var(--muted)", cursor: "pointer", display: "grid", placeItems: "center", flexShrink: 0 },
   waInput: { flex: 1, border: "1px solid var(--line)", borderRadius: 22, padding: "0 18px", height: 44, fontSize: 14.2, fontFamily: "inherit", background: "var(--bg)", color: "var(--text)", outline: "none" },
   waSendBtn: { width: 46, height: 46, borderRadius: "50%", border: "none", background: "linear-gradient(135deg,#F39200,#E08200)", color: "#fff", cursor: "pointer", display: "grid", placeItems: "center", boxShadow: "0 4px 12px rgba(243,146,0,0.35)", flexShrink: 0 },
+  waRecBtn: { background: "linear-gradient(135deg,#E5484D,#C1383C)", boxShadow: "0 4px 12px rgba(229,72,77,0.4)" },
+  waRecBar: { display: "flex", alignItems: "center", gap: 8, padding: "8px 18px", fontSize: 13, fontWeight: 600, color: "#E5484D", background: "var(--card)", borderTop: "1px solid var(--line)" },
+  waRecDot: { width: 10, height: 10, borderRadius: "50%", background: "#E5484D", animation: "pulse 1s infinite" },
+  waCloseConvo: { width: 40, height: 40, borderRadius: 10, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", cursor: "pointer", display: "grid", placeItems: "center", flexShrink: 0 },
   emojiPanel: { display: "flex", flexWrap: "wrap", gap: 2, padding: "10px 14px", borderTop: "1px solid var(--line)", background: "var(--card)", maxHeight: 140, overflowY: "auto" },
   emojiBtn: { border: "none", background: "transparent", cursor: "pointer", fontSize: 22, lineHeight: 1, padding: "5px 6px", borderRadius: 8 },
   waOk: { display: "inline-flex", alignItems: "center", gap: 7, color: "#12A150", fontSize: 14, fontWeight: 600 },
