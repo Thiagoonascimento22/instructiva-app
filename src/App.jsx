@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
@@ -9,7 +9,7 @@ import {
   Shield, UserPlus, Lock, Eye, EyeOff, Settings, TrendingUp, Award,
   Crown, ChevronRight, Activity, Zap, Target, Brain, Star, AlertTriangle,
   Sun, Moon, ListTodo, CalendarClock, Flag, Circle, ArrowLeft, UserCircle,
-  MessageCircle, Send, Link2, RefreshCw, Phone, PlusSquare, Power,
+  MessageCircle, Send, Link2, RefreshCw, Phone, PlusSquare, Power, Smile,
 } from "lucide-react";
 import { LOGO_FULL, LOGO_CLARO, LOGO_ICONE } from "./logos";
 import { api } from "./api";
@@ -21,6 +21,9 @@ const STATUS = {
 };
 // paleta de gráficos derivada da marca (laranja + cinzas + apoios sóbrios)
 const PALETTE = ["#F39200", "#6E7073", "#E8A93C", "#9A9CA0", "#C97A1A", "#B5B7BA", "#12A150", "#5B8DB8"];
+
+// emojis mais usados em atendimento
+const EMOJIS = ["😀","😁","😂","🤣","😊","😍","😉","😎","🤝","👍","👏","🙏","❤️","🔥","✅","✔️","⭐","🎉","💪","🙌","👋","😅","😢","😭","😡","🤔","😴","🥰","😘","💯","⏰","📌","📎","📞","💬","✍️","👀","🚀","💡","⚠️"];
 
 function emptyForm() {
   return { data: new Date().toISOString().slice(0, 10), aluno: "", email: "", telefone: "", assunto: "", solucao: "", status: "resolvido", obs: "" };
@@ -951,6 +954,9 @@ function WhatsApp({ me, isAdmin, can, goNovo }) {
   const [instancias, setInstancias] = useState([]);    // lista de atendentes p/ o filtro
   const [minhaInst, setMinhaInst] = useState(null);    // { configurado, instancias } da própria pessoa
   const [meuQr, setMeuQr] = useState(null);            // modal de QR da colaboradora
+  const [showEmoji, setShowEmoji] = useState(false);   // seletor de emoji
+  const msgEndRef = useRef(null);                      // âncora p/ rolar até o fim
+  const msgScrollRef = useRef(null);                   // container das mensagens
   const podeConfigurar = isAdmin || can("gerir_whatsapp");
 
   async function loadChats() {
@@ -1040,6 +1046,25 @@ function WhatsApp({ me, isAdmin, can, goNovo }) {
   function criarAtendimento() {
     if (!chat) return;
     goNovo({ telefone: chat.numero, nome: chat.nome !== chat.numero ? chat.nome : "" });
+  }
+
+  // auto-atualiza a conversa aberta (novas mensagens) a cada 5s
+  useEffect(() => {
+    if (!sel) return;
+    const t = setInterval(async () => {
+      try { const r = await api.waGetChat(sel); setChat(r.chat); } catch {}
+    }, 5000);
+    return () => clearInterval(t);
+  }, [sel]);
+
+  // rola até a última mensagem sempre que a conversa muda/cresce
+  useEffect(() => {
+    if (msgEndRef.current) msgEndRef.current.scrollIntoView({ behavior: "auto", block: "end" });
+  }, [chat?.numero, chat?.mensagens?.length]);
+
+  // adiciona um emoji ao texto
+  function addEmoji(e) {
+    setTexto((t) => t + e);
   }
 
   // ---- tela de configuração (só admin) ----
@@ -1170,31 +1195,49 @@ function WhatsApp({ me, isAdmin, can, goNovo }) {
                 )}
               </div>
 
-              <div style={SX.waMessages} className="wa-messages">
+              <div style={SX.waMessages} className="wa-messages" ref={msgScrollRef}>
                 {chat.mensagens.length === 0 ? (
                   <div style={SX.waEmpty}>Sem mensagens nesta conversa.</div>
                 ) : (
-                  chat.mensagens.map((m) => (
-                    <div key={m.id} style={{ ...SX.waBubbleRow, justifyContent: m.fromMe ? "flex-end" : "flex-start" }}>
-                      <div style={{ ...SX.waBubble, ...(m.fromMe ? SX.waBubbleMe : SX.waBubbleThem) }}>
-                        <div>{m.texto || "—"}</div>
-                        <div style={SX.waTime}>{new Date(m.ts).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</div>
+                  chat.mensagens.map((m, i) => {
+                    const prev = chat.mensagens[i - 1];
+                    const agrupado = prev && prev.fromMe === m.fromMe;   // mesma "pessoa" seguida
+                    return (
+                      <div key={m.id} style={{ ...SX.waBubbleRow, justifyContent: m.fromMe ? "flex-end" : "flex-start", marginTop: agrupado ? 2 : 10 }}>
+                        <div style={{ ...SX.waBubble, ...(m.fromMe ? SX.waBubbleMe : SX.waBubbleThem) }}>
+                          <span style={SX.waBubbleText}>{m.texto || "—"}</span>
+                          <span style={{ ...SX.waTime, color: m.fromMe ? "rgba(255,255,255,0.85)" : "var(--muted)" }}>
+                            {new Date(m.ts).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
+                <div ref={msgEndRef} />
               </div>
 
+              {showEmoji && (
+                <div style={SX.emojiPanel}>
+                  {EMOJIS.map((e) => (
+                    <button key={e} onClick={() => addEmoji(e)} style={SX.emojiBtn} type="button">{e}</button>
+                  ))}
+                </div>
+              )}
+
               <div style={SX.waInputBar}>
+                <button onClick={() => setShowEmoji((v) => !v)} style={SX.waIconBtn} title="Emojis" type="button">
+                  <Smile size={20} />
+                </button>
                 <input
                   value={texto}
                   onChange={(e) => setTexto(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") enviar(); }}
+                  onKeyDown={(e) => { if (e.key === "Enter") { enviar(); setShowEmoji(false); } }}
                   placeholder="Escreva uma mensagem…"
                   style={SX.waInput}
                 />
-                <button onClick={enviar} disabled={enviando || !texto.trim()} className="btn-primary" style={SX.waSendBtn}>
-                  <Send size={16} />
+                <button onClick={() => { enviar(); setShowEmoji(false); }} disabled={enviando || !texto.trim()} style={SX.waSendBtn} title="Enviar">
+                  <Send size={18} />
                 </button>
               </div>
             </>
@@ -1775,15 +1818,19 @@ const SX = {
   waConvo: { display: "flex", flexDirection: "column", minWidth: 0, background: "var(--bg)" },
   waConvoEmpty: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "var(--muted)", fontSize: 14 },
   waConvoHead: { display: "flex", alignItems: "center", gap: 12, padding: "14px 18px", borderBottom: "1px solid var(--line)", background: "var(--card)" },
-  waMessages: { flex: 1, overflowY: "auto", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 8 },
+  waMessages: { flex: 1, overflowY: "auto", padding: "20px 28px", display: "flex", flexDirection: "column", backgroundColor: "var(--wa-chat-bg)", backgroundImage: "radial-gradient(var(--wa-chat-dot) 1px, transparent 1px)", backgroundSize: "22px 22px" },
   waBubbleRow: { display: "flex", width: "100%" },
-  waBubble: { maxWidth: "72%", padding: "9px 13px", borderRadius: 14, fontSize: 14, lineHeight: 1.45, wordBreak: "break-word" },
-  waBubbleThem: { background: "var(--card)", color: "var(--text)", border: "1px solid var(--line)", borderBottomLeftRadius: 4 },
-  waBubbleMe: { background: "linear-gradient(120deg,#F39200,#E08200)", color: "#fff", borderBottomRightRadius: 4 },
-  waTime: { fontSize: 10.5, opacity: 0.7, marginTop: 3, textAlign: "right" },
-  waInputBar: { display: "flex", gap: 10, padding: "14px 16px", borderTop: "1px solid var(--line)", background: "var(--card)" },
-  waInput: { flex: 1, border: "1px solid var(--line)", borderRadius: 12, padding: "0 15px", height: 44, fontSize: 14, fontFamily: "inherit", background: "var(--bg)", color: "var(--text)", outline: "none" },
-  waSendBtn: { width: 48, height: 44, borderRadius: 12, border: "none", background: "linear-gradient(120deg,#F39200,#E08200)", color: "#fff", cursor: "pointer", display: "grid", placeItems: "center", boxShadow: "0 4px 12px rgba(243,146,0,0.3)" },
+  waBubble: { position: "relative", maxWidth: "65%", padding: "7px 11px 7px 12px", borderRadius: 12, fontSize: 14.2, lineHeight: 1.4, wordBreak: "break-word", boxShadow: "0 1px 1px rgba(0,0,0,0.08)", display: "flex", alignItems: "flex-end", gap: 8 },
+  waBubbleText: { whiteSpace: "pre-wrap" },
+  waBubbleThem: { background: "var(--wa-bubble-them)", color: "var(--text)", borderTopLeftRadius: 3 },
+  waBubbleMe: { background: "linear-gradient(135deg,#F8A93C,#E08200)", color: "#fff", borderTopRightRadius: 3 },
+  waTime: { fontSize: 10, fontWeight: 500, flexShrink: 0, alignSelf: "flex-end", marginBottom: 1, whiteSpace: "nowrap" },
+  waInputBar: { display: "flex", alignItems: "center", gap: 8, padding: "12px 16px", borderTop: "1px solid var(--line)", background: "var(--card)" },
+  waIconBtn: { width: 42, height: 42, borderRadius: 12, border: "none", background: "transparent", color: "var(--muted)", cursor: "pointer", display: "grid", placeItems: "center", flexShrink: 0 },
+  waInput: { flex: 1, border: "1px solid var(--line)", borderRadius: 22, padding: "0 18px", height: 44, fontSize: 14.2, fontFamily: "inherit", background: "var(--bg)", color: "var(--text)", outline: "none" },
+  waSendBtn: { width: 46, height: 46, borderRadius: "50%", border: "none", background: "linear-gradient(135deg,#F39200,#E08200)", color: "#fff", cursor: "pointer", display: "grid", placeItems: "center", boxShadow: "0 4px 12px rgba(243,146,0,0.35)", flexShrink: 0 },
+  emojiPanel: { display: "flex", flexWrap: "wrap", gap: 2, padding: "10px 14px", borderTop: "1px solid var(--line)", background: "var(--card)", maxHeight: 140, overflowY: "auto" },
+  emojiBtn: { border: "none", background: "transparent", cursor: "pointer", fontSize: 22, lineHeight: 1, padding: "5px 6px", borderRadius: 8 },
   waOk: { display: "inline-flex", alignItems: "center", gap: 7, color: "#12A150", fontSize: 14, fontWeight: 600 },
   waWebhookBox: { marginTop: 8, padding: "16px 18px", background: "rgba(243,146,0,0.05)", border: "1px solid rgba(243,146,0,0.16)", borderRadius: 14 },
   waCode: { display: "block", background: "#2C2D30", color: "#F8B14E", padding: "10px 13px", borderRadius: 9, fontSize: 12.5, fontFamily: "monospace", fontWeight: 600, wordBreak: "break-all", lineHeight: 1.5 },
@@ -1838,6 +1885,11 @@ body { margin: 0; }
   --shadow: 0 18px 50px -12px rgba(0,0,0,0.6);
   --mesh-1: rgba(243,146,0,0.14);
   --mesh-2: rgba(255,160,60,0.07);
+  --line: rgba(255,255,255,0.08);
+  --muted: #A0A3AB;
+  --wa-chat-bg: #0E0F13;
+  --wa-chat-dot: rgba(255,255,255,0.025);
+  --wa-bubble-them: #1E2025;
 }
 .theme-light {
   --bg: #F7F6F3;
@@ -1855,6 +1907,11 @@ body { margin: 0; }
   --shadow: 0 14px 40px -16px rgba(60,55,45,0.18);
   --mesh-1: rgba(243,146,0,0.10);
   --mesh-2: rgba(255,160,60,0.05);
+  --line: #EBE9E4;
+  --muted: #6B6F78;
+  --wa-chat-bg: #EDE6DD;
+  --wa-chat-dot: rgba(120,100,70,0.06);
+  --wa-bubble-them: #FFFFFF;
 }
 
 /* fundo com gradient mesh atmosférico */
