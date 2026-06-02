@@ -502,16 +502,23 @@ app.post("/api/wa/webhook/:token", (req, res) => {
         const fromMe = !!key.fromMe;
         // extrai o texto da mensagem (vários formatos possíveis)
         const msg = data.message || {};
+        // detecta o tipo de mídia
+        let tipoMidia = null;
+        if (msg.audioMessage) tipoMidia = "audio";
+        else if (msg.imageMessage) tipoMidia = "image";
+        else if (msg.videoMessage) tipoMidia = "video";
+        else if (msg.documentMessage) tipoMidia = "document";
+        else if (msg.stickerMessage) tipoMidia = "sticker";
         const texto =
           msg.conversation ||
           msg.extendedTextMessage?.text ||
           msg.imageMessage?.caption ||
           msg.videoMessage?.caption ||
-          (msg.audioMessage ? "🎤 Áudio" : "") ||
-          (msg.imageMessage ? "📷 Imagem" : "") ||
-          (msg.videoMessage ? "🎥 Vídeo" : "") ||
-          (msg.documentMessage ? "📄 Documento" : "") ||
-          (msg.stickerMessage ? "Figurinha" : "") ||
+          (tipoMidia === "audio" ? "🎤 Áudio" : "") ||
+          (tipoMidia === "image" ? "📷 Imagem" : "") ||
+          (tipoMidia === "video" ? "🎥 Vídeo" : "") ||
+          (tipoMidia === "document" ? "📄 Documento" : "") ||
+          (tipoMidia === "sticker" ? "Figurinha" : "") ||
           "";
         const pushName = data.pushName || "";
         const ts = (data.messageTimestamp ? Number(data.messageTimestamp) * 1000 : Date.now());
@@ -526,7 +533,15 @@ app.post("/api/wa/webhook/:token", (req, res) => {
         chat.instance = instance || chat.instance;
         chat.ehGrupo = ehGrupo;
         chat.numero = numero;
-        chat.mensagens.push({ id: key.id || (Date.now() + "-" + Math.random()), fromMe, texto, ts });
+        // guarda a mensagem; se for mídia, guarda o messageId pra baixar depois
+        const novaMsg = { id: key.id || (Date.now() + "-" + Math.random()), fromMe, texto, ts };
+        if (tipoMidia && tipoMidia !== "sticker") {
+          novaMsg.tipoMidia = tipoMidia;
+          novaMsg.mediaMsgId = key.id;       // usado pra baixar a mídia da Evolution
+          novaMsg.mimetype = msg[`${tipoMidia}Message`]?.mimetype || "";
+          if (tipoMidia === "document") novaMsg.fileName = msg.documentMessage?.fileName || "documento";
+        }
+        chat.mensagens.push(novaMsg);
         // mantém só as últimas 200 mensagens por conversa (evita crescer demais)
         if (chat.mensagens.length > 200) chat.mensagens = chat.mensagens.slice(-200);
         chat.atualizadoEm = ts;
@@ -765,6 +780,87 @@ app.get("/api/wa/instance/status/:nome", requireAuth, async (req, res) => {
     res.json({ state });   // "open" = conectado, "connecting", "close"
   } catch (e) {
     res.json({ state: "unknown" });
+  }
+});
+
+// ---- baixar mídia de uma mensagem (áudio/imagem/vídeo/doc) em base64 ----
+app.post("/api/wa/media", requireAuth, async (req, res) => {
+  const { id, mediaMsgId } = req.body;
+  const c = db.waConfig || {};
+  if (!c.url || !c.apiKey) return res.status(400).json({ error: "não configurado" });
+  const chat = id ? db.waChats?.[id] : null;
+  if (!chat) return res.status(404).json({ error: "conversa não encontrada" });
+  const permitidas = instanciasVisiveis(req);
+  if (permitidas !== null && !permitidas.includes(chat.instance)) {
+    return res.status(403).json({ error: "sem acesso" });
+  }
+  // acha a mensagem com aquele mediaMsgId
+  const msg = chat.mensagens.find((m) => m.mediaMsgId === mediaMsgId);
+  if (!msg) return res.status(404).json({ error: "mídia não encontrada" });
+  // se já baixamos antes, devolve do cache
+  if (msg.mediaBase64) return res.json({ base64: msg.mediaBase64, mimetype: msg.mimetype, tipoMidia: msg.tipoMidia });
+  try {
+    // pede a mídia decodificada pra Evolution
+    const r = await fetch(`${c.url}/chat/getBase64FromMediaMessage/${chat.instance}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "apikey": c.apiKey },
+      body: JSON.stringify({ message: { key: { id: mediaMsgId } }, convertToMp4: false }),
+    });
+    const data = await r.json().catch(() => ({}));
+    const base64 = data?.base64 || data?.media || "";
+    if (!base64) return res.status(502).json({ error: "não foi possível baixar a mídia" });
+    const mimetype = data?.mimetype || msg.mimetype || "application/octet-stream";
+    // guarda no cache (só áudio/imagem pequenos; evita inchar o banco com vídeo grande)
+    if (msg.tipoMidia === "audio" || msg.tipoMidia === "image") {
+      msg.mediaBase64 = base64;
+      msg.mimetype = mimetype;
+      saveDB(db);
+    }
+    res.json({ base64, mimetype, tipoMidia: msg.tipoMidia });
+  } catch (e) {
+    console.error("Erro ao baixar mídia:", e.message);
+    res.status(502).json({ error: "erro ao baixar a mídia" });
+  }
+});
+
+// ---- iniciar uma nova conversa (manda 1ª mensagem para um número novo) ----
+app.post("/api/wa/nova-conversa", requireAuth, async (req, res) => {
+  const { instance, numero, texto } = req.body;
+  const c = db.waConfig || {};
+  if (!c.url || !c.apiKey) return res.status(400).json({ error: "WhatsApp não configurado" });
+  if (!numero || !texto?.trim()) return res.status(400).json({ error: "número e mensagem são obrigatórios" });
+  // descobre a instância: a escolhida, ou a única da colaboradora, ou a 1ª
+  let inst = instance;
+  const permitidas = instanciasVisiveis(req);
+  if (permitidas !== null) {
+    // colaboradora: força usar uma instância dela
+    if (!inst || !permitidas.includes(inst)) inst = permitidas[0];
+  }
+  if (!inst) inst = c.instancias?.[0]?.instance;
+  if (!inst) return res.status(400).json({ error: "nenhuma instância disponível" });
+  // limpa o número (só dígitos)
+  const num = String(numero).replace(/\D/g, "");
+  if (num.length < 10) return res.status(400).json({ error: "número inválido — use DDD + número (ex: 5544999998888)" });
+  try {
+    const r = await fetch(`${c.url}/message/sendText/${inst}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "apikey": c.apiKey },
+      body: JSON.stringify({ number: num, text: texto.trim() }),
+    });
+    const data = await r.json();
+    if (!r.ok) return res.status(502).json({ error: data?.message || "não foi possível enviar (número tem WhatsApp?)" });
+    // cria/atualiza a conversa no sistema
+    const chaveId = `${inst}::${num}`;
+    if (!db.waChats[chaveId]) {
+      db.waChats[chaveId] = { id: chaveId, numero: num, nome: num, instance: inst, ehGrupo: false, mensagens: [], atualizadoEm: Date.now(), naoLidas: 0 };
+    }
+    db.waChats[chaveId].mensagens.push({ id: Date.now() + "-out", fromMe: true, texto: texto.trim(), ts: Date.now() });
+    db.waChats[chaveId].atualizadoEm = Date.now();
+    saveDB(db);
+    res.json({ ok: true, id: chaveId });
+  } catch (e) {
+    console.error("Erro ao iniciar conversa:", e.message);
+    res.status(502).json({ error: "não foi possível iniciar a conversa" });
   }
 });
 

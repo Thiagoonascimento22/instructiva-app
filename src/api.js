@@ -62,4 +62,6 @@ export const api = {
   waLogoutInstance: (nome) => req("POST", "/wa/instance/logout/" + encodeURIComponent(nome)),
   waDeleteInstance: (nome) => req("DELETE", "/wa/instance/" + encodeURIComponent(nome)),
   waLimparFantasmas: () => req("POST", "/wa/limpar-fantasmas"),
+  waBaixarMidia: (id, mediaMsgId) => req("POST", "/wa/media", { id, mediaMsgId }),
+  waNovaConversa: (instance, numero, texto) => req("POST", "/wa/nova-conversa", { instance, numero, texto }),
 };

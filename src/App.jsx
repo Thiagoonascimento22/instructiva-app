@@ -940,6 +940,44 @@ function Tarefas({ me, isAdmin, can, users }) {
 }
 
 // ============================================================= WHATSAPP
+// componente que baixa e exibe uma mídia (áudio ou imagem) recebida
+function MidiaMsg({ msg, chatId }) {
+  const [carregando, setCarregando] = useState(false);
+  const [dados, setDados] = useState(null);   // { base64, mimetype, tipoMidia }
+  const [erro, setErro] = useState(false);
+
+  async function baixar() {
+    if (carregando || dados) return;
+    setCarregando(true);
+    setErro(false);
+    try {
+      const r = await api.waBaixarMidia(chatId, msg.mediaMsgId);
+      setDados(r);
+    } catch (e) { setErro(true); }
+    setCarregando(false);
+  }
+
+  // áudio e imagem baixam automaticamente ao aparecer
+  useEffect(() => { baixar(); }, []);
+
+  if (carregando) return <span style={{ fontSize: 13, opacity: 0.7 }}>⏳ Carregando {msg.tipoMidia === "audio" ? "áudio" : "imagem"}…</span>;
+  if (erro) return (
+    <span style={{ fontSize: 13 }}>
+      {msg.texto} <button onClick={baixar} style={{ border: "none", background: "transparent", color: "#C97A1A", cursor: "pointer", fontWeight: 700, fontSize: 12 }}>tentar de novo</button>
+    </span>
+  );
+  if (!dados) return <span style={SX.waBubbleText}>{msg.texto || "—"}</span>;
+
+  const src = `data:${dados.mimetype || (msg.tipoMidia === "audio" ? "audio/ogg" : "image/jpeg")};base64,${dados.base64}`;
+  if (msg.tipoMidia === "audio") {
+    return <audio controls src={src} style={{ maxWidth: 240, height: 40 }} />;
+  }
+  if (msg.tipoMidia === "image") {
+    return <img src={src} alt="imagem" style={{ maxWidth: 240, maxHeight: 280, borderRadius: 8, display: "block", cursor: "pointer" }} onClick={() => window.open(src, "_blank")} />;
+  }
+  return <span style={SX.waBubbleText}>{msg.texto || "—"}</span>;
+}
+
 function WhatsApp({ me, isAdmin, can, goNovo }) {
   const [chats, setChats] = useState([]);
   const [sel, setSel] = useState(null);          // número selecionado
@@ -952,6 +990,8 @@ function WhatsApp({ me, isAdmin, can, goNovo }) {
   const [busca, setBusca] = useState("");              // busca de aluno
   const [filtroInst, setFiltroInst] = useState("");    // filtro por atendente (instância)
   const [showFiltro, setShowFiltro] = useState(false); // menu do funil de filtro
+  const [novaConv, setNovaConv] = useState(null);      // modal de nova conversa { numero, texto, instance }
+  const [enviandoNova, setEnviandoNova] = useState(false);
   const [instancias, setInstancias] = useState([]);    // lista de atendentes p/ o filtro
   const [minhaInst, setMinhaInst] = useState(null);    // { configurado, instancias } da própria pessoa
   const [meuQr, setMeuQr] = useState(null);            // modal de QR da colaboradora
@@ -1118,6 +1158,25 @@ function WhatsApp({ me, isAdmin, can, goNovo }) {
     goNovo({ telefone: chat.numero, nome: chat.nome !== chat.numero ? chat.nome : "" });
   }
 
+  // iniciar nova conversa
+  function abrirNovaConv() {
+    // escolhe instância padrão: a do filtro ativo, ou a 1ª disponível
+    const instPadrao = filtroInst || instancias[0]?.instance || "";
+    setNovaConv({ numero: "", texto: "", instance: instPadrao });
+  }
+  async function enviarNovaConv() {
+    if (!novaConv || enviandoNova) return;
+    if (!novaConv.numero.trim() || !novaConv.texto.trim()) { alert("Preencha o número e a mensagem."); return; }
+    setEnviandoNova(true);
+    try {
+      const r = await api.waNovaConversa(novaConv.instance, novaConv.numero, novaConv.texto);
+      setNovaConv(null);
+      await loadChats();
+      if (r.id) abrir(r.id);   // já abre a conversa criada
+    } catch (e) { alert(e.message); }
+    setEnviandoNova(false);
+  }
+
   // tecla ESC fecha a conversa aberta
   useEffect(() => {
     function onKey(e) { if (e.key === "Escape") fecharConversa(); }
@@ -1187,23 +1246,28 @@ function WhatsApp({ me, isAdmin, can, goNovo }) {
           <div style={SX.waListHead}>
             <MessageCircle size={16} /> Conversas
             <span style={SX.waCount}>{chatsFiltrados.length}</span>
-            {/* FUNIL de filtro por atendente */}
-            {instancias.length >= 1 && (
-              <div style={{ position: "relative", marginLeft: "auto" }}>
-                <button onClick={() => setShowFiltro((v) => !v)}
-                  style={{ ...SX.waFunil, ...(filtroInst ? SX.waFunilOn : {}) }}
-                  title="Filtrar por atendente">
-                  <Filter size={16} />
-                  {filtroInst && <span style={SX.waFunilDot} />}
-                </button>
-                {showFiltro && (
-                  <>
-                    <div style={SX.waFunilBackdrop} onClick={() => setShowFiltro(false)} />
-                    <div style={SX.waFunilMenu}>
-                      <div style={SX.waFunilTitle}>Ver conversas de:</div>
-                      <button onClick={() => { setFiltroInst(""); setShowFiltro(false); }}
-                        style={{ ...SX.waFunilItem, ...(filtroInst === "" ? SX.waFunilItemOn : {}) }}>
-                        <Users size={15} /> Todos os atendentes
+            <div style={{ display: "flex", gap: 6, marginLeft: "auto", alignItems: "center" }}>
+              {/* botão NOVA CONVERSA */}
+              <button onClick={abrirNovaConv} style={SX.waNovaBtn} title="Iniciar nova conversa">
+                <PlusSquare size={16} />
+              </button>
+              {/* FUNIL de filtro por atendente */}
+              {instancias.length >= 1 && (
+                <div style={{ position: "relative" }}>
+                  <button onClick={() => setShowFiltro((v) => !v)}
+                    style={{ ...SX.waFunil, ...(filtroInst ? SX.waFunilOn : {}) }}
+                    title="Filtrar por atendente">
+                    <Filter size={16} />
+                    {filtroInst && <span style={SX.waFunilDot} />}
+                  </button>
+                  {showFiltro && (
+                    <>
+                      <div style={SX.waFunilBackdrop} onClick={() => setShowFiltro(false)} />
+                      <div style={SX.waFunilMenu}>
+                        <div style={SX.waFunilTitle}>Ver conversas de:</div>
+                        <button onClick={() => { setFiltroInst(""); setShowFiltro(false); }}
+                          style={{ ...SX.waFunilItem, ...(filtroInst === "" ? SX.waFunilItemOn : {}) }}>
+                          <Users size={15} /> Todos os atendentes
                         {filtroInst === "" && <CheckCircle2 size={15} style={{ marginLeft: "auto", color: "#F39200" }} />}
                       </button>
                       {instancias.map((i) => (
@@ -1214,11 +1278,12 @@ function WhatsApp({ me, isAdmin, can, goNovo }) {
                           {filtroInst === i.instance && <CheckCircle2 size={15} style={{ marginLeft: "auto", color: "#F39200" }} />}
                         </button>
                       ))}
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* etiqueta do filtro ativo */}
@@ -1316,7 +1381,11 @@ function WhatsApp({ me, isAdmin, can, goNovo }) {
                     return (
                       <div key={m.id} style={{ ...SX.waBubbleRow, justifyContent: m.fromMe ? "flex-end" : "flex-start", marginTop: agrupado ? 2 : 10 }}>
                         <div style={{ ...SX.waBubble, ...(m.fromMe ? SX.waBubbleMe : SX.waBubbleThem) }}>
-                          <span style={SX.waBubbleText}>{m.texto || "—"}</span>
+                          {(!m.fromMe && m.tipoMidia && (m.tipoMidia === "audio" || m.tipoMidia === "image")) ? (
+                            <MidiaMsg msg={m} chatId={sel} fromMe={m.fromMe} />
+                          ) : (
+                            <span style={SX.waBubbleText}>{m.texto || "—"}</span>
+                          )}
                           <span style={{ ...SX.waTime, color: m.fromMe ? "rgba(255,255,255,0.85)" : "var(--muted)" }}>
                             {new Date(m.ts).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
                           </span>
@@ -1372,6 +1441,47 @@ function WhatsApp({ me, isAdmin, can, goNovo }) {
           )}
         </div>
       </div>
+
+      {/* MODAL NOVA CONVERSA */}
+      {novaConv && (
+        <div style={SX.qrOverlay} onClick={(e) => { if (e.target === e.currentTarget) setNovaConv(null); }}>
+          <div style={{ ...SX.qrCard, maxWidth: 440 }}>
+            <button onClick={() => setNovaConv(null)} style={SX.qrClose}><X size={18} /></button>
+            <h3 style={{ margin: "0 0 4px", color: "var(--text)" }}>Nova conversa</h3>
+            <p style={{ color: "var(--muted)", fontSize: 13, marginTop: 0, marginBottom: 18 }}>
+              Mande a primeira mensagem para um número novo.
+            </p>
+            <div style={{ display: "grid", gap: 14 }}>
+              {/* escolher de qual WhatsApp enviar (se tiver mais de um e for gerente) */}
+              {instancias.length > 1 && (
+                <div>
+                  <label style={SX.waCfgLabel}>Enviar pelo WhatsApp de:</label>
+                  <select value={novaConv.instance} onChange={(e) => setNovaConv({ ...novaConv, instance: e.target.value })} style={SX.input}>
+                    {instancias.map((i) => <option key={i.instance} value={i.instance}>{i.colaboradoraNome || i.instance}</option>)}
+                  </select>
+                </div>
+              )}
+              <div>
+                <label style={SX.waCfgLabel}>Número (com DDD)</label>
+                <input value={novaConv.numero} onChange={(e) => setNovaConv({ ...novaConv, numero: e.target.value })}
+                  placeholder="Ex: 5544999998888" style={SX.input} />
+                <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 5 }}>
+                  Use código do país + DDD + número. Ex: 55 44 99999-8888 → 5544999998888
+                </div>
+              </div>
+              <div>
+                <label style={SX.waCfgLabel}>Mensagem</label>
+                <textarea value={novaConv.texto} onChange={(e) => setNovaConv({ ...novaConv, texto: e.target.value })}
+                  placeholder="Escreva a primeira mensagem…" rows={3}
+                  style={{ ...SX.input, height: "auto", paddingTop: 10, resize: "vertical" }} />
+              </div>
+              <button onClick={enviarNovaConv} disabled={enviandoNova} className="btn-primary" style={SX.btnPrimary}>
+                {enviandoNova ? "Enviando…" : <><Send size={15} /> Enviar e abrir conversa</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL QR DA COLABORADORA */}
       {meuQr && (
@@ -1972,6 +2082,7 @@ const SX = {
   waSearchInput: { flex: 1, border: "none", outline: "none", background: "transparent", fontSize: 13.5, fontFamily: "inherit", color: "var(--text)" },
   waSearchClear: { border: "none", background: "transparent", color: "var(--muted)", cursor: "pointer", padding: 2, display: "grid", placeItems: "center" },
   waFunil: { position: "relative", width: 34, height: 34, borderRadius: 9, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", cursor: "pointer", display: "grid", placeItems: "center", padding: 0 },
+  waNovaBtn: { width: 34, height: 34, borderRadius: 9, border: "none", background: "linear-gradient(135deg,#F39200,#E08200)", color: "#fff", cursor: "pointer", display: "grid", placeItems: "center", padding: 0, boxShadow: "0 3px 10px rgba(243,146,0,0.3)" },
   waFunilOn: { background: "rgba(243,146,0,0.12)", color: "#C97A1A", borderColor: "rgba(243,146,0,0.4)" },
   waFunilDot: { position: "absolute", top: -3, right: -3, width: 9, height: 9, borderRadius: "50%", background: "#F39200", border: "2px solid var(--card)" },
   waFunilBackdrop: { position: "fixed", inset: 0, zIndex: 40 },
