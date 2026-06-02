@@ -705,6 +705,50 @@ app.get("/api/wa/instance/status/:nome", requireAuth, async (req, res) => {
   }
 });
 
+// ---- desconectar uma instância (logout — desliga o WhatsApp, dá pra reconectar) ----
+app.post("/api/wa/instance/logout/:nome", requireAuth, async (req, res) => {
+  if (!req.isAdmin && !can(req, "gerir_whatsapp")) return res.status(403).json({ error: "sem permissão" });
+  const c = db.waConfig || {};
+  if (!c.url || !c.apiKey) return res.status(400).json({ error: "não configurado" });
+  try {
+    const r = await fetch(`${c.url}/instance/logout/${req.params.nome}`, {
+      method: "DELETE", headers: { "apikey": c.apiKey },
+    });
+    await r.json().catch(() => ({}));
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("Erro ao desconectar:", e.message);
+    res.status(502).json({ error: "não foi possível desconectar" });
+  }
+});
+
+// ---- excluir uma instância de vez (delete) ----
+app.delete("/api/wa/instance/:nome", requireAuth, async (req, res) => {
+  if (!req.isAdmin && !can(req, "gerir_whatsapp")) return res.status(403).json({ error: "sem permissão" });
+  const c = db.waConfig || {};
+  if (!c.url || !c.apiKey) return res.status(400).json({ error: "não configurado" });
+  const nome = req.params.nome;
+  try {
+    // tenta logout antes (algumas versões exigem desconectar antes de excluir)
+    try {
+      await fetch(`${c.url}/instance/logout/${nome}`, { method: "DELETE", headers: { "apikey": c.apiKey } });
+    } catch {}
+    const r = await fetch(`${c.url}/instance/delete/${nome}`, {
+      method: "DELETE", headers: { "apikey": c.apiKey },
+    });
+    await r.json().catch(() => ({}));
+    // remove a instância da config do sistema também
+    if (db.waConfig?.instancias) {
+      db.waConfig.instancias = db.waConfig.instancias.filter((i) => i.instance !== nome);
+      saveDB(db);
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("Erro ao excluir instância:", e.message);
+    res.status(502).json({ error: "não foi possível excluir" });
+  }
+});
+
 // ---- enviar mensagem (pela Evolution) ----
 app.post("/api/wa/send", requireAuth, async (req, res) => {
   const { numero, texto } = req.body;

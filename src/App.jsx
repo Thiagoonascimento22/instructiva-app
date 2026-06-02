@@ -9,7 +9,7 @@ import {
   Shield, UserPlus, Lock, Eye, EyeOff, Settings, TrendingUp, Award,
   Crown, ChevronRight, Activity, Zap, Target, Brain, Star, AlertTriangle,
   Sun, Moon, ListTodo, CalendarClock, Flag, Circle, ArrowLeft, UserCircle,
-  MessageCircle, Send, Link2, RefreshCw, Phone, PlusSquare,
+  MessageCircle, Send, Link2, RefreshCw, Phone, PlusSquare, Power,
 } from "lucide-react";
 import { LOGO_FULL, LOGO_CLARO, LOGO_ICONE } from "./logos";
 import { api } from "./api";
@@ -1281,6 +1281,45 @@ function WhatsAppConfig({ cfg, onBack }) {
     setInstancias((arr) => arr.filter((_, i) => i !== idx));
   }
 
+  // ---- status de cada instância (conectado/desconectado) ----
+  const [statusInst, setStatusInst] = useState({});   // { nomeInstancia: "open"|"close"|... }
+  const [acaoInst, setAcaoInst] = useState("");        // instância em ação (loading)
+
+  async function checarStatusTodas() {
+    const nomes = instancias.map((i) => i.instance).filter(Boolean);
+    const novo = {};
+    for (const nome of nomes) {
+      try { const r = await api.waInstanceStatus(nome); novo[nome] = r.state; } catch {}
+    }
+    setStatusInst(novo);
+  }
+  useEffect(() => {
+    if (cfg?.temApiKey) checarStatusTodas();
+    // eslint-disable-next-line
+  }, []);
+
+  async function desconectar(nome) {
+    if (!nome) return;
+    if (!confirm(`Desconectar o WhatsApp "${nome}"?\n\nEle vai parar de receber mensagens até reconectar (escanear o QR de novo).`)) return;
+    setAcaoInst(nome);
+    try {
+      await api.waLogoutInstance(nome);
+      setStatusInst((s) => ({ ...s, [nome]: "close" }));
+    } catch (e) { alert(e.message); }
+    setAcaoInst("");
+  }
+
+  async function excluir(nome, idx) {
+    if (!nome) { removeInst(idx); return; }
+    if (!confirm(`EXCLUIR a instância "${nome}" de vez?\n\nIsso apaga a conexão na Evolution. Para usar de novo, terá que criar e escanear o QR outra vez.`)) return;
+    setAcaoInst(nome);
+    try {
+      await api.waDeleteInstance(nome);
+      setInstancias((arr) => arr.filter((_, i) => i !== idx));
+    } catch (e) { alert(e.message); }
+    setAcaoInst("");
+  }
+
   // ---- conexão via QR ----
   const [qrModal, setQrModal] = useState(null);   // { instance, qr, status }
   const [qrLoading, setQrLoading] = useState(false);
@@ -1378,11 +1417,21 @@ function WhatsAppConfig({ cfg, onBack }) {
             </div>
 
             <div style={{ display: "grid", gap: 12, marginTop: 14 }}>
-              {instancias.map((inst, idx) => (
+              {instancias.map((inst, idx) => {
+                const st = statusInst[inst.instance];
+                const conectado = st === "open";
+                const emAcao = acaoInst === inst.instance;
+                return (
                 <div key={idx} style={SX.waCfgRow}>
                   <div style={{ flex: 1 }}>
                     <label style={SX.waCfgLabel}>Nome da instância</label>
                     <input value={inst.instance} onChange={(e) => setInst(idx, "instance", e.target.value.replace(/\s/g, ""))} placeholder="ex: vitoria" style={SX.input} />
+                    {inst.instance && st && (
+                      <div style={SX.waStatusLine}>
+                        <span style={{ ...SX.waStatusDot, background: conectado ? "#12A150" : "#E5484D" }} />
+                        {conectado ? "Conectado" : "Desconectado"}
+                      </div>
+                    )}
                   </div>
                   <div style={{ flex: 1 }}>
                     <label style={SX.waCfgLabel}>Colaboradora</label>
@@ -1391,16 +1440,23 @@ function WhatsAppConfig({ cfg, onBack }) {
                       {colabs.map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
                     </select>
                   </div>
-                  <button onClick={() => conectar(inst.instance)} className="btn-primary" style={SX.waConnectBtn} title="Conectar / ver QR code">
-                    <MessageCircle size={15} /> Conectar
-                  </button>
-                  {instancias.length > 1 && (
-                    <button onClick={() => removeInst(idx)} style={SX.waCfgDel} title="Remover">
+                  <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                    {conectado ? (
+                      <button onClick={() => desconectar(inst.instance)} disabled={emAcao} style={SX.waDisconnectBtn} title="Desconectar">
+                        {emAcao ? "…" : <><Power size={15} /> Desconectar</>}
+                      </button>
+                    ) : (
+                      <button onClick={() => conectar(inst.instance)} className="btn-primary" style={SX.waConnectBtn} title="Conectar / ver QR code">
+                        <MessageCircle size={15} /> Conectar
+                      </button>
+                    )}
+                    <button onClick={() => excluir(inst.instance, idx)} disabled={emAcao} style={SX.waCfgDel} title="Excluir instância de vez">
                       <Trash2 size={16} />
                     </button>
-                  )}
+                  </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
 
             <button onClick={addInst} className="btn-ghost" style={{ ...SX.btnGhost, marginTop: 12, height: 40 }}>
@@ -1747,6 +1803,9 @@ const SX = {
   waCfgLabel: { display: "block", fontSize: 12, fontWeight: 600, color: "var(--muted)", marginBottom: 6 },
   waCfgDel: { width: 44, height: 44, borderRadius: 10, border: "1px solid #F3D7D8", background: "transparent", color: "#E5484D", cursor: "pointer", display: "grid", placeItems: "center", flexShrink: 0 },
   waConnectBtn: { display: "inline-flex", alignItems: "center", gap: 6, background: "linear-gradient(120deg,#F39200,#E08200)", color: "#fff", border: "none", borderRadius: 10, padding: "0 14px", height: 44, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", flexShrink: 0 },
+  waDisconnectBtn: { display: "inline-flex", alignItems: "center", gap: 6, background: "transparent", color: "#E5484D", border: "1px solid #F3D7D8", borderRadius: 10, padding: "0 14px", height: 44, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", flexShrink: 0 },
+  waStatusLine: { display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: "var(--muted)", marginTop: 6 },
+  waStatusDot: { width: 8, height: 8, borderRadius: "50%", flexShrink: 0 },
   // modal QR
   qrOverlay: { position: "fixed", inset: 0, background: "rgba(20,18,15,0.55)", backdropFilter: "blur(3px)", display: "grid", placeItems: "center", zIndex: 1000, padding: 20 },
   qrCard: { position: "relative", background: "var(--card)", borderRadius: 20, padding: "32px 28px", maxWidth: 380, width: "100%", boxShadow: "0 30px 80px rgba(0,0,0,0.35)", border: "1px solid var(--line)" },

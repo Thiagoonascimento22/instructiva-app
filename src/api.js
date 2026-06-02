@@ -57,4 +57,6 @@ export const api = {
   waConnectInstance: (instance) => req("POST", "/wa/instance/connect", { instance }),
   waInstanceStatus: (nome) => req("GET", "/wa/instance/status/" + encodeURIComponent(nome)),
   waMinhaInstancia: () => req("GET", "/wa/minha-instancia"),
+  waLogoutInstance: (nome) => req("POST", "/wa/instance/logout/" + encodeURIComponent(nome)),
+  waDeleteInstance: (nome) => req("DELETE", "/wa/instance/" + encodeURIComponent(nome)),
 };
