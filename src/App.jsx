@@ -9,6 +9,7 @@ import {
   Shield, UserPlus, Lock, Eye, EyeOff, Settings, TrendingUp, Award,
   Crown, ChevronRight, Activity, Zap, Target, Brain, Star, AlertTriangle,
   Sun, Moon, ListTodo, CalendarClock, Flag, Circle, ArrowLeft, UserCircle,
+  MessageCircle, Send, Link2, RefreshCw, Phone, PlusSquare,
 } from "lucide-react";
 import { LOGO_FULL, LOGO_CLARO, LOGO_ICONE } from "./logos";
 import { api } from "./api";
@@ -40,6 +41,7 @@ export default function App() {
   const [users, setUsers] = useState([]);      // lista de nomes (para tabelas) ou completa (admin)
   const [records, setRecords] = useState([]);
   const [view, setView] = useState("dashboard");
+  const [waPrefill, setWaPrefill] = useState(null);   // pré-preenche Novo Registro a partir do WhatsApp
   const [theme, setTheme] = useState(() => localStorage.getItem("instructiva_theme") || "light");
 
   const isAdmin = me?.role === "admin";
@@ -103,6 +105,7 @@ export default function App() {
   nav.push(["lista", "Atendimentos", ClipboardList]);
   if (can("registrar")) nav.push(["novo", "Novo Registro", PlusCircle]);
   nav.push(["tarefas", "Tarefas", ListTodo]);
+  nav.push(["whatsapp", "WhatsApp", MessageCircle]);
   if (can("ia")) nav.push(["ia", "Análise IA", Sparkles, true]);
   if (can("gerir_usuarios")) nav.push(["equipe", "Equipe & Acessos", Shield]);
   if (isAdmin) nav.push(["config", "Configurações", Settings]);
@@ -149,8 +152,9 @@ export default function App() {
         <div className="fade-in" key={view}>
           {view === "dashboard" && <Dashboard records={visibleRecords} users={users} me={me} isAdmin={isAdmin} />}
           {view === "lista" && <Lista records={visibleRecords} users={users} can={can} refresh={refreshData} goNew={() => setView("novo")} />}
-          {view === "novo" && can("registrar") && <NovoRegistro me={me} isAdmin={isAdmin} users={users} refresh={refreshData} onDone={() => setView("lista")} />}
+          {view === "novo" && can("registrar") && <NovoRegistro me={me} isAdmin={isAdmin} users={users} refresh={refreshData} prefill={waPrefill} onDone={() => { setWaPrefill(null); setView("lista"); }} />}
           {view === "tarefas" && <Tarefas me={me} isAdmin={isAdmin} can={can} users={users} />}
+          {view === "whatsapp" && <WhatsApp me={me} isAdmin={isAdmin} can={can} goNovo={(pre) => { setWaPrefill(pre); setView("novo"); }} />}
           {view === "ia" && can("ia") && <AnaliseIA records={records} users={users} />}
           {view === "equipe" && can("gerir_usuarios") && <Equipe refresh={refreshData} />}
           {view === "config" && isAdmin && <Config me={me} onUpdated={setMe} />}
@@ -608,9 +612,13 @@ function Lista({ records, users, can, refresh, goNew }) {
 }
 
 // ============================================================= NOVO REGISTRO
-function NovoRegistro({ me, isAdmin, users, refresh, onDone }) {
+function NovoRegistro({ me, isAdmin, users, refresh, onDone, prefill }) {
   const colabs = users.filter((u) => u.ativo);
-  const [form, setForm] = useState(() => ({ ...emptyForm(), colaboradoraId: me.id }));
+  const [form, setForm] = useState(() => ({
+    ...emptyForm(),
+    colaboradoraId: me.id,
+    ...(prefill ? { telefone: prefill.telefone || "", aluno: prefill.nome || "" } : {}),
+  }));
   const [saving, setSaving] = useState(false);
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const valid = form.colaboradoraId && form.aluno && form.assunto;
@@ -927,6 +935,237 @@ function Tarefas({ me, isAdmin, can, users }) {
   );
 }
 
+// ============================================================= WHATSAPP
+function WhatsApp({ me, isAdmin, can, goNovo }) {
+  const [chats, setChats] = useState([]);
+  const [sel, setSel] = useState(null);          // número selecionado
+  const [chat, setChat] = useState(null);        // conversa aberta
+  const [texto, setTexto] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [enviando, setEnviando] = useState(false);
+  const [showConfig, setShowConfig] = useState(false);
+  const [cfg, setCfg] = useState(null);
+  const podeConfigurar = isAdmin || can("gerir_usuarios");
+
+  async function loadChats() {
+    try {
+      const r = await api.waListChats();
+      setChats(r.chats || []);
+    } catch (e) { /* silencioso */ }
+    setLoading(false);
+  }
+  async function loadCfg() {
+    if (!podeConfigurar) return;
+    try { const r = await api.waGetConfig(); setCfg(r.config); } catch {}
+  }
+
+  useEffect(() => {
+    loadChats(); loadCfg();
+    const t = setInterval(loadChats, 8000);   // atualiza a cada 8s
+    return () => clearInterval(t);
+  }, []);
+
+  async function abrir(numero) {
+    setSel(numero);
+    try {
+      const r = await api.waGetChat(numero);
+      setChat(r.chat);
+      // atualiza contador de não-lidas na lista
+      setChats((cs) => cs.map((c) => c.numero === numero ? { ...c, naoLidas: 0 } : c));
+    } catch (e) { alert(e.message); }
+  }
+
+  async function enviar() {
+    if (!texto.trim() || enviando || !sel) return;
+    setEnviando(true);
+    try {
+      await api.waSend(sel, texto.trim());
+      setTexto("");
+      const r = await api.waGetChat(sel);
+      setChat(r.chat);
+    } catch (e) { alert(e.message); }
+    setEnviando(false);
+  }
+
+  function criarAtendimento() {
+    if (!chat) return;
+    goNovo({ telefone: chat.numero, nome: chat.nome !== chat.numero ? chat.nome : "" });
+  }
+
+  // ---- tela de configuração (só admin) ----
+  if (showConfig && podeConfigurar) {
+    return <WhatsAppConfig cfg={cfg} onBack={() => { setShowConfig(false); loadCfg(); }} />;
+  }
+
+  return (
+    <div>
+      <Header title="WhatsApp" subtitle="Conversas dos alunos em tempo real">
+        <button onClick={loadChats} className="btn-ghost" style={SX.btnGhost} title="Atualizar">
+          <RefreshCw size={15} /> Atualizar
+        </button>
+        {podeConfigurar && (
+          <button onClick={() => setShowConfig(true)} className="btn-ghost" style={SX.btnGhost}>
+            <Link2 size={15} /> Configurar conexão
+          </button>
+        )}
+      </Header>
+
+      <div style={SX.waWrap} className="panel">
+        {/* LISTA DE CONVERSAS */}
+        <div style={SX.waList}>
+          <div style={SX.waListHead}>
+            <MessageCircle size={16} /> Conversas
+            <span style={SX.waCount}>{chats.length}</span>
+          </div>
+          <div style={SX.waListScroll}>
+            {loading ? (
+              <div style={SX.waEmpty}>Carregando…</div>
+            ) : chats.length === 0 ? (
+              <div style={SX.waEmpty}>
+                <MessageCircle size={32} style={{ opacity: 0.3, marginBottom: 8 }} />
+                <div>Nenhuma conversa ainda.</div>
+                <div style={{ fontSize: 12, opacity: 0.6, marginTop: 4 }}>
+                  As mensagens aparecem aqui quando os alunos escreverem.
+                </div>
+              </div>
+            ) : (
+              chats.map((c) => (
+                <button key={c.numero} onClick={() => abrir(c.numero)}
+                  className="wa-chat-item"
+                  style={{ ...SX.waChatItem, ...(sel === c.numero ? SX.waChatItemActive : {}) }}>
+                  <div style={SX.waAvatar}>{(c.nome || c.numero).slice(0, 2).toUpperCase()}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={SX.waChatName}>{c.nome || c.numero}</div>
+                    <div style={SX.waChatPreview}>{c.ultima || "—"}</div>
+                  </div>
+                  {c.naoLidas > 0 && <span style={SX.waBadge}>{c.naoLidas}</span>}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* CONVERSA ABERTA */}
+        <div style={SX.waConvo}>
+          {!chat ? (
+            <div style={SX.waConvoEmpty}>
+              <MessageCircle size={48} style={{ opacity: 0.2 }} />
+              <div style={{ marginTop: 12, opacity: 0.6 }}>Selecione uma conversa para ver as mensagens</div>
+            </div>
+          ) : (
+            <>
+              <div style={SX.waConvoHead}>
+                <div style={SX.waAvatar}>{(chat.nome || chat.numero).slice(0, 2).toUpperCase()}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={SX.waChatName}>{chat.nome || chat.numero}</div>
+                  <div style={SX.waChatPreview}><Phone size={11} style={{ verticalAlign: "middle" }} /> {chat.numero}</div>
+                </div>
+                {can("registrar") && (
+                  <button onClick={criarAtendimento} className="btn-primary" style={SX.btnPrimarySm}>
+                    <PlusSquare size={15} /> Registrar atendimento
+                  </button>
+                )}
+              </div>
+
+              <div style={SX.waMessages} className="wa-messages">
+                {chat.mensagens.length === 0 ? (
+                  <div style={SX.waEmpty}>Sem mensagens nesta conversa.</div>
+                ) : (
+                  chat.mensagens.map((m) => (
+                    <div key={m.id} style={{ ...SX.waBubbleRow, justifyContent: m.fromMe ? "flex-end" : "flex-start" }}>
+                      <div style={{ ...SX.waBubble, ...(m.fromMe ? SX.waBubbleMe : SX.waBubbleThem) }}>
+                        <div>{m.texto || "—"}</div>
+                        <div style={SX.waTime}>{new Date(m.ts).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div style={SX.waInputBar}>
+                <input
+                  value={texto}
+                  onChange={(e) => setTexto(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") enviar(); }}
+                  placeholder="Escreva uma mensagem…"
+                  style={SX.waInput}
+                />
+                <button onClick={enviar} disabled={enviando || !texto.trim()} className="btn-primary" style={SX.waSendBtn}>
+                  <Send size={16} />
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// tela de configuração da conexão WhatsApp
+function WhatsAppConfig({ cfg, onBack }) {
+  const [url, setUrl] = useState(cfg?.url || "");
+  const [apiKey, setApiKey] = useState("");
+  const [instance, setInstance] = useState(cfg?.instance || "");
+  const [saving, setSaving] = useState(false);
+  const [token, setToken] = useState(cfg?.webhookToken || "");
+  const [salvo, setSalvo] = useState(false);
+
+  async function salvar() {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const payload = { url, instance };
+      if (apiKey.trim()) payload.apiKey = apiKey.trim();
+      const r = await api.waSetConfig(payload);
+      if (r.webhookToken) setToken(r.webhookToken);
+      setSalvo(true);
+    } catch (e) { alert(e.message); }
+    setSaving(false);
+  }
+
+  const base = (typeof window !== "undefined") ? window.location.origin : "";
+  const webhookUrl = token ? `${base}/api/wa/webhook/${token}` : "(salve para gerar)";
+
+  return (
+    <div>
+      <Header title="Configurar WhatsApp" subtitle="Conecte o sistema à sua Evolution API">
+        <button onClick={onBack} className="btn-ghost" style={SX.btnGhost}><ArrowLeft size={15} /> Voltar</button>
+      </Header>
+
+      <div style={SX.formCard} className="rise panel" >
+        <div style={{ display: "grid", gap: 16, maxWidth: 620 }}>
+          <F label="Endereço da Evolution (URL)" req>
+            <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://evolution-api-production-xxxx.up.railway.app" style={SX.input} />
+          </F>
+          <F label="Chave da API (AUTHENTICATION_API_KEY)" req>
+            <input value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder={cfg?.temApiKey ? "•••••• (já salva — preencha só para trocar)" : "cole a chave aqui"} style={SX.input} />
+          </F>
+          <F label="Nome da instância" req>
+            <input value={instance} onChange={(e) => setInstance(e.target.value)} placeholder="thiago" style={SX.input} />
+          </F>
+
+          <button onClick={salvar} disabled={saving} className="btn-primary" style={SX.btnPrimary}>
+            {saving ? "Salvando…" : "Salvar conexão"}
+          </button>
+
+          {salvo && <div style={SX.waOk}><CheckCircle2 size={15} /> Conexão salva!</div>}
+
+          <div style={SX.waWebhookBox}>
+            <div style={{ fontWeight: 600, marginBottom: 6, fontSize: 13 }}>
+              <Link2 size={14} style={{ verticalAlign: "middle" }} /> Endereço do Webhook
+            </div>
+            <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 8 }}>
+              Cole este endereço na sua Evolution (em Events → Webhook), marcando o evento <b>messages.upsert</b>:
+            </div>
+            <code style={SX.waCode}>{webhookUrl}</code>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ============================================================= SHARED
 function Header({ title, subtitle, children }) {
   return (<div style={SX.header}><div><h1 style={SX.h1}>{title}</h1><p style={SX.sub}>{subtitle}</p></div>{children && <div style={SX.headerActions}>{children}</div>}</div>);
@@ -1160,6 +1399,36 @@ const SX = {
   onbTitle: { textAlign: "center", fontSize: 23, fontWeight: 800, color: "#2A2B2E", margin: "14px 0 0" },
   onbText: { textAlign: "center", color: "#82848A", fontSize: 14, lineHeight: 1.55, margin: "10px 0 0" },
   onbHint: { textAlign: "center", color: "#A0A2A6", fontSize: 12.5, marginTop: 16 },
+
+  // ---- WhatsApp ----
+  btnPrimarySm: { display: "inline-flex", alignItems: "center", gap: 7, background: "linear-gradient(120deg,#F39200,#E08200)", color: "#fff", border: "none", borderRadius: 10, padding: "0 14px", height: 38, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 4px 12px rgba(243,146,0,0.3)", whiteSpace: "nowrap" },
+  waWrap: { display: "grid", gridTemplateColumns: "320px 1fr", height: "calc(100vh - 200px)", minHeight: 480, borderRadius: 18, overflow: "hidden", border: "1px solid var(--line)", background: "var(--card)" },
+  waList: { display: "flex", flexDirection: "column", borderRight: "1px solid var(--line)", minWidth: 0, background: "var(--card)" },
+  waListHead: { display: "flex", alignItems: "center", gap: 8, padding: "16px 18px", fontWeight: 700, fontSize: 14, color: "var(--text)", borderBottom: "1px solid var(--line)" },
+  waCount: { marginLeft: "auto", fontSize: 12, fontWeight: 700, color: "#fff", background: "#F39200", borderRadius: 20, padding: "1px 9px" },
+  waListScroll: { flex: 1, overflowY: "auto" },
+  waEmpty: { padding: "36px 20px", textAlign: "center", color: "var(--muted)", fontSize: 14, display: "flex", flexDirection: "column", alignItems: "center" },
+  waChatItem: { display: "flex", alignItems: "center", gap: 11, width: "100%", padding: "12px 16px", border: "none", borderBottom: "1px solid var(--line)", background: "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left", transition: "background .12s" },
+  waChatItemActive: { background: "rgba(243,146,0,0.1)" },
+  waAvatar: { width: 42, height: 42, borderRadius: 12, background: "linear-gradient(135deg,#F39200,#C97A1A)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 700, fontSize: 14, flexShrink: 0 },
+  waChatName: { fontSize: 14, fontWeight: 700, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
+  waChatPreview: { fontSize: 12.5, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginTop: 2 },
+  waBadge: { fontSize: 11, fontWeight: 700, color: "#fff", background: "#12A150", borderRadius: 20, padding: "1px 7px", flexShrink: 0 },
+  waConvo: { display: "flex", flexDirection: "column", minWidth: 0, background: "var(--bg)" },
+  waConvoEmpty: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "var(--muted)", fontSize: 14 },
+  waConvoHead: { display: "flex", alignItems: "center", gap: 12, padding: "14px 18px", borderBottom: "1px solid var(--line)", background: "var(--card)" },
+  waMessages: { flex: 1, overflowY: "auto", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 8 },
+  waBubbleRow: { display: "flex", width: "100%" },
+  waBubble: { maxWidth: "72%", padding: "9px 13px", borderRadius: 14, fontSize: 14, lineHeight: 1.45, wordBreak: "break-word" },
+  waBubbleThem: { background: "var(--card)", color: "var(--text)", border: "1px solid var(--line)", borderBottomLeftRadius: 4 },
+  waBubbleMe: { background: "linear-gradient(120deg,#F39200,#E08200)", color: "#fff", borderBottomRightRadius: 4 },
+  waTime: { fontSize: 10.5, opacity: 0.7, marginTop: 3, textAlign: "right" },
+  waInputBar: { display: "flex", gap: 10, padding: "14px 16px", borderTop: "1px solid var(--line)", background: "var(--card)" },
+  waInput: { flex: 1, border: "1px solid var(--line)", borderRadius: 12, padding: "0 15px", height: 44, fontSize: 14, fontFamily: "inherit", background: "var(--bg)", color: "var(--text)", outline: "none" },
+  waSendBtn: { width: 48, height: 44, borderRadius: 12, border: "none", background: "linear-gradient(120deg,#F39200,#E08200)", color: "#fff", cursor: "pointer", display: "grid", placeItems: "center", boxShadow: "0 4px 12px rgba(243,146,0,0.3)" },
+  waOk: { display: "inline-flex", alignItems: "center", gap: 7, color: "#12A150", fontSize: 14, fontWeight: 600 },
+  waWebhookBox: { marginTop: 8, padding: "16px 18px", background: "rgba(243,146,0,0.05)", border: "1px solid rgba(243,146,0,0.16)", borderRadius: 14 },
+  waCode: { display: "block", background: "#2C2D30", color: "#F8B14E", padding: "10px 13px", borderRadius: 9, fontSize: 12.5, fontFamily: "monospace", fontWeight: 600, wordBreak: "break-all", lineHeight: 1.5 },
 };
 
 const CSS = `
