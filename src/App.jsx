@@ -1973,7 +1973,7 @@ const SX = {
   logoutBtn: { width: 32, height: 32, borderRadius: 9, border: "none", background: "rgba(255,255,255,0.06)", color: "#B4B6BA", cursor: "pointer", display: "grid", placeItems: "center", flexShrink: 0, transition: "all .15s" },
 
   main: { flex: 1, padding: "36px 44px 70px", maxWidth: 1340, margin: "0 auto", width: "100%", position: "relative", zIndex: 1, overflowY: "auto", height: "100vh" },
-  mainWide: { flex: 1, padding: "28px 32px 50px", width: "100%", position: "relative", zIndex: 1, overflowY: "auto", height: "100vh" },
+  mainWide: { flex: 1, padding: "28px 32px 20px", width: "100%", position: "relative", zIndex: 1, overflowY: "auto", height: "100vh" },
   header: { display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 26, flexWrap: "wrap", gap: 16 },
   h1: { margin: 0, fontSize: 29, fontWeight: 800, letterSpacing: "-0.6px", color: "#2A2B2E" },
   sub: { margin: "5px 0 0", color: "#82848A", fontSize: 14.5, fontWeight: 500 },
@@ -2120,7 +2120,7 @@ const SX = {
 
   // ---- WhatsApp ----
   btnPrimarySm: { display: "inline-flex", alignItems: "center", gap: 7, background: "linear-gradient(120deg,#6366F1 0%,#7C5CF0 55%,#4F46E5 100%)", color: "#fff", border: "none", borderRadius: 10, padding: "0 14px", height: 38, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 4px 12px rgba(99,102,241,0.3)", whiteSpace: "nowrap" },
-  waWrap: { display: "grid", gridTemplateColumns: "340px 1fr", height: "calc(100vh - 185px)", minHeight: 400, borderRadius: 16, overflow: "hidden", border: "1px solid var(--line)", background: "var(--card)", boxShadow: "0 10px 40px -12px rgba(0,0,0,0.18)" },
+  waWrap: { display: "grid", gridTemplateColumns: "340px 1fr", height: "calc(100vh - 138px)", minHeight: 400, borderRadius: 16, overflow: "hidden", border: "1px solid var(--line)", background: "var(--card)", boxShadow: "0 10px 40px -12px rgba(0,0,0,0.18)" },
   waList: { display: "flex", flexDirection: "column", borderRight: "1px solid var(--line)", minWidth: 0, minHeight: 0, height: "100%", overflow: "hidden", background: "var(--card)" },
   waListHead: { display: "flex", alignItems: "center", gap: 8, padding: "16px 18px", fontWeight: 700, fontSize: 14, color: "var(--text)", borderBottom: "1px solid var(--line)" },
   waCount: { marginLeft: "auto", fontSize: 12, fontWeight: 700, color: "#fff", background: "#6366F1", borderRadius: 20, padding: "1px 9px" },
