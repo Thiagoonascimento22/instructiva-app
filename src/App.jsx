@@ -1955,7 +1955,7 @@ const SX = {
   feedbackLabel: { display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 700, color: "#4F46E5", textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 10 },
   feedbackText: { margin: 0, fontSize: 15, lineHeight: 1.65, color: "#5A4E3C", fontStyle: "italic" },
 
-  app: { display: "flex", minHeight: "100vh", background: "transparent", fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif", color: "var(--text)", position: "relative", overflow: "hidden" },
+  app: { display: "flex", minHeight: "100vh", background: "transparent", fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif", color: "var(--text)", position: "relative" },
   bgGlow: { position: "fixed", top: -180, right: -120, width: 520, height: 520, background: "radial-gradient(circle, rgba(99,102,241,0.09), transparent 70%)", pointerEvents: "none", zIndex: 0 },
 
   sidebar: { width: 262, background: "linear-gradient(180deg,#1E2235 0%,#171A28 100%)", display: "flex", flexDirection: "column", padding: "28px 16px 20px", position: "sticky", top: 0, height: "100vh", zIndex: 2, boxShadow: "1px 0 0 rgba(255,255,255,0.04), 8px 0 40px rgba(15,18,30,0.35)", borderRight: "1px solid rgba(255,255,255,0.05)" },
@@ -2120,7 +2120,7 @@ const SX = {
 
   // ---- WhatsApp ----
   btnPrimarySm: { display: "inline-flex", alignItems: "center", gap: 7, background: "linear-gradient(120deg,#6366F1 0%,#7C5CF0 55%,#4F46E5 100%)", color: "#fff", border: "none", borderRadius: 10, padding: "0 14px", height: 38, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 4px 12px rgba(99,102,241,0.3)", whiteSpace: "nowrap" },
-  waWrap: { display: "grid", gridTemplateColumns: "340px 1fr", height: 560, maxHeight: "calc(100vh - 170px)", borderRadius: 16, overflow: "hidden", border: "1px solid var(--line)", background: "var(--card)", boxShadow: "0 10px 40px -12px rgba(0,0,0,0.18)" },
+  waWrap: { display: "grid", gridTemplateColumns: "340px 1fr", height: "calc(100vh - 185px)", minHeight: 400, borderRadius: 16, overflow: "hidden", border: "1px solid var(--line)", background: "var(--card)", boxShadow: "0 10px 40px -12px rgba(0,0,0,0.18)" },
   waList: { display: "flex", flexDirection: "column", borderRight: "1px solid var(--line)", minWidth: 0, background: "var(--card)" },
   waListHead: { display: "flex", alignItems: "center", gap: 8, padding: "16px 18px", fontWeight: 700, fontSize: 14, color: "var(--text)", borderBottom: "1px solid var(--line)" },
   waCount: { marginLeft: "auto", fontSize: 12, fontWeight: 700, color: "#fff", background: "#6366F1", borderRadius: 20, padding: "1px 9px" },
