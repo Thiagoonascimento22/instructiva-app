@@ -153,7 +153,7 @@ export default function App() {
       </aside>
 
       <main style={view === "whatsapp" ? SX.mainWide : SX.main}>
-        <div className="fade-in" key={view} style={view === "whatsapp" ? { height: "100%" } : undefined}>
+        <div className="fade-in" key={view} style={view === "whatsapp" ? { flex: 1, minHeight: 0, display: "flex", flexDirection: "column" } : undefined}>
           {view === "dashboard" && <Dashboard records={visibleRecords} users={users} me={me} isAdmin={isAdmin} />}
           {view === "lista" && <Lista records={visibleRecords} users={users} can={can} refresh={refreshData} goNew={() => setView("novo")} />}
           {view === "novo" && can("registrar") && <NovoRegistro me={me} isAdmin={isAdmin} users={users} refresh={refreshData} prefill={waPrefill} onDone={() => { setWaPrefill(null); setView("lista"); }} />}
@@ -1212,7 +1212,7 @@ function WhatsApp({ me, isAdmin, can, goNovo }) {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
       <Header title="WhatsApp" subtitle="Conversas dos alunos em tempo real">
         <button onClick={loadChats} className="btn-ghost" style={SX.btnGhost} title="Atualizar">
           <RefreshCw size={15} /> Atualizar
@@ -1701,7 +1701,7 @@ function WhatsAppConfig({ cfg, onBack }) {
   const webhookUrl = token ? `${base}/api/wa/webhook/${token}` : "(salve para gerar)";
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
       <Header title="Configurar WhatsApp" subtitle="Conecte os WhatsApps das colaboradoras">
         <button onClick={onBack} className="btn-ghost" style={SX.btnGhost}><ArrowLeft size={15} /> Voltar</button>
       </Header>
