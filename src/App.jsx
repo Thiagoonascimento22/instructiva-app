@@ -235,10 +235,44 @@ function Login({ onLogin }) {
 
 // ============================================================= DASHBOARD
 function Dashboard({ records, users, me, isAdmin }) {
-  const stats = useMemo(() => buildStats(records, users), [records, users]);
+  const hoje = new Date().toISOString().slice(0, 10);
+  const [periodo, setPeriodo] = useState("hoje");   // hoje | semana | mes | tudo | custom
+  const [dataIni, setDataIni] = useState(hoje);
+  const [dataFim, setDataFim] = useState(hoje);
+
+  // filtra os registros pelo período escolhido
+  const recordsFiltrados = useMemo(() => {
+    if (periodo === "tudo") return records;
+    const hojeD = new Date(); hojeD.setHours(0, 0, 0, 0);
+    let ini, fim;
+    if (periodo === "hoje") {
+      ini = new Date(hojeD); fim = new Date(hojeD); fim.setHours(23, 59, 59, 999);
+    } else if (periodo === "semana") {
+      ini = new Date(hojeD); ini.setDate(ini.getDate() - 6);   // últimos 7 dias
+      fim = new Date(hojeD); fim.setHours(23, 59, 59, 999);
+    } else if (periodo === "mes") {
+      ini = new Date(hojeD); ini.setDate(ini.getDate() - 29);  // últimos 30 dias
+      fim = new Date(hojeD); fim.setHours(23, 59, 59, 999);
+    } else { // custom
+      ini = new Date(dataIni + "T00:00:00");
+      fim = new Date(dataFim + "T23:59:59");
+    }
+    return records.filter((r) => {
+      if (!r.data) return false;
+      const d = new Date(r.data + "T12:00:00");
+      return d >= ini && d <= fim;
+    });
+  }, [records, periodo, dataIni, dataFim]);
+
+  const stats = useMemo(() => buildStats(recordsFiltrados, users), [recordsFiltrados, users]);
   const hora = new Date().getHours();
   const saud = hora < 12 ? "Bom dia" : hora < 18 ? "Boa tarde" : "Boa noite";
   const primeiroNome = me.nome.split(" ")[0];
+
+  // rótulo do período pra mostrar
+  const rotuloPeriodo = periodo === "hoje" ? "Hoje" : periodo === "semana" ? "Últimos 7 dias"
+    : periodo === "mes" ? "Últimos 30 dias" : periodo === "tudo" ? "Todo o período"
+    : `${fmtDate(dataIni)} até ${fmtDate(dataFim)}`;
 
   if (records.length === 0) {
     return (<div><Header title={`${saud}, ${primeiroNome} 👋`} subtitle={isAdmin ? "Painel geral do setor de suporte" : "Seus atendimentos"} /><Empty /></div>);
@@ -246,6 +280,29 @@ function Dashboard({ records, users, me, isAdmin }) {
   return (
     <div>
       <Header title={`${saud}, ${primeiroNome} 👋`} subtitle={isAdmin ? "Painel geral do setor de suporte" : "Resumo dos seus atendimentos"} />
+
+      {/* FILTRO DE PERÍODO */}
+      <div style={SX.periodoBar}>
+        <div style={SX.periodoBtns}>
+          {[["hoje", "Hoje"], ["semana", "Semana"], ["mes", "Mês"], ["tudo", "Tudo"]].map(([k, lbl]) => (
+            <button key={k} onClick={() => setPeriodo(k)}
+              style={{ ...SX.periodoBtn, ...(periodo === k ? SX.periodoBtnOn : {}) }}>
+              {lbl}
+            </button>
+          ))}
+        </div>
+        <div style={SX.periodoCustom}>
+          <input type="date" value={dataIni} max={dataFim}
+            onChange={(e) => { setDataIni(e.target.value); setPeriodo("custom"); }}
+            style={SX.periodoData} />
+          <span style={{ color: "var(--muted)", fontSize: 13 }}>até</span>
+          <input type="date" value={dataFim} min={dataIni} max={hoje}
+            onChange={(e) => { setDataFim(e.target.value); setPeriodo("custom"); }}
+            style={SX.periodoData} />
+        </div>
+        <div style={SX.periodoRotulo}>{rotuloPeriodo}</div>
+      </div>
+
 
       <div style={SX.kpiGrid}>
         <Kpi i={ClipboardList} c="#6366F1" v={stats.total} l="Total de atendimentos" d={0} />
@@ -1979,6 +2036,13 @@ const SX = {
   sub: { margin: "5px 0 0", color: "#82848A", fontSize: 14.5, fontWeight: 500 },
   headerActions: { display: "flex", gap: 10 },
 
+  periodoBar: { display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", marginBottom: 18, padding: "12px 16px", borderRadius: 14, background: "var(--card)", border: "1px solid var(--line)" },
+  periodoBtns: { display: "flex", gap: 6 },
+  periodoBtn: { padding: "7px 16px", borderRadius: 9, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", cursor: "pointer", fontSize: 13.5, fontWeight: 600, fontFamily: "inherit" },
+  periodoBtnOn: { background: "linear-gradient(135deg,#6366F1 0%,#7C5CF0 55%,#4F46E5 100%)", color: "#fff", border: "1px solid transparent", boxShadow: "0 4px 12px rgba(99,102,241,0.3)" },
+  periodoCustom: { display: "flex", alignItems: "center", gap: 8, paddingLeft: 14, borderLeft: "1px solid var(--line)" },
+  periodoData: { padding: "6px 10px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--input-bg)", color: "var(--text)", fontSize: 13, fontFamily: "inherit" },
+  periodoRotulo: { marginLeft: "auto", fontSize: 13, fontWeight: 700, color: "#4F46E5", background: "rgba(99,102,241,0.08)", padding: "6px 14px", borderRadius: 8 },
   kpiGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(218px,1fr))", gap: 15, marginBottom: 16 },
   kpiCard: { background: "#fff", borderRadius: 18, padding: "20px 22px", display: "flex", alignItems: "center", gap: 15, border: "1px solid #ECECEE", boxShadow: "0 1px 3px rgba(60,55,45,0.04)" },
   kpiIcon: { width: 50, height: 50, borderRadius: 14, display: "grid", placeItems: "center", flexShrink: 0 },
