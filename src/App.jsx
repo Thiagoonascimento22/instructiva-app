@@ -2120,7 +2120,7 @@ const SX = {
 
   // ---- WhatsApp ----
   btnPrimarySm: { display: "inline-flex", alignItems: "center", gap: 7, background: "linear-gradient(120deg,#6366F1 0%,#7C5CF0 55%,#4F46E5 100%)", color: "#fff", border: "none", borderRadius: 10, padding: "0 14px", height: 38, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 4px 12px rgba(99,102,241,0.3)", whiteSpace: "nowrap" },
-  waWrap: { display: "grid", gridTemplateColumns: "360px 1fr", height: "calc(100vh - 200px)", minHeight: 520, borderRadius: 16, overflow: "hidden", border: "1px solid var(--line)", background: "var(--card)", boxShadow: "0 10px 40px -12px rgba(0,0,0,0.18)" },
+  waWrap: { display: "grid", gridTemplateColumns: "340px 1fr", height: 560, maxHeight: "calc(100vh - 170px)", borderRadius: 16, overflow: "hidden", border: "1px solid var(--line)", background: "var(--card)", boxShadow: "0 10px 40px -12px rgba(0,0,0,0.18)" },
   waList: { display: "flex", flexDirection: "column", borderRight: "1px solid var(--line)", minWidth: 0, background: "var(--card)" },
   waListHead: { display: "flex", alignItems: "center", gap: 8, padding: "16px 18px", fontWeight: 700, fontSize: 14, color: "var(--text)", borderBottom: "1px solid var(--line)" },
   waCount: { marginLeft: "auto", fontSize: 12, fontWeight: 700, color: "#fff", background: "#6366F1", borderRadius: 20, padding: "1px 9px" },
