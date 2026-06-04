@@ -126,7 +126,7 @@ function hash(senha) {
 }
 function newToken() { return crypto.randomBytes(24).toString("hex"); }
 function publicUser(u) {
-  return { id: u.id, nome: u.nome, login: u.login, role: u.role, perms: u.perms, ativo: !!u.ativo };
+  return { id: u.id, nome: u.nome, login: u.login, role: u.role, perms: u.perms, ativo: !!u.ativo, excluirAnalise: !!u.excluirAnalise };
 }
 function userFromToken(req) {
   const auth = req.headers.authorization || "";
@@ -218,11 +218,12 @@ app.put("/api/users/:id", requireAuth, (req, res) => {
   const u = db.users.find((x) => x.id === req.params.id);
   if (!u) return res.status(404).json({ error: "não encontrado" });
   if (u.role === "admin") return res.status(400).json({ error: "não é possível editar o admin por aqui" });
-  const { perms, ativo, nome, senha } = req.body;
+  const { perms, ativo, nome, senha, excluirAnalise } = req.body;
   if (perms) u.perms = perms;
   if (ativo !== undefined) u.ativo = !!ativo;
   if (nome !== undefined) u.nome = nome.trim() || u.nome;
   if (senha && senha.trim()) u.senha = hash(senha.trim());
+  if (excluirAnalise !== undefined) u.excluirAnalise = !!excluirAnalise;
   saveDB(db);
   res.json({ user: publicUser(u) });
 });
@@ -271,6 +272,24 @@ app.delete("/api/records/:id", requireAuth, (req, res) => {
   db.records = db.records.filter((r) => r.id !== req.params.id);
   saveDB(db);
   res.json({ ok: true });
+});
+
+// ---- atualizar um atendimento (editar status, solução, etc) ----
+app.put("/api/records/:id", requireAuth, (req, res) => {
+  const rec = db.records.find((r) => r.id === req.params.id);
+  if (!rec) return res.status(404).json({ error: "não encontrado" });
+  // quem registrou pode editar o próprio; quem tem ver_todos pode editar qualquer um
+  const ehDono = rec.colaboradoraId === req.user.id;
+  if (!ehDono && !can(req, "ver_todos")) {
+    return res.status(403).json({ error: "sem permissão para editar este atendimento" });
+  }
+  // campos que podem ser editados
+  const editaveis = ["status", "solucao", "obs", "assunto", "aluno", "email", "telefone", "data"];
+  editaveis.forEach((campo) => {
+    if (req.body[campo] !== undefined) rec[campo] = req.body[campo];
+  });
+  saveDB(db);
+  res.json({ record: rec });
 });
 
 // ---------------------------------------------------------------------------
@@ -415,7 +434,9 @@ Seja específico usando os números reais. Tom profissional, construtivo e acion
 });
 
 function buildAIPayload(records, users) {
-  const lines = users.map((u) => {
+  // gestores (gerente/diretor) não entram na análise de produtividade
+  const equipe = users.filter((u) => !u.excluirAnalise && u.role !== "admin");
+  const lines = equipe.map((u) => {
     const rs = records.filter((r) => r.colaboradoraId === u.id);
     if (rs.length === 0) return `- ${u.nome || u.login}: nenhum atendimento registrado`;
     const resolv = rs.filter((r) => r.status === "resolvido").length;
@@ -427,8 +448,11 @@ function buildAIPayload(records, users) {
     const topA = Object.entries(assuntos).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([a, n]) => `${a} (${n})`).join(", ");
     return `- ${u.nome || u.login}: ${rs.length} atendimentos | ${resolv} resolvidos, ${and} em andamento, ${pen} pendentes | taxa de resolução ${taxa}% | principais assuntos: ${topA}`;
   });
-  const total = records.length;
-  const totalRes = records.filter((r) => r.status === "resolvido").length;
+  // total considera só atendimentos da equipe operacional
+  const idsEquipe = new Set(equipe.map((u) => u.id));
+  const recordsEquipe = records.filter((r) => idsEquipe.has(r.colaboradoraId));
+  const total = recordsEquipe.length;
+  const totalRes = recordsEquipe.filter((r) => r.status === "resolvido").length;
   return `Total geral: ${total} atendimentos | Taxa de resolução do setor: ${total ? Math.round((totalRes / total) * 100) : 0}%\n\nPor colaboradora:\n${lines.join("\n")}`;
 }
 

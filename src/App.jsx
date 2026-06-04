@@ -7,7 +7,7 @@ import {
   LayoutDashboard, ClipboardList, PlusCircle, Search, Trash2, Download,
   Users, CheckCircle2, Clock, AlertCircle, X, Filter, Sparkles, LogOut,
   Shield, UserPlus, Lock, Eye, EyeOff, Settings, TrendingUp, Award,
-  Crown, ChevronRight, Activity, Zap, Target, Brain, Star, AlertTriangle,
+  Crown, ChevronRight, Activity, Zap, Target, Brain, Star, AlertTriangle, BarChart3,
   Sun, Moon, ListTodo, CalendarClock, Flag, Circle, ArrowLeft, UserCircle,
   MessageCircle, Send, Link2, RefreshCw, Phone, PlusSquare, Power, Smile, Paperclip, Mic, Square,
 } from "lucide-react";
@@ -659,7 +659,22 @@ function Lista({ records, users, can, refresh, goNew }) {
                     <td style={SX.td}><div style={SX.contact}>{r.email && <span style={SX.cMain}>{r.email}</span>}{r.telefone && <span style={SX.cSub}>{r.telefone}</span>}</div></td>
                     <td style={SX.td}>{r.assunto}</td>
                     <td style={{ ...SX.td, maxWidth: 210 }}><span style={SX.trunc} title={r.solucao}>{r.solucao || "—"}</span></td>
-                    <td style={SX.td}><span style={{ ...SX.pill, background: st.bg, color: st.color }}><Icon size={13} strokeWidth={2.5} /> {st.label}</span></td>
+                    <td style={SX.td}>
+                      <select
+                        value={r.status}
+                        onChange={async (e) => {
+                          const novo = e.target.value;
+                          try { await api.updateRecord(r.id, { status: novo }); refresh(); }
+                          catch (err) { alert(err.message); }
+                        }}
+                        style={{ ...SX.statusSelect, background: st.bg, color: st.color }}
+                        title="Clique para mudar o status"
+                      >
+                        {Object.entries(STATUS).map(([k, v]) => (
+                          <option key={k} value={k} style={{ background: "var(--card)", color: "var(--text)" }}>{v.label}</option>
+                        ))}
+                      </select>
+                    </td>
                     <td style={SX.td}>{can("excluir") && <button onClick={async () => { if (confirm("Excluir este atendimento?")) { try { await api.deleteRecord(r.id); refresh(); } catch (e) { alert(e.message); } } }} className="btn-del" style={SX.btnDel}><Trash2 size={15} /></button>}</td>
                   </tr>
                 );
@@ -765,6 +780,9 @@ function Equipe({ refresh }) {
   async function toggleActive(u) {
     try { await api.updateUser(u.id, { ativo: !u.ativo }); await load(); refresh && refresh(); } catch (e) { alert(e.message); }
   }
+  async function toggleAnalise(u) {
+    try { await api.updateUser(u.id, { excluirAnalise: !u.excluirAnalise }); await load(); refresh && refresh(); } catch (e) { alert(e.message); }
+  }
   async function removeUser(id) {
     if (!confirm("Remover este acesso?")) return;
     try { await api.deleteUser(id); await load(); refresh && refresh(); } catch (e) { alert(e.message); }
@@ -822,13 +840,21 @@ function Equipe({ refresh }) {
               {admin ? (
                 <div style={SX.adminNote}><Shield size={13} /> Acesso total ao sistema</div>
               ) : (
-                <div style={SX.permRow}>
-                  {Object.entries(PERM_LABELS).map(([k, label]) => (
-                    <button key={k} onClick={() => togglePerm(u, k)} title={label} style={{ ...SX.permPill, ...(u.perms[k] ? SX.permPillOn : {}) }}>
-                      {u.perms[k] ? <CheckCircle2 size={11} /> : <X size={11} />} {label}
-                    </button>
-                  ))}
-                </div>
+                <>
+                  <div style={SX.permRow}>
+                    {Object.entries(PERM_LABELS).map(([k, label]) => (
+                      <button key={k} onClick={() => togglePerm(u, k)} title={label} style={{ ...SX.permPill, ...(u.perms[k] ? SX.permPillOn : {}) }}>
+                        {u.perms[k] ? <CheckCircle2 size={11} /> : <X size={11} />} {label}
+                      </button>
+                    ))}
+                  </div>
+                  <button onClick={() => toggleAnalise(u)} style={{ ...SX.analiseToggle, ...(u.excluirAnalise ? SX.analiseToggleOff : {}) }}
+                    title="Quem é gestão (gerente/diretor) pode ficar de fora da análise de produtividade da equipe">
+                    {u.excluirAnalise
+                      ? <><EyeOff size={12} /> Fora da análise de produtividade</>
+                      : <><BarChart3 size={12} /> Entra na análise de produtividade</>}
+                  </button>
+                </>
               )}
             </div>
           );
@@ -1970,7 +1996,9 @@ function buildStats(records, users) {
   const byStatus = { resolvido: 0, andamento: 0, pendente: 0 };
   records.forEach((r) => { byStatus[r.status] = (byStatus[r.status] || 0) + 1; });
   const taxa = total ? Math.round((byStatus.resolvido / total) * 100) : 0;
-  const cm = {}; records.forEach((r) => { cm[r.colaboradoraId] = (cm[r.colaboradoraId] || 0) + 1; });
+  // IDs de gestão (admin ou marcados pra excluir da análise) não entram no ranking de colaboradoras
+  const idsGestao = new Set((users || []).filter((u) => u.role === "admin" || u.excluirAnalise).map((u) => u.id));
+  const cm = {}; records.forEach((r) => { if (!idsGestao.has(r.colaboradoraId)) cm[r.colaboradoraId] = (cm[r.colaboradoraId] || 0) + 1; });
   const byColab = Object.entries(cm).map(([id, value]) => ({ name: shortName(nameOf(users, id)), value })).sort((a, b) => b.value - a.value);
   const am = {}; records.forEach((r) => { const k = r.assunto || "—"; am[k] = (am[k] || 0) + 1; });
   const byAssunto = Object.entries(am).map(([name, value]) => ({ name: name.length > 22 ? name.slice(0, 21) + "…" : name, value })).sort((a, b) => b.value - a.value).slice(0, 6);
@@ -2129,6 +2157,7 @@ const SX = {
   cSub: { fontSize: 12, color: "#969A9E" },
   trunc: { display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
   pill: { display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 11px", borderRadius: 20, fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" },
+  statusSelect: { padding: "5px 10px", borderRadius: 20, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", fontFamily: "inherit", appearance: "none", WebkitAppearance: "none", textAlign: "center", outline: "none" },
   btnDel: { width: 32, height: 32, borderRadius: 9, border: "1px solid #F3D7D8", background: "#fff", color: "#E5484D", cursor: "pointer", display: "grid", placeItems: "center", transition: "all .15s" },
   noRes: { background: "#fff", borderRadius: 18, border: "1px dashed #E6E6E9", padding: "48px 20px", textAlign: "center" },
 
@@ -2161,6 +2190,8 @@ const SX = {
   permRow: { display: "flex", flexWrap: "wrap", gap: 7 },
   permPill: { display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, fontWeight: 600, padding: "6px 11px", borderRadius: 9, border: "1px solid #E6E6E9", background: "#F8F8F9", color: "#969A9E", cursor: "pointer", fontFamily: "inherit", transition: "all .15s" },
   permPillOn: { background: "rgba(99,102,241,0.1)", color: "#4F46E5", borderColor: "rgba(99,102,241,0.35)" },
+  analiseToggle: { display: "inline-flex", alignItems: "center", gap: 6, marginTop: 10, padding: "7px 12px", borderRadius: 9, border: "1px solid rgba(18,161,80,0.3)", background: "rgba(18,161,80,0.08)", color: "#12A150", cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: "inherit", width: "100%", justifyContent: "center" },
+  analiseToggleOff: { border: "1px solid rgba(120,120,130,0.3)", background: "rgba(120,120,130,0.08)", color: "var(--muted)" },
 
   savedMsg: { display: "inline-flex", alignItems: "center", gap: 7, color: "#12A150", fontSize: 14, fontWeight: 600 },
   configNote: { display: "flex", gap: 11, marginTop: 18, padding: "16px 18px", background: "rgba(99,102,241,0.05)", border: "1px solid rgba(99,102,241,0.16)", borderRadius: 14, fontSize: 13.5, color: "#4C4E52", lineHeight: 1.55, maxWidth: 880 },

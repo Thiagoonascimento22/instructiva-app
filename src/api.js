@@ -40,6 +40,7 @@ export const api = {
   // records
   listRecords: () => req("GET", "/records"),
   createRecord: (payload) => req("POST", "/records", payload),
+  updateRecord: (id, payload) => req("PUT", "/records/" + id, payload),
   deleteRecord: (id) => req("DELETE", "/records/" + id),
   // tasks
   listTasks: () => req("GET", "/tasks"),
