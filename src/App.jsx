@@ -1,2012 +1,2474 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { api, getToken, setToken } from "./api.js";
-import { LOGO_FULL, LOGO_LIGHT } from "./logos.js";
+import {
+  BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+} from "recharts";
+import {
+  LayoutDashboard, ClipboardList, PlusCircle, Search, Trash2, Download,
+  Users, CheckCircle2, Clock, AlertCircle, X, Filter, Sparkles, LogOut,
+  Shield, UserPlus, Lock, Eye, EyeOff, Settings, TrendingUp, Award,
+  Crown, ChevronRight, Activity, Zap, Target, Brain, Star, AlertTriangle, BarChart3,
+  Sun, Moon, ListTodo, CalendarClock, Flag, Circle, ArrowLeft, UserCircle,
+  MessageCircle, Send, Link2, RefreshCw, Phone, PlusSquare, Power, Smile, Paperclip, Mic, Square,
+} from "lucide-react";
+import { LOGO_FULL, LOGO_CLARO, LOGO_ICONE } from "./logos";
+import { api } from "./api";
 
-/* ============================ ÍCONES ============================ */
-const I = {
-  pipe: (p) => (
-    <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="6" height="14" rx="1"/><rect x="9.5" y="3" width="6" height="9" rx="1"/><rect x="16" y="3" width="5" height="6" rx="1"/></svg>
-  ),
-  team: (p) => (
-    <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-  ),
-  cog: (p) => (
-    <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-  ),
-  plus: (p) => (<svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>),
-  wa: (p) => (<svg {...p} viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38c1.45.79 3.08 1.21 4.79 1.21 5.46 0 9.91-4.45 9.91-9.91S17.5 2 12.04 2zm0 18.02c-1.52 0-3-.41-4.29-1.18l-.31-.18-3.12.82.83-3.04-.2-.31a8.2 8.2 0 0 1-1.26-4.39c0-4.54 3.7-8.23 8.24-8.23 2.2 0 4.27.86 5.82 2.42a8.18 8.18 0 0 1 2.41 5.82c0 4.54-3.7 8.24-8.24 8.24zm4.52-6.16c-.25-.12-1.47-.72-1.69-.81-.23-.08-.39-.12-.56.12-.16.25-.64.81-.79.98-.14.16-.29.18-.54.06-.25-.12-1.05-.39-1.99-1.23-.74-.66-1.23-1.47-1.38-1.72-.14-.25-.01-.38.11-.5.11-.11.25-.29.37-.43.12-.14.16-.25.25-.41.08-.16.04-.31-.02-.43-.06-.12-.56-1.34-.76-1.84-.2-.48-.41-.42-.56-.43h-.48c-.16 0-.43.06-.66.31-.23.25-.86.85-.86 2.07 0 1.22.89 2.4 1.01 2.56.12.16 1.75 2.67 4.25 3.74.59.26 1.06.41 1.42.52.6.19 1.14.16 1.57.1.48-.07 1.47-.6 1.68-1.18.21-.58.21-1.07.14-1.18-.06-.1-.22-.16-.47-.28z"/></svg>),
-  x: (p) => (<svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>),
-  trash: (p) => (<svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>),
-  out: (p) => (<svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>),
-  empty: (p) => (<svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>),
-  send: (p) => (<svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>),
-  search: (p) => (<svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>),
-  chat: (p) => (<svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>),
-  power: (p) => (<svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v10M18.4 6.6a9 9 0 1 1-12.8 0"/></svg>),
-  refresh: (p) => (<svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/></svg>),
-  link: (p) => (<svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.5-1.5"/></svg>),
-  dash: (p) => (<svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><rect x="7" y="11" width="3" height="6" rx="1"/><rect x="12" y="7" width="3" height="10" rx="1"/><rect x="17" y="13" width="3" height="4" rx="1"/></svg>),
-  medal: (p) => (<svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="15" r="6"/><path d="M9 9 6.5 2M15 9l2.5-7M9.5 2h5"/></svg>),
-  target: (p) => (<svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/></svg>),
-  cash: (p) => (<svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/></svg>),
-  check: (p) => (<svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.8 10A10 10 0 1 1 17 3.3"/><path d="m9 11 3 3L22 4"/></svg>),
-  trend: (p) => (<svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 7h6v6"/><path d="m22 7-8.5 8.5-5-5L2 17"/></svg>),
-  users: (p) => (<svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>),
-  spark: (p) => (<svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/></svg>),
-  funnel: (p) => (<svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 4h18l-7 8v7l-4-2v-5z"/></svg>),
+const STATUS = {
+  resolvido: { label: "Resolvido", color: "#12A150", bg: "rgba(18,161,80,0.12)", icon: CheckCircle2 },
+  andamento: { label: "Em andamento", color: "#6366F1", bg: "rgba(99,102,241,0.14)", icon: Clock },
+  pendente: { label: "Pendente", color: "#E5484D", bg: "rgba(229,72,77,0.12)", icon: AlertCircle },
+};
+// categorias fixas de atendimento (padroniza relatórios)
+const CATEGORIAS = ["Acesso", "Livro", "Financeiro", "Plataforma", "Certificado", "Comercial", "Reembolso"];
+// paleta de gráficos derivada da marca (laranja + cinzas + apoios sóbrios)
+const PALETTE = ["#6366F1", "#6E7073", "#818CF8", "#9A9CA0", "#4F46E5", "#B5B7BA", "#12A150", "#5B8DB8"];
+
+// emojis mais usados em atendimento
+const EMOJIS = ["😀","😁","😂","🤣","😊","😍","😉","😎","🤝","👍","👏","🙏","❤️","🔥","✅","✔️","⭐","🎉","💪","🙌","👋","😅","😢","😭","😡","🤔","😴","🥰","😘","💯","⏰","📌","📎","📞","💬","✍️","👀","🚀","💡","⚠️"];
+
+function emptyForm() {
+  return { data: new Date().toISOString().slice(0, 10), aluno: "", email: "", telefone: "", assunto: "", solucao: "", status: "resolvido", obs: "" };
+}
+const PERM_LABELS = {
+  registrar: "Registrar atendimentos",
+  ver_todos: "Ver atendimentos de todas",
+  excluir: "Excluir registros",
+  exportar: "Exportar dados (CSV)",
+  ia: "Acessar análise por IA",
+  gerir_usuarios: "Gerenciar usuários",
+  gerir_whatsapp: "Gerenciar conexões WhatsApp",
 };
 
-/* ============================ HELPERS ============================ */
-const ETAPAS = [
-  { id: "lead", nome: "Lead Novo", cor: "var(--lead)" },
-  { id: "contato", nome: "Em Contato", cor: "var(--contato)" },
-  { id: "sem_resposta", nome: "Sem Resposta", cor: "#94a3b8" },
-  { id: "negociando", nome: "Negociando", cor: "var(--negociando)" },
-  { id: "fechou", nome: "Fechou", cor: "var(--fechou)" },
-  { id: "perdeu", nome: "Perdeu", cor: "var(--perdeu)" },
-];
-const corEtapa = (id) => (ETAPAS.find((e) => e.id === id) || ETAPAS[0]).cor;
-
-function fmtMoney(n) {
-  return "R$ " + (Number(n) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-function iniciais(nome) {
-  const p = (nome || "?").trim().split(/\s+/);
-  return ((p[0]?.[0] || "") + (p[1]?.[0] || "")).toUpperCase() || "?";
-}
-const soDigitos = (s) => (s || "").replace(/\D/g, "");
-const limpaInst = (s) =>
-  (s || "").trim().toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9_-]/g, "");
-
-/* ============================ APP ============================ */
+// =============================================================================
 export default function App() {
-  const [booting, setBooting] = useState(true);
-  const [user, setUser] = useState(null);
-  const [view, setView] = useState("painel");
-  const [waTarget, setWaTarget] = useState(null);
-  const [toast, setToast] = useState(null);
-  const toastT = useRef(null);
+  const [loaded, setLoaded] = useState(false);
+  const [me, setMe] = useState(null);          // usuário logado
+  const [users, setUsers] = useState([]);      // lista de nomes (para tabelas) ou completa (admin)
+  const [records, setRecords] = useState([]);
+  const [view, setView] = useState("dashboard");
+  const [waPrefill, setWaPrefill] = useState(null);   // pré-preenche Novo Registro a partir do WhatsApp
+  const [theme, setTheme] = useState(() => localStorage.getItem("instructiva_theme") || "light");
 
+  const isAdmin = me?.role === "admin";
+  const can = (p) => isAdmin || me?.perms?.[p];
+
+  useEffect(() => { localStorage.setItem("instructiva_theme", theme); }, [theme]);
+  const toggleTheme = () => setTheme((t) => (t === "light" ? "dark" : "light"));
+
+  // ao carregar: se tem token salvo, busca o usuário
   useEffect(() => {
-    if (!getToken()) { setBooting(false); return; }
-    api.me().then(setUser).catch(() => setToken("")).finally(() => setBooting(false));
+    (async () => {
+      if (api.token) {
+        try { const { user } = await api.me(); setMe(user); } catch { api.setToken(null); }
+      }
+      setLoaded(true);
+    })();
   }, []);
 
-  function showToast(msg) {
-    setToast(msg);
-    clearTimeout(toastT.current);
-    toastT.current = setTimeout(() => setToast(null), 2600);
+  // sempre que houver usuário logado, carrega dados (nomes + registros)
+  async function refreshData() {
+    try {
+      const namesResp = await api.listUserNames();
+      setUsers(namesResp.users);
+    } catch {}
+    try {
+      const recsResp = await api.listRecords();
+      setRecords(recsResp.records);
+    } catch {}
   }
-  function logout() {
-    setToken("");
-    setUser(null);
-    setView("painel");
+  useEffect(() => { if (me) refreshData(); }, [me]);
+
+  const visibleRecords = records; // o backend já filtra por permissão
+
+  async function login(loginStr, senhaStr) {
+    try {
+      const { token, user } = await api.login(loginStr, senhaStr);
+      api.setToken(token);
+      setMe(user);
+      setView("dashboard");
+      return true;
+    } catch { return false; }
+  }
+  async function logout() {
+    try { await api.logout(); } catch {}
+    api.setToken(null);
+    setMe(null);
+    setUsers([]); setRecords([]);
+  }
+  async function setMyName(nome) {
+    try { const { user } = await api.updateMe({ nome }); setMe(user); } catch {}
   }
 
-  if (booting) return <div className="login-wrap"><div className="spin" /></div>;
-  if (!user) return <Login onDone={(u) => setUser(u)} />;
-  if (user.precisaOnboarding) return <Onboarding user={user} onDone={setUser} />;
+  if (!loaded) return <div style={{ ...SX.app, display: "grid", placeItems: "center" }}><style>{CSS}</style><img src={LOGO_FULL} alt="Instructiva" style={{ width: 200, opacity: 0.5 }} className="pulse" /></div>;
+  if (!me) return <Login onLogin={login} />;
 
-  const isGer = user.role === "gerente";
-  const titulos = {
-    painel: { t: "Painel Comercial", s: "Visão geral das vendas e metas" },
-    pipeline: { t: "Pipeline de Vendas", s: "Arraste os cards conforme a negociação avança" },
-    whatsapp: { t: "WhatsApp", s: "Atenda seus leads sem sair do sistema" },
-    ia: { t: "Análise Inteligente", s: "A IA lê o desempenho e sugere melhorias" },
-    equipe: { t: "Equipe & Acessos", s: "Gerencie os vendedores e suas metas" },
-    config: { t: "Configurações", s: "Seus dados de acesso" },
-  };
-  const hora = new Date().getHours();
-  const saud = hora < 12 ? "Bom dia" : hora < 18 ? "Boa tarde" : "Boa noite";
+  // primeiro acesso da gerente sem nome definido → onboarding
+  if (isAdmin && !me.nome) return <Onboarding onSave={setMyName} />;
+
+  const nav = [];
+  nav.push(["dashboard", "Dashboard", LayoutDashboard]);
+  nav.push(["lista", "Atendimentos", ClipboardList]);
+  if (can("registrar")) nav.push(["novo", "Novo Registro", PlusCircle]);
+  nav.push(["tarefas", "Tarefas", ListTodo]);
+  nav.push(["whatsapp", "WhatsApp", MessageCircle]);
+  if (can("ia")) nav.push(["ia", "Análise IA", Sparkles, true]);
+  if (can("gerir_usuarios")) nav.push(["equipe", "Equipe & Acessos", Shield]);
+  if (isAdmin) nav.push(["config", "Configurações", Settings]);
 
   return (
-    <div className="shell">
-      <aside className="sidebar">
-        <div className="brand">
-          <img src={LOGO_LIGHT} alt="Instructiva" />
-          <div className="tag">CRM Comercial</div>
+    <div style={SX.app} className={`app-root theme-${theme}`}>
+      <style>{CSS}</style>
+      <div style={SX.bgGlow} className="bg-glow" />
+
+      <aside style={SX.sidebar} className="sidebar">
+        <div style={SX.brand}>
+          <img src={LOGO_CLARO} alt="Instructiva" style={SX.brandLogo} />
         </div>
-        <nav className="nav">
-          <NavBtn ic={I.dash} label="Painel" active={view === "painel"} onClick={() => setView("painel")} />
-          <NavBtn ic={I.pipe} label="Pipeline" active={view === "pipeline"} onClick={() => setView("pipeline")} />
-          <NavBtn ic={I.wa} label="WhatsApp" active={view === "whatsapp"} onClick={() => setView("whatsapp")} />
-          <NavBtn ic={I.spark} label="Análise IA" active={view === "ia"} onClick={() => setView("ia")} />
-          {isGer && <NavBtn ic={I.team} label="Equipe & Acessos" active={view === "equipe"} onClick={() => setView("equipe")} />}
-          <NavBtn ic={I.cog} label="Configurações" active={view === "config"} onClick={() => setView("config")} />
+        <div style={SX.brandTag}>Suporte ao Aluno</div>
+
+        <nav style={SX.nav}>
+          {nav.map(([id, label, Icon, glow]) => (
+            <button key={id} onClick={() => setView(id)} className="navbtn"
+              style={{ ...SX.navBtn, ...(view === id ? SX.navBtnActive : {}) }}>
+              <Icon size={18} strokeWidth={2} />
+              <span style={{ flex: 1, textAlign: "left" }}>{label}</span>
+              {glow && <span className="ai-dot" />}
+              {view === id && <ChevronRight size={15} />}
+            </button>
+          ))}
         </nav>
-        <div className="side-foot">
-          <div className="side-user">
-            <div className="avatar">{iniciais(user.nome)}</div>
-            <div>
-              <div className="nm">{user.nome}</div>
-              <div className="rl">{isGer ? "Gerente comercial" : "Vendedor"}</div>
-            </div>
+
+        <button onClick={toggleTheme} className="theme-toggle" style={SX.themeToggle} title="Alternar tema">
+          {theme === "light" ? <Moon size={16} /> : <Sun size={16} />}
+          <span>{theme === "light" ? "Modo escuro" : "Modo claro"}</span>
+        </button>
+
+        <div style={SX.userCard} className="user-card">
+          <div style={SX.avatar}>{initials(me.nome)}</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={SX.userName} className="user-name">{me.nome}</div>
+            <div style={SX.userRole}>{isAdmin ? <><Crown size={11} /> Administradora</> : "Colaboradora"}</div>
           </div>
-          <button className="logout" onClick={logout}>Sair</button>
+          <button onClick={logout} className="logout-btn" style={SX.logoutBtn} title="Sair"><LogOut size={16} /></button>
         </div>
       </aside>
 
-      <main className="main">
-        <div className="topbar">
-          <div>
-            <div className="greet">{view === "pipeline" ? `${saud}, ${user.nome.split(" ")[0]} 👋` : titulos[view].t}</div>
-            <div className="sub">{titulos[view].s}</div>
-          </div>
-        </div>
-        <div className="content">
-          {view === "painel" && <Painel user={user} showToast={showToast} irParaPipeline={() => setView("pipeline")} />}
-          {view === "pipeline" && <Pipeline user={user} showToast={showToast} irParaWhatsApp={(numero, cliente) => { setWaTarget({ numero, cliente }); setView("whatsapp"); }} />}
-          {view === "whatsapp" && <WhatsApp user={user} showToast={showToast} target={waTarget} onTargetUsed={() => setWaTarget(null)} />}
-          {view === "ia" && <PaginaIA user={user} showToast={showToast} />}
-          {view === "equipe" && isGer && <Equipe showToast={showToast} meId={user.id} />}
-          {view === "config" && <Config user={user} setUser={setUser} showToast={showToast} />}
+      <main style={view === "whatsapp" ? SX.mainWide : SX.main}>
+        <div className="fade-in" key={view}>
+          {view === "dashboard" && <Dashboard records={visibleRecords} users={users} me={me} isAdmin={isAdmin} />}
+          {view === "lista" && <Lista records={visibleRecords} users={users} can={can} refresh={refreshData} goNew={() => setView("novo")} />}
+          {view === "novo" && can("registrar") && <NovoRegistro me={me} isAdmin={isAdmin} users={users} refresh={refreshData} prefill={waPrefill} onDone={() => { setWaPrefill(null); setView("lista"); }} />}
+          {view === "tarefas" && <Tarefas me={me} isAdmin={isAdmin} can={can} users={users} />}
+          {view === "whatsapp" && <WhatsApp me={me} isAdmin={isAdmin} can={can} goNovo={(pre) => { setWaPrefill(pre); setView("novo"); }} />}
+          {view === "ia" && can("ia") && <AnaliseIA records={records} users={users} />}
+          {view === "equipe" && can("gerir_usuarios") && <Equipe refresh={refreshData} />}
+          {view === "config" && isAdmin && <Config me={me} onUpdated={setMe} />}
         </div>
       </main>
-
-      {toast && <div className="toast">{toast}</div>}
     </div>
   );
 }
 
-function NavBtn({ ic: Ico, label, active, onClick }) {
+// ============================================================= ONBOARDING
+function Onboarding({ onSave }) {
+  const [nome, setNome] = useState("");
   return (
-    <button className={active ? "active" : ""} onClick={onClick}>
-      <Ico className="ico" />
-      <span>{label}</span>
-    </button>
+    <div style={SX.loginWrap}>
+      <style>{CSS}</style>
+      <div style={SX.loginGlow} />
+      <div style={SX.loginCard} className="login-rise">
+        <img src={LOGO_FULL} alt="Instructiva" style={{ width: 190, display: "block", margin: "0 auto 6px" }} />
+        <div style={SX.onbIcon}><Sparkles size={22} color="#6366F1" /></div>
+        <h2 style={SX.onbTitle}>Bem-vinda! 👋</h2>
+        <p style={SX.onbText}>Como você gostaria de ser chamada no sistema? Esse nome vai aparecer no seu painel e nos relatórios.</p>
+        <label style={{ ...SX.loginLabel, marginTop: 20 }}>Seu nome</label>
+        <div style={SX.loginField}>
+          <Users size={17} color="#A0A2A6" />
+          <input value={nome} onChange={(e) => setNome(e.target.value)} onKeyDown={(e) => e.key === "Enter" && nome.trim() && onSave(nome.trim())}
+            placeholder="Ex: Maria Silva" style={SX.loginInput} autoFocus />
+        </div>
+        <button onClick={() => nome.trim() && onSave(nome.trim())} disabled={!nome.trim()} className="login-cta"
+          style={{ ...SX.loginBtn, opacity: nome.trim() ? 1 : 0.5, cursor: nome.trim() ? "pointer" : "not-allowed" }}>
+          Continuar <ChevronRight size={18} />
+        </button>
+        <p style={SX.onbHint}>Você pode alterar isso depois em Configurações.</p>
+      </div>
+    </div>
   );
 }
 
-/* ============================ LOGIN ============================ */
-function Login({ onDone }) {
+// ============================================================= LOGIN
+function Login({ onLogin }) {
   const [login, setLogin] = useState("");
   const [senha, setSenha] = useState("");
-  const [err, setErr] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [show, setShow] = useState(false);
+  const [err, setErr] = useState(false);
 
-  async function entrar(e) {
-    e.preventDefault();
-    setErr(""); setLoading(true);
-    try {
-      const r = await api.login(login, senha);
-      setToken(r.token);
-      onDone(r.user);
-    } catch (e) {
-      setErr(e.message);
-    } finally { setLoading(false); }
-  }
-
+  async function submit() { if (!(await onLogin(login, senha))) { setErr(true); setTimeout(() => setErr(false), 2000); } }
   return (
-    <div className="login-wrap">
-      <form className="login-card" onSubmit={entrar}>
-        <img className="logo" src={LOGO_FULL} alt="Instructiva" />
-        <div className="ttl">CRM Comercial</div>
-        <h2>Entrar</h2>
-        <p className="hi">Acesse com seu usuário e senha.</p>
-        {err && <div className="err">{err}</div>}
-        <div className="field">
-          <label>Usuário</label>
-          <input className="input" value={login} onChange={(e) => setLogin(e.target.value)} placeholder="seu usuário" autoFocus />
+    <div style={SX.loginWrap}>
+      <style>{CSS}</style>
+      <div style={SX.loginGlow} />
+      <div style={SX.loginCard} className="login-rise">
+        <img src={LOGO_FULL} alt="Instructiva" style={{ width: 210, display: "block", margin: "0 auto" }} />
+        <p style={SX.loginSub}>Sistema de Controle de Atendimento ao Aluno</p>
+
+        <div style={{ marginTop: 26 }}>
+          <label style={SX.loginLabel}>Usuário</label>
+          <div style={SX.loginField}>
+            <Users size={17} color="#A0A2A6" />
+            <input value={login} onChange={(e) => setLogin(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} placeholder="seu usuário" style={SX.loginInput} autoFocus />
+          </div>
+          <label style={{ ...SX.loginLabel, marginTop: 16 }}>Senha</label>
+          <div style={SX.loginField}>
+            <Lock size={17} color="#A0A2A6" />
+            <input type={show ? "text" : "password"} value={senha} onChange={(e) => setSenha(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} placeholder="sua senha" style={SX.loginInput} />
+            <button onClick={() => setShow(!show)} style={SX.eyeBtn}>{show ? <EyeOff size={16} /> : <Eye size={16} />}</button>
+          </div>
+          {err && <div className="shake" style={SX.loginErr}><AlertCircle size={14} /> Usuário ou senha incorretos</div>}
+          <button onClick={submit} className="login-cta" style={SX.loginBtn}>Entrar <ChevronRight size={18} /></button>
         </div>
-        <div className="field">
-          <label>Senha</label>
-          <input className="input" type="password" value={senha} onChange={(e) => setSenha(e.target.value)} placeholder="••••••••" />
-        </div>
-        <button className="btn btn-primary full" disabled={loading} style={{ marginTop: 6 }}>
-          {loading ? "Entrando..." : "Entrar"}
-        </button>
-      </form>
+      </div>
+      <div style={SX.loginFoot}>Instructiva · Painel de gestão de suporte</div>
     </div>
   );
 }
 
-/* ============================ ONBOARDING ============================ */
-function Onboarding({ user, onDone }) {
-  const [nome, setNome] = useState(user.nome === "Gerente Comercial" ? "" : user.nome);
-  const [senha, setSenha] = useState("");
-  const [loading, setLoading] = useState(false);
+// ============================================================= DASHBOARD
+function Dashboard({ records, users, me, isAdmin }) {
+  const hoje = new Date().toISOString().slice(0, 10);
+  const [periodo, setPeriodo] = useState("hoje");   // hoje | semana | mes | tudo | custom
+  const [dataIni, setDataIni] = useState(hoje);
+  const [dataFim, setDataFim] = useState(hoje);
 
-  async function salvar(e) {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      const dados = { nome };
-      if (senha) dados.senha = senha;
-      const u = await api.updateMe(dados);
-      onDone(u);
-    } finally { setLoading(false); }
-  }
-
-  return (
-    <div className="login-wrap">
-      <form className="login-card" onSubmit={salvar}>
-        <img className="logo" src={LOGO_FULL} alt="Instructiva" />
-        <div className="ttl">Primeiro acesso</div>
-        <h2>Seja bem-vindo(a)! 🎉</h2>
-        <p className="hi">Confirme seu nome e defina uma senha sua.</p>
-        <div className="field">
-          <label>Seu nome</label>
-          <input className="input" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex: Maria Souza" required autoFocus />
-        </div>
-        <div className="field">
-          <label>Nova senha</label>
-          <input className="input" type="password" value={senha} onChange={(e) => setSenha(e.target.value)} placeholder="mínimo 3 caracteres" />
-        </div>
-        <button className="btn btn-primary full" disabled={loading || !nome.trim()}>
-          {loading ? "Salvando..." : "Começar"}
-        </button>
-      </form>
-    </div>
-  );
-}
-
-/* ============================ PIPELINE (KANBAN) ============================ */
-function Pipeline({ user, showToast, irParaWhatsApp }) {
-  const isGer = user.role === "gerente";
-  const [cards, setCards] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [filtro, setFiltro] = useState("todos");
-  const [overCol, setOverCol] = useState(null);
-  const [dragId, setDragId] = useState(null);
-  const [sel, setSel] = useState(null); // card aberto no drawer
-  const [novo, setNovo] = useState(false); // modal novo lead
-  const [importar, setImportar] = useState(false); // modal importar lista
-  const [fechar, setFechar] = useState(null); // { card } -> modal valor final
-
-  const usersMap = useMemo(() => {
-    const m = {};
-    users.forEach((u) => (m[u.id] = u));
-    m[user.id] = m[user.id] || user;
-    return m;
-  }, [users, user]);
-
-  async function carregar() {
-    setLoading(true);
-    try {
-      const cs = await api.listCards(isGer ? filtro : null);
-      setCards(cs);
-      if (users.length === 0) setUsers(await api.listVendedores());
-    } catch (e) {
-      showToast("✗ " + e.message);
-    } finally { setLoading(false); }
-  }
-  useEffect(() => { carregar(); /* eslint-disable-next-line */ }, [filtro]);
-
-  function nomeResp(id) {
-    return usersMap[id]?.nome || "—";
-  }
-
-  async function moverPara(card, etapa) {
-    if (card.etapa === etapa) return;
-    if (etapa === "fechou") { setFechar({ card }); return; }
-    try {
-      await api.updateCard(card.id, { etapa });
-      setCards((cs) => cs.map((c) => (c.id === card.id ? { ...c, etapa } : c)));
-    } catch (e) { showToast("✗ " + e.message); }
-  }
-
-  // ---- drag handlers ----
-  function onDrop(e, etapa) {
-    e.preventDefault();
-    setOverCol(null);
-    const id = e.dataTransfer.getData("id") || dragId;
-    const card = cards.find((c) => c.id === id);
-    if (card) moverPara(card, etapa);
-    setDragId(null);
-  }
-
-  const stats = useMemo(() => {
-    const ativos = cards.filter((c) => !["fechou", "perdeu"].includes(c.etapa));
-    const fechados = cards.filter((c) => c.etapa === "fechou");
-    const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0, 0, 0, 0);
-    const fechadosMes = fechados.filter((c) => (c.atualizadoEm || 0) >= inicioMes.getTime());
-    const totalMes = fechadosMes.reduce((s, c) => s + (c.valorFinal || 0), 0);
-    const totalNeg = cards.filter((c) => c.etapa === "negociando").reduce((s, c) => s + (c.valorEstimado || 0), 0);
-    return { abertos: ativos.length, fechadosMes: fechadosMes.length, totalMes, totalNeg };
-  }, [cards]);
-
-  if (loading) return <div className="spin" />;
-
-  return (
-    <>
-      {/* AÇÕES */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 18, flexWrap: "wrap" }}>
-        {isGer ? (
-          <select className="select" style={{ width: 230 }} value={filtro} onChange={(e) => setFiltro(e.target.value)}>
-            <option value="todos">Todos os vendedores</option>
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>{u.nome}</option>
-            ))}
-          </select>
-        ) : <div />}
-        <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn" onClick={() => setImportar(true)}>
-            <I.out style={{ width: 16, height: 16, transform: "rotate(180deg)" }} /> Importar lista
-          </button>
-          <button className="btn btn-primary" onClick={() => setNovo(true)}>
-            <I.plus style={{ width: 16, height: 16 }} /> Novo lead
-          </button>
-        </div>
-      </div>
-
-      {/* STATS */}
-      <div className="stats">
-        <div className="stat">
-          <div className="lab"><span className="dot" style={{ background: "var(--contato)" }} /> Em aberto</div>
-          <div className="val">{stats.abertos}</div>
-        </div>
-        <div className="stat">
-          <div className="lab"><span className="dot" style={{ background: "var(--negociando)" }} /> Em negociação</div>
-          <div className="val money">{fmtMoney(stats.totalNeg)}</div>
-        </div>
-        <div className="stat">
-          <div className="lab"><span className="dot" style={{ background: "var(--fechou)" }} /> Fechados no mês</div>
-          <div className="val">{stats.fechadosMes}</div>
-        </div>
-        <div className="stat">
-          <div className="lab"><span className="dot" style={{ background: "var(--fechou)" }} /> Vendido no mês</div>
-          <div className="val money">{fmtMoney(stats.totalMes)}</div>
-        </div>
-      </div>
-
-      {/* KANBAN */}
-      <div className="board">
-        {ETAPAS.map((et) => {
-          const lista = cards.filter((c) => c.etapa === et.id);
-          return (
-            <div
-              key={et.id}
-              className={"col" + (overCol === et.id ? " over" : "")}
-              onDragOver={(e) => { e.preventDefault(); setOverCol(et.id); }}
-              onDragLeave={(e) => { if (e.currentTarget === e.target) setOverCol(null); }}
-              onDrop={(e) => onDrop(e, et.id)}
-            >
-              <div className="col-h">
-                <div className="nm"><span className="bar" style={{ background: et.cor }} /> {et.nome}</div>
-                <span className="cnt">{lista.length}</span>
-              </div>
-              <div className="col-body">
-                {lista.length === 0 && <div className="col-empty">Arraste cards pra cá</div>}
-                {lista.map((c) => (
-                  <div
-                    key={c.id}
-                    className={"kcard" + (dragId === c.id ? " dragging" : "")}
-                    style={{ borderLeftColor: et.cor }}
-                    draggable
-                    onDragStart={(e) => { e.dataTransfer.setData("id", c.id); setDragId(c.id); }}
-                    onDragEnd={() => { setDragId(null); setOverCol(null); }}
-                    onClick={() => setSel(c)}
-                  >
-                    <div className="nm">{c.cliente}</div>
-                    {c.curso && <div className="kcurso">{c.curso}</div>}
-                    <div className={"val" + (c.etapa === "fechou" ? " win" : "")}>
-                      {c.etapa === "fechou" ? fmtMoney(c.valorFinal) : fmtMoney(c.valorEstimado)}
-                    </div>
-                    {c.origem && <span className="origem-tag">{c.origem}</span>}
-                    <div className="meta">
-                      {isGer && (
-                        <span className="seller"><span className="mini-av">{iniciais(nomeResp(c.responsavelId))}</span>{nomeResp(c.responsavelId).split(" ")[0]}</span>
-                      )}
-                      {c.telefone && (
-                        <button className="wa-btn" title="Abrir conversa no sistema" onClick={(e) => { e.stopPropagation(); irParaWhatsApp && irParaWhatsApp(c.telefone, c.cliente); }}>
-                          <I.wa style={{ width: 16, height: 16 }} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {sel && (
-        <CardDrawer
-          card={sel}
-          isGer={isGer}
-          users={users}
-          nomeResp={nomeResp}
-          onClose={() => setSel(null)}
-          onSaved={(c) => { setCards((cs) => cs.map((x) => (x.id === c.id ? c : x))); setSel(null); showToast("✓ Card atualizado"); }}
-          onDeleted={(id) => { setCards((cs) => cs.filter((x) => x.id !== id)); setSel(null); showToast("✓ Card removido"); }}
-        />
-      )}
-
-      {novo && (
-        <NovoLead
-          isGer={isGer}
-          users={users}
-          meId={user.id}
-          onClose={() => setNovo(false)}
-          onCreated={(c) => { setCards((cs) => [...cs, c]); setNovo(false); showToast("✓ Lead criado"); }}
-        />
-      )}
-
-      {importar && (
-        <ImportarLeads
-          isGer={isGer}
-          users={users}
-          meId={user.id}
-          onClose={() => setImportar(false)}
-          onImported={(n) => { setImportar(false); carregar(); showToast(`✓ ${n} lead${n === 1 ? "" : "s"} importado${n === 1 ? "" : "s"}`); }}
-        />
-      )}
-
-      {fechar && (
-        <FecharModal
-          card={fechar.card}
-          onClose={() => setFechar(null)}
-          onDone={(c) => { setCards((cs) => cs.map((x) => (x.id === c.id ? c : x))); setFechar(null); showToast("🎉 Venda registrada!"); }}
-        />
-      )}
-    </>
-  );
-}
-
-/* ---------- DRAWER DO CARD ---------- */
-function CardDrawer({ card, isGer, users, nomeResp, onClose, onSaved, onDeleted }) {
-  const [f, setF] = useState({
-    cliente: card.cliente, telefone: card.telefone, valorEstimado: card.valorEstimado,
-    valorFinal: card.valorFinal, etapa: card.etapa, obs: card.obs, responsavelId: card.responsavelId,
-    curso: card.curso || "", origem: card.origem || "",
-  });
-  const [saving, setSaving] = useState(false);
-  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
-
-  async function salvar() {
-    setSaving(true);
-    try {
-      const c = await api.updateCard(card.id, f);
-      onSaved(c);
-    } catch (e) { alert(e.message); setSaving(false); }
-  }
-  async function excluir() {
-    if (!confirm(`Remover o card de "${card.cliente}"?`)) return;
-    try { await api.deleteCard(card.id); onDeleted(card.id); } catch (e) { alert(e.message); }
-  }
-
-  return (
-    <>
-      <div className="scrim" onClick={onClose} />
-      <div className="drawer">
-        <div className="drawer-h">
-          <h3>Detalhes do lead</h3>
-          <button className="x-btn" onClick={onClose}><I.x style={{ width: 18, height: 18 }} /></button>
-        </div>
-        <div className="drawer-body">
-          <div className="field">
-            <label>Cliente</label>
-            <input className="input" value={f.cliente} onChange={(e) => set("cliente", e.target.value)} />
-          </div>
-          <div className="field">
-            <label>WhatsApp / Telefone</label>
-            <input className="input" value={f.telefone} onChange={(e) => set("telefone", e.target.value)} placeholder="Ex: 55 44 99999-9999" />
-          </div>
-          <div className="row2">
-            <div className="field">
-              <label>Curso de interesse</label>
-              <input className="input" value={f.curso} onChange={(e) => set("curso", e.target.value)} placeholder="Ex: Eletrônica" />
-            </div>
-            <div className="field">
-              <label>Origem do lead</label>
-              <input className="input" value={f.origem} onChange={(e) => set("origem", e.target.value)} placeholder="Ex: Lista Instagram" />
-            </div>
-          </div>
-          <div className="row2">
-            <div className="field">
-              <label>Valor estimado (R$)</label>
-              <input className="input mono" type="number" step="0.01" value={f.valorEstimado} onChange={(e) => set("valorEstimado", e.target.value)} />
-            </div>
-            <div className="field">
-              <label>Etapa</label>
-              <select className="select" value={f.etapa} onChange={(e) => set("etapa", e.target.value)}>
-                {ETAPAS.map((et) => <option key={et.id} value={et.id}>{et.nome}</option>)}
-              </select>
-            </div>
-          </div>
-          {f.etapa === "fechou" && (
-            <div className="field">
-              <label>Valor final da venda (R$)</label>
-              <input className="input mono" type="number" step="0.01" value={f.valorFinal} onChange={(e) => set("valorFinal", e.target.value)} />
-            </div>
-          )}
-          <div className="field">
-            <label>{isGer ? "Vendedor responsável" : "Transferir para"}</label>
-            <select className="select" value={f.responsavelId} onChange={(e) => set("responsavelId", e.target.value)}>
-              {users.map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
-            </select>
-          </div>
-          <div className="field">
-            <label>Observações</label>
-            <textarea className="textarea" value={f.obs} onChange={(e) => set("obs", e.target.value)} placeholder="Anotações sobre a negociação..." />
-          </div>
-          <button className="btn btn-danger btn-sm" onClick={excluir}><I.trash style={{ width: 15, height: 15 }} /> Remover lead</button>
-        </div>
-        <div className="drawer-foot">
-          <button className="btn full" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-primary full" onClick={salvar} disabled={saving}>{saving ? "Salvando..." : "Salvar"}</button>
-        </div>
-      </div>
-    </>
-  );
-}
-
-/* ---------- NOVO LEAD ---------- */
-function NovoLead({ isGer, users, meId, prefill, onClose, onCreated }) {
-  const [f, setF] = useState({
-    cliente: (prefill && prefill.cliente) || "",
-    telefone: (prefill && prefill.telefone) || "",
-    valorEstimado: "", curso: "", origem: (prefill && prefill.origem) || "",
-    responsavelId: meId,
-  });
-  const [saving, setSaving] = useState(false);
-  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
-
-  async function criar() {
-    if (!f.cliente.trim()) return;
-    setSaving(true);
-    try {
-      const c = await api.createCard(f);
-      onCreated(c);
-    } catch (e) { alert(e.message); setSaving(false); }
-  }
-
-  return (
-    <div className="modal" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal-box">
-        <div className="mh">
-          <h3>{prefill ? "Cadastrar lead" : "Novo lead"}</h3>
-          <p>{prefill ? "Confirme os dados e escolha o curso de interesse." : "Adicione um cliente ao topo do funil."}</p>
-        </div>
-        <div className="mb">
-          <div className="field">
-            <label>Cliente *</label>
-            <input className="input" value={f.cliente} onChange={(e) => set("cliente", e.target.value)} autoFocus placeholder="Nome do cliente" />
-          </div>
-          <div className="field">
-            <label>WhatsApp / Telefone</label>
-            <input className="input" value={f.telefone} onChange={(e) => set("telefone", e.target.value)} placeholder="Ex: 55 44 99999-9999" />
-          </div>
-          <div className="row2">
-            <div className="field">
-              <label>Curso de interesse</label>
-              <input className="input" value={f.curso} onChange={(e) => set("curso", e.target.value)} placeholder="Ex: Eletrônica" />
-            </div>
-            <div className="field">
-              <label>Origem</label>
-              <input className="input" value={f.origem} onChange={(e) => set("origem", e.target.value)} placeholder="Ex: WhatsApp" />
-            </div>
-          </div>
-          <div className="field">
-            <label>Valor estimado (R$)</label>
-            <input className="input mono" type="number" step="0.01" value={f.valorEstimado} onChange={(e) => set("valorEstimado", e.target.value)} placeholder="0,00" />
-          </div>
-          {isGer && (
-            <div className="field">
-              <label>Vendedor responsável</label>
-              <select className="select" value={f.responsavelId} onChange={(e) => set("responsavelId", e.target.value)}>
-                {users.map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
-              </select>
-            </div>
-          )}
-        </div>
-        <div className="mf">
-          <button className="btn full" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-primary full" onClick={criar} disabled={saving || !f.cliente.trim()}>{saving ? "Criando..." : "Criar lead"}</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ---------- MODAL FECHOU (valor final) ---------- */
-function FecharModal({ card, onClose, onDone }) {
-  const [valor, setValor] = useState(card.valorEstimado || "");
-  const [saving, setSaving] = useState(false);
-
-  async function confirmar() {
-    setSaving(true);
-    try {
-      const c = await api.updateCard(card.id, { etapa: "fechou", valorFinal: Number(valor) || 0 });
-      onDone(c);
-    } catch (e) { alert(e.message); setSaving(false); }
-  }
-
-  return (
-    <div className="modal" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal-box">
-        <div className="mh">
-          <h3>🎉 Venda fechada!</h3>
-          <p>Qual foi o valor final da venda de <b>{card.cliente}</b>?</p>
-        </div>
-        <div className="mb">
-          <div className="field">
-            <label>Valor final (R$)</label>
-            <input className="input mono" type="number" step="0.01" value={valor} onChange={(e) => setValor(e.target.value)} autoFocus style={{ fontSize: 18 }} />
-          </div>
-        </div>
-        <div className="mf">
-          <button className="btn full" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-primary full" onClick={confirmar} disabled={saving}>{saving ? "Salvando..." : "Confirmar venda"}</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ============================ EQUIPE ============================ */
-function Equipe({ showToast, meId }) {
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState(null); // user ou {} (novo)
-
-  async function carregar() {
-    setLoading(true);
-    try { setUsers(await api.listUsers()); } catch (e) { showToast("✗ " + e.message); } finally { setLoading(false); }
-  }
-  useEffect(() => { carregar(); }, []);
-
-  async function excluir(u) {
-    if (!confirm(`Excluir o acesso de "${u.nome}"?`)) return;
-    try { await api.deleteUser(u.id); setUsers((l) => l.filter((x) => x.id !== u.id)); showToast("✓ Acesso removido"); }
-    catch (e) { showToast("✗ " + e.message); }
-  }
-
-  if (loading) return <div className="spin" />;
-
-  return (
-    <>
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
-        <button className="btn btn-primary" onClick={() => setEditing({})}><I.plus style={{ width: 16, height: 16 }} /> Novo vendedor</button>
-      </div>
-      <div className="panel">
-        <div className="panel-h"><h3>Equipe ({users.length})</h3></div>
-        {users.map((u) => (
-          <div className="urow" key={u.id}>
-            <div className="avatar">{iniciais(u.nome)}</div>
-            <div className="info">
-              <div className="nm">{u.nome} {!u.ativo && <span className="tag-off">• desativado</span>}</div>
-              <div className="sub">@{u.login}{u.role === "vendedor" && u.meta > 0 ? ` · meta ${fmtMoney(u.meta)}` : ""}</div>
-            </div>
-            <span className={"tag-role " + (u.role === "gerente" ? "ger" : "ven")}>{u.role === "gerente" ? "Gerente" : "Vendedor"}</span>
-            <button className="btn btn-sm" onClick={() => setEditing(u)}>Editar</button>
-            {u.id !== meId && <button className="x-btn" onClick={() => excluir(u)} title="Excluir"><I.trash style={{ width: 16, height: 16 }} /></button>}
-          </div>
-        ))}
-      </div>
-
-      {editing && (
-        <UserForm
-          user={editing.id ? editing : null}
-          onClose={() => setEditing(null)}
-          onSaved={(u, novo) => {
-            setUsers((l) => (novo ? [...l, u] : l.map((x) => (x.id === u.id ? u : x))));
-            setEditing(null);
-            showToast(novo ? "✓ Vendedor criado" : "✓ Atualizado");
-          }}
-        />
-      )}
-    </>
-  );
-}
-
-function UserForm({ user, onClose, onSaved }) {
-  const novo = !user;
-  const [f, setF] = useState({
-    nome: user?.nome || "", login: user?.login || "", senha: "",
-    role: user?.role || "vendedor", meta: user?.meta || 0, ativo: user ? user.ativo : true,
-  });
-  const [saving, setSaving] = useState(false);
-  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
-
-  async function salvar() {
-    if (!f.nome.trim() || (novo && (!f.login.trim() || !f.senha))) { alert("Preencha nome, login e senha."); return; }
-    setSaving(true);
-    try {
-      if (novo) {
-        const u = await api.createUser(f);
-        onSaved(u, true);
-      } else {
-        const dados = { nome: f.nome, role: f.role, meta: f.meta, ativo: f.ativo };
-        if (f.senha) dados.senha = f.senha;
-        const u = await api.updateUser(user.id, dados);
-        onSaved(u, false);
-      }
-    } catch (e) { alert(e.message); setSaving(false); }
-  }
-
-  return (
-    <div className="modal" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal-box">
-        <div className="mh">
-          <h3>{novo ? "Novo vendedor" : "Editar acesso"}</h3>
-          <p>{novo ? "Crie o login do vendedor." : "Atualize os dados do acesso."}</p>
-        </div>
-        <div className="mb">
-          <div className="field">
-            <label>Nome</label>
-            <input className="input" value={f.nome} onChange={(e) => set("nome", e.target.value)} autoFocus />
-          </div>
-          {novo && (
-            <div className="field">
-              <label>Login (usuário)</label>
-              <input className="input" value={f.login} onChange={(e) => set("login", e.target.value)} placeholder="ex: maria" />
-            </div>
-          )}
-          <div className="field">
-            <label>{novo ? "Senha" : "Nova senha (deixe vazio pra manter)"}</label>
-            <input className="input" type="password" value={f.senha} onChange={(e) => set("senha", e.target.value)} placeholder="mínimo 3 caracteres" />
-          </div>
-          <div className="row2">
-            <div className="field">
-              <label>Perfil</label>
-              <select className="select" value={f.role} onChange={(e) => set("role", e.target.value)}>
-                <option value="vendedor">Vendedor</option>
-                <option value="gerente">Gerente</option>
-              </select>
-            </div>
-            <div className="field">
-              <label>Meta mensal (R$)</label>
-              <input className="input mono" type="number" step="0.01" value={f.meta} onChange={(e) => set("meta", e.target.value)} />
-            </div>
-          </div>
-          {!novo && (
-            <label style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 14, cursor: "pointer" }}>
-              <input type="checkbox" checked={f.ativo} onChange={(e) => set("ativo", e.target.checked)} style={{ width: 17, height: 17 }} />
-              Acesso ativo
-            </label>
-          )}
-        </div>
-        <div className="mf">
-          <button className="btn full" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-primary full" onClick={salvar} disabled={saving}>{saving ? "Salvando..." : "Salvar"}</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ============================ CONFIG ============================ */
-function Config({ user, setUser, showToast }) {
-  const [nome, setNome] = useState(user.nome);
-  const [senha, setSenha] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  async function salvar() {
-    setSaving(true);
-    try {
-      const dados = { nome };
-      if (senha) dados.senha = senha;
-      const u = await api.updateMe(dados);
-      setUser((prev) => ({ ...prev, ...u }));
-      setSenha("");
-      showToast("✓ Dados atualizados");
-    } catch (e) { showToast("✗ " + e.message); } finally { setSaving(false); }
-  }
-
-  return (
-    <div className="panel" style={{ maxWidth: 520 }}>
-      <div className="panel-h"><h3>Meus dados</h3></div>
-      <div style={{ padding: 22 }}>
-        <div className="field">
-          <label>Nome</label>
-          <input className="input" value={nome} onChange={(e) => setNome(e.target.value)} />
-        </div>
-        <div className="field">
-          <label>Nova senha (deixe vazio pra manter)</label>
-          <input className="input" type="password" value={senha} onChange={(e) => setSenha(e.target.value)} placeholder="••••••••" />
-        </div>
-        <button className="btn btn-primary" onClick={salvar} disabled={saving}>{saving ? "Salvando..." : "Salvar alterações"}</button>
-      </div>
-    </div>
-  );
-}
-
-/* ============================================================
-   WHATSAPP
-   ============================================================ */
-function WhatsApp({ user, showToast, target, onTargetUsed }) {
-  const isGer = user.role === "gerente";
-  const [chats, setChats] = useState([]);
-  const [usersMap, setUsersMap] = useState({});
-  const [usersArr, setUsersArr] = useState([]);
-  const [instancias, setInstancias] = useState([]);
-  const [minha, setMinha] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [sel, setSel] = useState(null);
-  const [chat, setChat] = useState(null);
-  const [texto, setTexto] = useState("");
-  const [busca, setBusca] = useState("");
-  const [filtro, setFiltro] = useState("todas");
-  const [showCfg, setShowCfg] = useState(false);
-  const [qrInst, setQrInst] = useState(null);
-  const [nova, setNova] = useState(false);
-  const [novaNum, setNovaNum] = useState("");
-  const [novoLead, setNovoLead] = useState(null);
-  const [enviando, setEnviando] = useState(false);
-  const msgsEnd = useRef(null);
-  const selRef = useRef(null);
-  const filtroRef = useRef("todas");
-  const alvoRef = useRef(null);
-  useEffect(() => { selRef.current = sel; }, [sel]);
-  useEffect(() => { filtroRef.current = filtro; }, [filtro]);
-
-  async function carregarChats(silencioso) {
-    if (!silencioso) setLoading(true);
-    try {
-      const cs = await api.waChats(isGer ? filtroRef.current : null);
-      setChats(cs);
-    } catch (e) { if (!silencioso) showToast("✗ " + e.message); }
-    finally { if (!silencioso) setLoading(false); }
-  }
-  async function initGerente() {
-    try {
-      const [cfg, us] = await Promise.all([api.waConfig(), api.listUsers()]);
-      setInstancias(cfg.instancias || []);
-      const m = {}; us.forEach((u) => (m[u.id] = u)); setUsersMap(m);
-      setUsersArr(us.filter((u) => u.role === "vendedor" && u.ativo).map((u) => ({ id: u.id, nome: u.nome })));
-    } catch (_) {}
-  }
-  async function initVendedor() {
-    try { setMinha(await api.waMinha()); } catch (_) {}
-  }
-
-  useEffect(() => {
-    (async () => {
-      if (isGer) await initGerente(); else await initVendedor();
-      await carregarChats(false);
-    })();
-    const t = setInterval(async () => {
-      await carregarChats(true);
-      if (selRef.current) {
-        try { setChat(await api.waChat(selRef.current)); } catch (_) {}
-      }
-    }, 6000);
-    return () => clearInterval(t);
-    // eslint-disable-next-line
-  }, []);
-
-  useEffect(() => { if (isGer) carregarChats(true); /* eslint-disable-next-line */ }, [filtro]);
-  useEffect(() => { if (msgsEnd.current) msgsEnd.current.scrollIntoView({ block: "end" }); }, [chat]);
-
-  async function abrir(id) {
-    setSel(id); selRef.current = id;
-    try {
-      setChat(await api.waChat(id));
-      setChats((cs) => cs.map((x) => (x.id === id ? { ...x, naoLidas: 0 } : x)));
-    } catch (e) { showToast("✗ " + e.message); }
-  }
-  async function enviar() {
-    const t = texto.trim();
-    if (!t || !sel) return;
-    setTexto(""); setEnviando(true);
-    try {
-      await api.waSend(sel, t);
-      setChat((c) => (c ? { ...c, mensagens: [...c.mensagens, { role: "me", content: t, ts: Date.now() }] } : c));
-      carregarChats(true);
-    } catch (e) { showToast("✗ " + e.message); setTexto(t); }
-    finally { setEnviando(false); }
-  }
-  function virarCard() {
-    if (!chat) return;
-    setNovoLead({ cliente: chat.nome, telefone: chat.numero });
-  }
-
-  // alvo vindo do botão de WhatsApp no card do pipeline
-  useEffect(() => {
-    if (!target || !target.numero) return;
-    if (alvoRef.current === target.numero) return;
-    if (loading) return;
-    alvoRef.current = target.numero;
-    const num = soDigitos(target.numero);
-    const achado = chats.find((c) => soDigitos(c.numero) === num);
-    if (achado) { abrir(achado.id); }
-    else { setNovaNum(num); setNova(true); }
-    onTargetUsed && onTargetUsed();
-    // eslint-disable-next-line
-  }, [target, loading, chats]);
-
-  const filtrados = chats.filter((c) => {
-    const q = busca.trim().toLowerCase();
-    if (!q) return true;
-    return (c.nome || "").toLowerCase().includes(q) || (c.numero || "").includes(q);
-  });
-
-  if (loading) return <div className="spin" />;
-
-  if (!isGer && (!minha || !minha.instance)) {
-    return (
-      <div className="wa-page">
-        <div className="wa-grid"><div className="wa-none">
-          <I.wa className="ico" />
-          <div><b>Seu WhatsApp ainda não foi vinculado.</b><br />Peça pra gerente cadastrar o seu número em WhatsApp → Configurar conexão.</div>
-        </div></div>
-      </div>
-    );
-  }
-
-  if (showCfg) return <WhatsAppConfig onVoltar={() => { setShowCfg(false); initGerente(); }} showToast={showToast} />;
-
-  return (
-    <div className="wa-page">
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          {isGer && (
-            <select className="select" style={{ width: 220 }} value={filtro} onChange={(e) => setFiltro(e.target.value)}>
-              <option value="todas">Todos os WhatsApps</option>
-              {instancias.map((i) => <option key={i.instance} value={i.instance}>{usersMap[i.vendedorId]?.nome || i.instance}</option>)}
-            </select>
-          )}
-          {!isGer && minha && minha.estado !== "open" && (
-            <button className="btn btn-primary" onClick={() => setQrInst(minha.instance)}><I.link style={{ width: 15, height: 15 }} /> Conectar meu WhatsApp</button>
-          )}
-          {!isGer && minha && minha.estado === "open" && (
-            <span style={{ fontSize: 13, color: "var(--fechou)", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}><span className="wa-dot on" /> WhatsApp conectado</span>
-          )}
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn" onClick={() => setNova(true)}><I.plus style={{ width: 15, height: 15 }} /> Nova conversa</button>
-          {isGer && <button className="btn" onClick={() => setShowCfg(true)}><I.cog style={{ width: 15, height: 15 }} /> Configurar conexão</button>}
-        </div>
-      </div>
-
-      <div className="wa-grid">
-        <div className="wa-list">
-          <div className="wa-list-h">
-            <div className="wa-search"><input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar conversa..." /></div>
-          </div>
-          <div className="wa-list-scroll">
-            {filtrados.length === 0 && <div style={{ padding: 30, textAlign: "center", color: "var(--faint)", fontSize: 13 }}>Nenhuma conversa ainda.</div>}
-            {filtrados.map((c) => (
-              <div key={c.id} className={"wa-conv" + (sel === c.id ? " active" : "")} onClick={() => abrir(c.id)}>
-                <div className="av">{iniciais(c.nome)}</div>
-                <div className="mid">
-                  <div className="nm">{c.nome}</div>
-                  <div className="last">{c.ultima}</div>
-                  {isGer && c.vendedorId && <div className="seller-tag">{usersMap[c.vendedorId]?.nome || ""}</div>}
-                </div>
-                {c.naoLidas > 0 && <div className="wa-badge">{c.naoLidas}</div>}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {!chat ? (
-          <div className="wa-chat"><div className="wa-none"><I.chat className="ico" /><div>Selecione uma conversa pra começar</div></div></div>
-        ) : (
-          <div className="wa-chat">
-            <div className="wa-chat-h">
-              <div className="av">{iniciais(chat.nome)}</div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="nm">{chat.nome}</div>
-                <div className="num">{chat.numero}</div>
-              </div>
-              <button className="btn btn-sm" onClick={virarCard}><I.pipe style={{ width: 14, height: 14 }} /> Virar card</button>
-            </div>
-            <div className="wa-msgs">
-              {chat.mensagens.map((m, i) => (
-                <div key={i} className={"wa-bubble " + (m.role === "me" ? "me" : "them")}>
-                  {m.content}
-                  <span className="t">{new Date(m.ts).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
-                </div>
-              ))}
-              <div ref={msgsEnd} />
-            </div>
-            <div className="wa-input">
-              <input value={texto} onChange={(e) => setTexto(e.target.value)} onKeyDown={(e) => e.key === "Enter" && enviar()} placeholder="Escreva uma mensagem..." />
-              <button className="wa-send" onClick={enviar} disabled={enviando || !texto.trim()}><I.send style={{ width: 19, height: 19 }} /></button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {qrInst && <QrModal instance={qrInst} onClose={() => setQrInst(null)} onConnected={() => { setQrInst(null); initVendedor(); showToast("🎉 WhatsApp conectado!"); }} />}
-      {nova && <NovaConversa isGer={isGer} instancias={instancias} minha={minha} numeroInicial={novaNum} onClose={() => { setNova(false); setNovaNum(""); }} onCriada={(id) => { setNova(false); setNovaNum(""); carregarChats(true).then(() => abrir(id)); }} />}
-      {novoLead && <NovoLead isGer={isGer} users={usersArr} meId={user.id} prefill={novoLead} onClose={() => setNovoLead(null)} onCreated={() => { setNovoLead(null); showToast("✓ Lead criado no Pipeline"); }} />}
-    </div>
-  );
-}
-
-/* ---------- CONFIG WHATSAPP (gerente) ---------- */
-function WhatsAppConfig({ onVoltar, showToast }) {
-  const [cfg, setCfg] = useState(null);
-  const [users, setUsers] = useState([]);
-  const [url, setUrl] = useState("");
-  const [apiKey, setApiKey] = useState("");
-  const [rows, setRows] = useState([]);
-  const [status, setStatus] = useState({});
-  const [saving, setSaving] = useState(false);
-  const [qrInst, setQrInst] = useState(null);
-
-  async function carregar() {
-    const [c, us] = await Promise.all([api.waConfig(), api.listUsers()]);
-    setCfg(c); setUrl(c.url || "");
-    setRows((c.instancias || []).map((i) => ({ ...i })));
-    setUsers(us.filter((u) => u.ativo));
-    (c.instancias || []).forEach(async (i) => {
-      try { const s = await api.waStatus(i.instance); setStatus((st) => ({ ...st, [i.instance]: s.estado })); } catch (_) {}
+  // filtra os registros pelo período escolhido
+  const recordsFiltrados = useMemo(() => {
+    if (periodo === "tudo") return records;
+    const hojeD = new Date(); hojeD.setHours(0, 0, 0, 0);
+    let ini, fim;
+    if (periodo === "hoje") {
+      ini = new Date(hojeD); fim = new Date(hojeD); fim.setHours(23, 59, 59, 999);
+    } else if (periodo === "semana") {
+      ini = new Date(hojeD); ini.setDate(ini.getDate() - 6);   // últimos 7 dias
+      fim = new Date(hojeD); fim.setHours(23, 59, 59, 999);
+    } else if (periodo === "mes") {
+      ini = new Date(hojeD); ini.setDate(ini.getDate() - 29);  // últimos 30 dias
+      fim = new Date(hojeD); fim.setHours(23, 59, 59, 999);
+    } else { // custom
+      ini = new Date(dataIni + "T00:00:00");
+      fim = new Date(dataFim + "T23:59:59");
+    }
+    return records.filter((r) => {
+      if (!r.data) return false;
+      const d = new Date(r.data + "T12:00:00");
+      return d >= ini && d <= fim;
     });
-  }
-  useEffect(() => { carregar(); }, []);
+  }, [records, periodo, dataIni, dataFim]);
 
-  const addRow = () => setRows((r) => [...r, { instance: "", vendedorId: users[0]?.id || null }]);
-  const setRow = (i, k, v) => setRows((r) => r.map((x, j) => (j === i ? { ...x, [k]: v } : x)));
+  const stats = useMemo(() => buildStats(recordsFiltrados, users), [recordsFiltrados, users]);
+  const hora = new Date().getHours();
+  const saud = hora < 12 ? "Bom dia" : hora < 18 ? "Boa tarde" : "Boa noite";
+  const primeiroNome = me.nome.split(" ")[0];
 
-  async function salvar() {
-    setSaving(true);
-    try {
-      const dados = { url, publicUrl: window.location.origin, instancias: rows.filter((r) => r.instance.trim()) };
-      if (apiKey) dados.apiKey = apiKey;
-      await api.waSetConfig(dados);
-      setApiKey("");
-      showToast("✓ Conexão salva");
-      carregar();
-    } catch (e) { showToast("✗ " + e.message); } finally { setSaving(false); }
-  }
-  async function desconectar(inst) {
-    if (!confirm(`Desconectar o WhatsApp "${inst}"?`)) return;
-    try { await api.waLogout(inst); setStatus((s) => ({ ...s, [inst]: "close" })); showToast("✓ Desconectado"); } catch (e) { showToast("✗ " + e.message); }
-  }
-  async function excluir(inst) {
-    if (!confirm(`Excluir a instância "${inst}"? Isso apaga as conversas dela.`)) return;
-    try { await api.waDeleteInstance(inst); setRows((r) => r.filter((x) => x.instance !== inst)); showToast("✓ Instância excluída"); } catch (e) { showToast("✗ " + e.message); }
-  }
+  // rótulo do período pra mostrar
+  const rotuloPeriodo = periodo === "hoje" ? "Hoje" : periodo === "semana" ? "Últimos 7 dias"
+    : periodo === "mes" ? "Últimos 30 dias" : periodo === "tudo" ? "Todo o período"
+    : `${fmtDate(dataIni)} até ${fmtDate(dataFim)}`;
 
-  if (!cfg) return <div className="spin" />;
-
+  if (records.length === 0) {
+    return (<div><Header title={`${saud}, ${primeiroNome} 👋`} subtitle={isAdmin ? "Painel geral do setor de suporte" : "Seus atendimentos"} /><Empty /></div>);
+  }
   return (
-    <div style={{ maxWidth: 720 }}>
-      <button className="btn btn-sm" onClick={onVoltar} style={{ marginBottom: 16 }}>← Voltar pras conversas</button>
+    <div>
+      <Header title={`${saud}, ${primeiroNome} 👋`} subtitle={isAdmin ? "Painel geral do setor de suporte" : "Resumo dos seus atendimentos"} />
 
-      <div className="panel" style={{ marginBottom: 18 }}>
-        <div className="panel-h"><h3>Servidor Evolution</h3></div>
-        <div style={{ padding: 22 }}>
-          <div className="field">
-            <label>Endereço da Evolution (URL)</label>
-            <input className="input" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://sua-evolution.up.railway.app" />
-          </div>
-          <div className="field">
-            <label>Chave da API (apikey){cfg.temApiKey ? " — já salva, preencha só pra trocar" : ""}</label>
-            <input className="input" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder={cfg.temApiKey ? "•••••••• (mantém a atual)" : "cole a AUTHENTICATION_API_KEY"} />
-          </div>
+      {/* FILTRO DE PERÍODO */}
+      <div style={SX.periodoBar}>
+        <div style={SX.periodoBtns}>
+          {[["hoje", "Hoje"], ["semana", "Semana"], ["mes", "Mês"], ["tudo", "Tudo"]].map(([k, lbl]) => (
+            <button key={k} onClick={() => setPeriodo(k)}
+              style={{ ...SX.periodoBtn, ...(periodo === k ? SX.periodoBtnOn : {}) }}>
+              {lbl}
+            </button>
+          ))}
+        </div>
+        <div style={SX.periodoCustom}>
+          <input type="date" value={dataIni} max={dataFim}
+            onChange={(e) => { setDataIni(e.target.value); setPeriodo("custom"); }}
+            style={SX.periodoData} />
+          <span style={{ color: "var(--muted)", fontSize: 13 }}>até</span>
+          <input type="date" value={dataFim} min={dataIni} max={hoje}
+            onChange={(e) => { setDataFim(e.target.value); setPeriodo("custom"); }}
+            style={SX.periodoData} />
+        </div>
+        <div style={SX.periodoRotulo}>{rotuloPeriodo}</div>
+      </div>
+
+
+      <div style={SX.kpiGrid}>
+        <Kpi i={ClipboardList} c="#6366F1" v={stats.total} l="Total de atendimentos" d={0} />
+        <Kpi i={CheckCircle2} c="#12A150" v={stats.byStatus.resolvido} l="Resolvidos" d={1} />
+        <Kpi i={Clock} c="#818CF8" v={stats.byStatus.andamento} l="Em andamento" d={2} />
+        <Kpi i={isAdmin ? Users : Target} c="#6E7073" v={isAdmin ? stats.byColab.length : stats.byStatus.pendente} l={isAdmin ? "Colaboradoras ativas" : "Pendentes"} d={3} />
+      </div>
+
+      <div style={SX.taxaCard} className="rise panel">
+        <div style={SX.taxaShine} />
+        <div style={{ position: "relative" }}>
+          <div style={SX.taxaLabel}><Award size={18} /> Taxa de Resolução</div>
+          <div style={SX.taxaSub}>{stats.byStatus.resolvido} de {stats.total} atendimentos concluídos</div>
+        </div>
+        <div style={SX.taxaRight}>
+          <div style={SX.taxaTrack}><div style={{ ...SX.taxaFill, width: `${stats.taxa}%` }} /></div>
+          <div style={SX.taxaPct} className="taxa-pct">{stats.taxa}<span style={{ fontSize: 18 }}>%</span></div>
         </div>
       </div>
 
-      <div className="panel">
-        <div className="panel-h">
-          <h3>WhatsApps dos vendedores</h3>
-          <button className="btn btn-sm" onClick={addRow}><I.plus style={{ width: 14, height: 14 }} /> Adicionar</button>
-        </div>
-        <div style={{ padding: "6px 22px 18px" }}>
-          {rows.length === 0 && <p style={{ color: "var(--muted)", fontSize: 13, padding: "14px 0" }}>Nenhum WhatsApp cadastrado. Clique em "Adicionar".</p>}
-          {rows.map((r, i) => {
-            const on = status[r.instance] === "open";
-            return (
-              <div className="wa-inst-row" key={i}>
-                <span className={"wa-dot " + (on ? "on" : "off")} title={on ? "conectado" : "desconectado"} />
-                <input className="input" style={{ flex: "1 1 130px" }} value={r.instance} onChange={(e) => setRow(i, "instance", e.target.value)} placeholder="nome (ex: com-maria)" />
-                <select className="select" style={{ flex: "1 1 150px" }} value={r.vendedorId || ""} onChange={(e) => setRow(i, "vendedorId", e.target.value)}>
-                  <option value="">— vendedor —</option>
-                  {users.map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
-                </select>
-                {on
-                  ? <button className="btn btn-sm btn-danger" onClick={() => desconectar(r.instance)}><I.power style={{ width: 14, height: 14 }} /> Desconectar</button>
-                  : <button className="btn btn-sm" onClick={() => setQrInst(limpaInst(r.instance))}>Conectar</button>}
-                <button className="x-btn" onClick={() => excluir(r.instance)} title="Excluir"><I.trash style={{ width: 15, height: 15 }} /></button>
-              </div>
-            );
-          })}
-          <div style={{ marginTop: 16, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <button className="btn btn-primary" onClick={salvar} disabled={saving}>{saving ? "Salvando..." : "Salvar conexão"}</button>
-            <span style={{ fontSize: 12.5, color: "var(--muted)" }}>Salve antes de conectar, pra vincular cada número ao vendedor.</span>
-          </div>
-        </div>
-      </div>
-
-      {qrInst && <QrModal instance={qrInst} onClose={() => setQrInst(null)} onConnected={() => { setStatus((s) => ({ ...s, [qrInst]: "open" })); setQrInst(null); showToast("🎉 Conectado!"); }} />}
-    </div>
-  );
-}
-
-/* ---------- QR MODAL ---------- */
-function QrModal({ instance, onClose, onConnected }) {
-  const [qr, setQr] = useState(null);
-  const [erro, setErro] = useState("");
-  const [estado, setEstado] = useState("connecting");
-  const [carregando, setCarregando] = useState(true);
-
-  async function gerar() {
-    setErro(""); setQr(null); setCarregando(true);
-    try {
-      const r = await api.waConnect(instance);
-      setQr(r.qr);
-      if (!r.qr) setErro("A Evolution não retornou o QR. Tente gerar de novo.");
-    } catch (e) { setErro(e.message); } finally { setCarregando(false); }
-  }
-  useEffect(() => {
-    gerar();
-    const t = setInterval(async () => {
-      try {
-        const s = await api.waStatus(instance);
-        setEstado(s.estado);
-        if (s.estado === "open") { clearInterval(t); onConnected && onConnected(); }
-      } catch (_) {}
-    }, 3000);
-    return () => clearInterval(t);
-    // eslint-disable-next-line
-  }, [instance]);
-
-  return (
-    <div className="modal" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal-box">
-        <div className="mh"><h3>Conectar WhatsApp</h3><p>Instância <b>{instance}</b></p></div>
-        <div className="mb">
-          {estado === "open" ? (
-            <div className="qr-box"><div style={{ fontSize: 46 }}>✅</div><b style={{ fontSize: 17 }}>Conectado!</b></div>
-          ) : (
-            <div className="qr-box">
-              {erro && <div className="err">{erro}</div>}
-              {qr ? <img src={qr} alt="QR Code" /> : <div className="qr-wait">{carregando ? "Gerando QR..." : "Sem QR"}</div>}
-              <div className="qr-steps">
-                1. Abra o WhatsApp do vendedor no celular<br />
-                2. Toque em <b>Aparelhos conectados</b><br />
-                3. <b>Conectar um aparelho</b> e aponte a câmera pro QR
-              </div>
-            </div>
-          )}
-        </div>
-        <div className="mf">
-          <button className="btn full" onClick={onClose}>Fechar</button>
-          {estado !== "open" && <button className="btn btn-primary full" onClick={gerar} disabled={carregando}><I.refresh style={{ width: 15, height: 15 }} /> Gerar novo QR</button>}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ---------- NOVA CONVERSA ---------- */
-function NovaConversa({ isGer, instancias, minha, numeroInicial, onClose, onCriada }) {
-  const [instance, setInstance] = useState(isGer ? (instancias[0]?.instance || "") : (minha?.instance || ""));
-  const [numero, setNumero] = useState(numeroInicial || "");
-  const [texto, setTexto] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  async function enviar() {
-    if (!numero.trim() || !texto.trim()) return;
-    setSaving(true);
-    try { const r = await api.waIniciar({ instance, numero, texto }); onCriada(r.id); }
-    catch (e) { alert(e.message); setSaving(false); }
-  }
-
-  return (
-    <div className="modal" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal-box">
-        <div className="mh"><h3>Nova conversa</h3><p>Envie a primeira mensagem pra um número.</p></div>
-        <div className="mb">
-          {isGer && (
-            <div className="field">
-              <label>Enviar pelo WhatsApp de</label>
-              <select className="select" value={instance} onChange={(e) => setInstance(e.target.value)}>
-                {instancias.map((i) => <option key={i.instance} value={i.instance}>{i.instance}</option>)}
-              </select>
-            </div>
-          )}
-          <div className="field">
-            <label>Número (com DDD)</label>
-            <input className="input" value={numero} onChange={(e) => setNumero(e.target.value)} placeholder="Ex: 5544999990000" autoFocus />
-          </div>
-          <div className="field">
-            <label>Mensagem</label>
-            <textarea className="textarea" value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Olá! Tudo bem?" />
-          </div>
-        </div>
-        <div className="mf">
-          <button className="btn full" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-primary full" onClick={enviar} disabled={saving || !numero.trim() || !texto.trim()}>{saving ? "Enviando..." : "Enviar"}</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ============================================================
-   DASHBOARD / PAINEL
-   ============================================================ */
-function intervaloPeriodo(preset, de, ate) {
-  const agora = Date.now();
-  const d = new Date();
-  if (preset === "hoje") { d.setHours(0, 0, 0, 0); return [d.getTime(), agora]; }
-  if (preset === "semana") { return [agora - 7 * 86400000, agora]; }
-  if (preset === "mes") { return [new Date(d.getFullYear(), d.getMonth(), 1).getTime(), agora]; }
-  if (preset === "custom") {
-    const ini = de ? new Date(de + "T00:00:00").getTime() : 0;
-    const fim = ate ? new Date(ate + "T23:59:59").getTime() : agora;
-    return [ini, fim];
-  }
-  return [0, agora];
-}
-function inicioDoMes() {
-  const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth(), 1).getTime();
-}
-
-function Dashboard({ user, showToast, irParaPipeline }) {
-  const isGer = user.role === "gerente";
-  const [cards, setCards] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [preset, setPreset] = useState("mes");
-  const [de, setDe] = useState("");
-  const [ate, setAte] = useState("");
-
-  async function carregar() {
-    setLoading(true);
-    try {
-      const cs = await api.listCards();
-      setCards(cs);
-      if (isGer) setUsers(await api.listUsers());
-    } catch (e) { showToast("✗ " + e.message); }
-    finally { setLoading(false); }
-  }
-  useEffect(() => { carregar(); /* eslint-disable-next-line */ }, []);
-
-  if (loading) return <div className="spin" />;
-
-  const [ini, fim] = intervaloPeriodo(preset, de, ate);
-  const dataFech = (c) => c.fechadoEm || c.atualizadoEm || 0;
-  const noPeriodoVenda = (c) => c.etapa === "fechou" && dataFech(c) >= ini && dataFech(c) <= fim;
-  const noPeriodoLead = (c) => (c.criadoEm || 0) >= ini && (c.criadoEm || 0) <= fim;
-
-  const vendas = cards.filter(noPeriodoVenda);
-  const totalVendido = vendas.reduce((s, c) => s + (Number(c.valorFinal) || 0), 0);
-  const nVendas = vendas.length;
-  const ticket = nVendas ? totalVendido / nVendas : 0;
-  const leadsPeriodo = cards.filter(noPeriodoLead);
-  const ganhosDoCohort = leadsPeriodo.filter((c) => c.etapa === "fechou").length;
-  const conversao = leadsPeriodo.length ? (ganhosDoCohort / leadsPeriodo.length) * 100 : 0;
-
-  const nomePeriodo = { hoje: "hoje", semana: "nos últimos 7 dias", mes: "neste mês", tudo: "no total", custom: "no período" }[preset];
-
-  const segBtns = (
-    <div className="seg">
-      {[["hoje", "Hoje"], ["semana", "7 dias"], ["mes", "Este mês"], ["tudo", "Tudo"], ["custom", "Personalizado"]].map(([k, lbl]) => (
-        <button key={k} className={preset === k ? "on" : ""} onClick={() => setPreset(k)}>{lbl}</button>
-      ))}
-    </div>
-  );
-
-  const kpis = (
-    <div className="stats">
-      <div className="stat"><div className="lab"><span className="dot" style={{ background: "var(--fechou)" }} />Total vendido</div><div className="val money">{fmtMoney(totalVendido)}</div></div>
-      <div className="stat"><div className="lab"><span className="dot" style={{ background: "var(--indigo)" }} />Vendas fechadas</div><div className="val">{nVendas}</div></div>
-      <div className="stat"><div className="lab"><span className="dot" style={{ background: "var(--negociando)" }} />Ticket médio</div><div className="val money">{fmtMoney(ticket)}</div></div>
-      <div className="stat"><div className="lab"><span className="dot" style={{ background: "var(--violet)" }} />Conversão</div><div className="val">{conversao.toFixed(0)}%</div></div>
-    </div>
-  );
-
-  /* ---------- VISÃO DO VENDEDOR ---------- */
-  if (!isGer) {
-    const vendidoMes = cards.filter((c) => c.etapa === "fechou" && dataFech(c) >= inicioDoMes()).reduce((s, c) => s + (Number(c.valorFinal) || 0), 0);
-    const meta = Number(user.meta) || 0;
-    const pct = meta > 0 ? Math.min(100, (vendidoMes / meta) * 100) : 0;
-    const bateu = meta > 0 && vendidoMes >= meta;
-    const ultimas = [...vendas].sort((a, b) => dataFech(b) - dataFech(a)).slice(0, 8);
-
-    return (
-      <div>
-        <div className="dash-top">{segBtns}</div>
-        {preset === "custom" && (
-          <div className="custom-range">De <input type="date" value={de} onChange={(e) => setDe(e.target.value)} /> até <input type="date" value={ate} onChange={(e) => setAte(e.target.value)} /></div>
+      <div style={SX.chartGrid}>
+        {isAdmin && (
+          <CardBox title="Atendimentos por colaboradora" sub="volume individual">
+            <ResponsiveContainer width="100%" height={250}>
+              <BarChart data={stats.byColab} margin={{ top: 8, right: 12, left: -10, bottom: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#EEEEF0" vertical={false} />
+                <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#8A8C90" }} interval={0} angle={-15} textAnchor="end" height={48} />
+                <YAxis tick={{ fontSize: 11, fill: "#8A8C90" }} allowDecimals={false} />
+                <Tooltip contentStyle={TT} cursor={{ fill: "rgba(99,102,241,0.06)" }} />
+                <Bar dataKey="value" name="Atendimentos" radius={[7, 7, 0, 0]} maxBarSize={46}>
+                  {stats.byColab.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </CardBox>
         )}
-        {kpis}
-        <div className="dash-grid">
-          <div className="panel">
-            <div className="panel-h"><h3>Minha meta do mês</h3></div>
-            <div className="big-meta">
-              {meta > 0 ? (
-                <>
-                  <div className={"pct" + (bateu ? " done" : "")}>{pct.toFixed(0)}%</div>
-                  <div className="sub">{fmtMoney(vendidoMes)} de {fmtMoney(meta)}{bateu ? " — meta batida! 🎉" : ""}</div>
-                  <div className="pbar"><div className={"pfill" + (bateu ? " done" : "")} style={{ width: pct + "%" }} /></div>
-                </>
-              ) : (
-                <div className="sub">Você ainda não tem uma meta definida. Peça pra gerência cadastrar em Equipe & Acessos.</div>
-              )}
-            </div>
-          </div>
-          <div className="panel">
-            <div className="panel-h"><h3>Minhas últimas vendas</h3></div>
-            {ultimas.length === 0 ? (
-              <div className="dash-empty">Nenhuma venda fechada {nomePeriodo}.<br />Arraste um card pra "Fechou" no Pipeline. 🎯</div>
-            ) : ultimas.map((c) => (
-              <div className="deal-row" key={c.id}>
-                <div><div className="nm">{c.cliente}</div><div className="dt">{new Date(dataFech(c)).toLocaleDateString("pt-BR")}</div></div>
-                <div className="vl">{fmtMoney(c.valorFinal)}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-        <AnaliseIA user={user} showToast={showToast} />
+
+        <CardBox title="Distribuição por status" sub="situação atual">
+          <ResponsiveContainer width="100%" height={250}>
+            <PieChart>
+              <Pie data={stats.statusData} dataKey="value" nameKey="name" cx="50%" cy="48%" innerRadius={56} outerRadius={92} paddingAngle={4} cornerRadius={6}>
+                {stats.statusData.map((d) => <Cell key={d.key} fill={STATUS[d.key].color} />)}
+              </Pie>
+              <Tooltip contentStyle={TT} />
+              <Legend iconType="circle" wrapperStyle={{ fontSize: 12, paddingTop: 10 }} />
+            </PieChart>
+          </ResponsiveContainer>
+        </CardBox>
+
+        <CardBox title="Evolução de atendimentos" sub="últimos dias" wide={isAdmin}>
+          <ResponsiveContainer width="100%" height={230}>
+            <AreaChart data={stats.byDay} margin={{ top: 8, right: 16, left: -10, bottom: 4 }}>
+              <defs>
+                <linearGradient id="ar" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#6366F1" stopOpacity={0.32} />
+                  <stop offset="100%" stopColor="#6366F1" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#EEEEF0" vertical={false} />
+              <XAxis dataKey="data" tick={{ fontSize: 11, fill: "#8A8C90" }} />
+              <YAxis tick={{ fontSize: 11, fill: "#8A8C90" }} allowDecimals={false} />
+              <Tooltip contentStyle={TT} />
+              <Area type="monotone" dataKey="value" name="Atendimentos" stroke="#6366F1" strokeWidth={2.5} fill="url(#ar)" dot={{ r: 3, fill: "#6366F1" }} activeDot={{ r: 5 }} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </CardBox>
+
+        <CardBox title="Principais categorias" sub="o que mais aparece" wide={!isAdmin}>
+          <ResponsiveContainer width="100%" height={230}>
+            <BarChart data={stats.byAssunto} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 4 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#EEEEF0" horizontal={false} />
+              <XAxis type="number" tick={{ fontSize: 11, fill: "#8A8C90" }} allowDecimals={false} />
+              <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: "#8A8C90" }} width={130} />
+              <Tooltip contentStyle={TT} cursor={{ fill: "rgba(99,102,241,0.06)" }} />
+              <Bar dataKey="value" name="Ocorrências" radius={[0, 7, 7, 0]} maxBarSize={26}>
+                {stats.byAssunto.map((_, i) => <Cell key={i} fill={PALETTE[(i + 1) % PALETTE.length]} />)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </CardBox>
       </div>
-    );
+    </div>
+  );
+}
+
+function Kpi({ i: Icon, c, v, l, d }) {
+  return (
+    <div style={{ ...SX.kpiCard, animationDelay: `${d * 0.07}s` }} className="kpi card-hover panel">
+      <div style={{ ...SX.kpiIcon, background: c + "1c", color: c }}><Icon size={22} strokeWidth={2.2} /></div>
+      <div><div style={SX.kpiValue} className="kpi-value">{v}</div><div style={SX.kpiLabel}>{l}</div></div>
+    </div>
+  );
+}
+
+// ============================================================= ANÁLISE IA
+function AnaliseIA({ records, users }) {
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
+  const [modo, setModo] = useState("equipe");        // equipe | individual
+  const [colabSel, setColabSel] = useState("");      // id da colaboradora p/ análise individual
+
+  const colabs = users.filter((u) => u.role !== "admin");
+  const stats = useMemo(() => buildStats(records, users), [records, users]);
+
+  async function analisar() {
+    if (modo === "individual" && !colabSel) { setError("Escolha uma colaboradora para analisar."); return; }
+    setLoading(true); setError(null); setResult(null);
+    try {
+      const { result } = await api.analise(modo === "individual" ? colabSel : null);
+      setResult(result);
+    } catch (e) {
+      setError(e.message || "Não consegui gerar a análise agora. Tente novamente em instantes.");
+    } finally { setLoading(false); }
   }
 
-  /* ---------- VISÃO DO GERENTE ---------- */
-  const vendedores = users.filter((u) => u.role === "vendedor");
-  const ranking = vendedores.map((v) => {
-    const vs = vendas.filter((c) => c.responsavelId === v.id);
-    return { ...v, total: vs.reduce((s, c) => s + (Number(c.valorFinal) || 0), 0), qtd: vs.length };
-  }).sort((a, b) => b.total - a.total);
-  const maxRank = Math.max(1, ...ranking.map((r) => r.total));
+  // ao trocar de modo, limpa o resultado anterior
+  function trocarModo(m) { setModo(m); setResult(null); setError(null); }
 
-  const mesIni = inicioDoMes();
-  const metas = vendedores.map((v) => {
-    const vendidoMes = cards.filter((c) => c.etapa === "fechou" && c.responsavelId === v.id && dataFech(c) >= mesIni).reduce((s, c) => s + (Number(c.valorFinal) || 0), 0);
-    const meta = Number(v.meta) || 0;
-    return { ...v, vendidoMes, meta, pct: meta > 0 ? Math.min(100, (vendidoMes / meta) * 100) : 0, bateu: meta > 0 && vendidoMes >= meta };
-  });
-  const comMeta = metas.filter((m) => m.meta > 0);
-  const bateram = comMeta.filter((m) => m.bateu).length;
-  const medalhas = ["🥇", "🥈", "🥉"];
+  const AVAL = {
+    "Excelente": { c: "#12A150", bg: "rgba(18,161,80,0.1)", icon: Star },
+    "Bom": { c: "#6366F1", bg: "rgba(99,102,241,0.12)", icon: TrendingUp },
+    "Regular": { c: "#4F46E5", bg: "rgba(79,70,229,0.1)", icon: Activity },
+    "Precisa atenção": { c: "#E5484D", bg: "rgba(229,72,77,0.1)", icon: AlertTriangle },
+  };
 
   return (
     <div>
-      <div className="dash-top">{segBtns}</div>
-      {preset === "custom" && (
-        <div className="custom-range">De <input type="date" value={de} onChange={(e) => setDe(e.target.value)} /> até <input type="date" value={ate} onChange={(e) => setAte(e.target.value)} /></div>
-      )}
-      {kpis}
+      <Header title={<span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}><Brain size={28} color="#6366F1" /> Análise Inteligente</span>}
+        subtitle="A IA lê o desempenho e sugere melhorias" />
 
-      {cards.length === 0 ? (
-        <div className="panel"><div className="dash-empty">Ainda não há dados pra mostrar.<br /><button className="btn btn-primary" style={{ marginTop: 14 }} onClick={irParaPipeline}>Ir pro Pipeline criar leads</button></div></div>
-      ) : (
-        <div className="dash-grid">
-          <div className="panel">
-            <div className="panel-h"><h3>Ranking de vendedores</h3><span style={{ fontSize: 12, color: "var(--muted)" }}>{nomePeriodo}</span></div>
-            {ranking.length === 0 ? (
-              <div className="dash-empty">Nenhum vendedor cadastrado.</div>
-            ) : ranking.map((r, i) => (
-              <div className="rank-row" key={r.id}>
-                <div className="rank-fill" style={{ width: (r.total / maxRank) * 100 + "%" }} />
-                <div className={"rank-pos" + (i < 3 ? " medal" : "")}>{i < 3 && r.total > 0 ? medalhas[i] : i + 1}</div>
-                <div className="rank-av">{iniciais(r.nome)}</div>
-                <div className="rank-mid"><div className="nm">{r.nome}</div><div className="sub">{r.qtd} venda{r.qtd === 1 ? "" : "s"}</div></div>
-                <div className="rank-val">{fmtMoney(r.total)}</div>
-              </div>
-            ))}
+      {/* seletor de modo */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+        <button onClick={() => trocarModo("equipe")} className="filter-chip" style={{ ...SX.filterChip, ...(modo === "equipe" ? SX.filterChipOn : {}) }}><Users size={14} /> Equipe inteira</button>
+        <button onClick={() => trocarModo("individual")} className="filter-chip" style={{ ...SX.filterChip, ...(modo === "individual" ? SX.filterChipOn : {}) }}><UserCircle size={14} /> Colaboradora específica</button>
+      </div>
+
+      <div style={SX.aiHero} className="rise">
+        <div style={SX.aiHeroGlow} />
+        <div style={{ position: "relative", flex: 1 }}>
+          <div style={SX.aiBadge}><Sparkles size={13} /> Inteligência Artificial</div>
+          <h2 style={SX.aiHeroTitle}>{modo === "equipe" ? "Relatório gerencial da equipe" : "Análise individual de desempenho"}</h2>
+          <p style={SX.aiHeroText}>
+            {modo === "equipe"
+              ? "A IA analisa volume, taxa de resolução, pendências e padrões de cada colaboradora, gerando uma leitura geral e recomendações para apresentar à diretoria."
+              : "Escolha uma colaboradora e a IA gera um parecer focado: pontos fortes, pontos a melhorar, sugestões práticas e um feedback pronto para você passar a ela."}
+          </p>
+
+          {modo === "individual" && (
+            <select value={colabSel} onChange={(e) => setColabSel(e.target.value)} style={{ ...SX.input, maxWidth: 320, marginBottom: 16 }}>
+              <option value="">Selecione a colaboradora…</option>
+              {users.map((u) => <option key={u.id} value={u.id}>{u.nome}{u.role === "admin" ? " (você)" : ""}</option>)}
+            </select>
+          )}
+
+          {modo === "equipe" && (
+            <div style={SX.aiMeta}>
+              <span><strong>{records.length}</strong> atendimentos</span><span style={SX.dot} />
+              <span><strong>{colabs.length}</strong> colaboradoras</span><span style={SX.dot} />
+              <span><strong>{stats.taxa}%</strong> resolução</span>
+            </div>
+          )}
+
+          <button onClick={analisar} disabled={loading || records.length === 0} className="ai-cta"
+            style={{ ...SX.aiCta, opacity: loading || records.length === 0 ? 0.6 : 1, cursor: loading || records.length === 0 ? "not-allowed" : "pointer" }}>
+            {loading ? <><span className="spin"><Activity size={17} /></span> Analisando dados…</> : <><Sparkles size={17} /> {modo === "equipe" ? "Gerar análise da equipe" : "Gerar análise individual"}</>}
+          </button>
+          {records.length === 0 && <p style={{ fontSize: 12.5, color: "#94A3B8", marginTop: 12 }}>Registre alguns atendimentos primeiro para a IA ter o que analisar.</p>}
+        </div>
+      </div>
+
+      {error && <div style={SX.aiError}><AlertCircle size={16} /> {error}</div>}
+      {loading && <div style={SX.aiLoading}>{[0, 1, 2].map((i) => <div key={i} className="skel" style={{ ...SX.skel, animationDelay: `${i * 0.15}s` }} />)}</div>}
+
+      {/* RESULTADO INDIVIDUAL */}
+      {result && result.individual && (
+        <div className="fade-in">
+          <IndividualResult result={result} AVAL={AVAL} />
+        </div>
+      )}
+
+      {/* RESULTADO DA EQUIPE */}
+      {result && !result.individual && (
+        <div className="fade-in">
+          <div style={SX.aiPanorama} className="panel">
+            <div style={SX.aiPanIcon}><Activity size={20} color="#6366F1" /></div>
+            <div><div style={SX.aiPanLabel}>Panorama do setor</div><p style={SX.aiPanText}>{result.panorama}</p></div>
           </div>
 
-          <div className="panel">
-            <div className="panel-h"><h3>Metas do mês</h3></div>
-            {comMeta.length > 0 && (
-              <div className="metas-resumo"><b>{bateram}</b> de <b>{comMeta.length}</b> {comMeta.length === 1 ? "vendedor bateu" : "vendedores bateram"} a meta este mês 🎯</div>
+          <div style={SX.aiHighlights}>
+            <div style={{ ...SX.aiHl, borderColor: "rgba(18,161,80,0.3)", background: "rgba(18,161,80,0.05)" }} className="ai-hl">
+              <div style={{ ...SX.aiHlIcon, background: "rgba(18,161,80,0.14)", color: "#12A150" }}><Award size={18} /></div>
+              <div><div style={SX.aiHlLabel}>Destaque</div><div style={SX.aiHlText}>{result.destaque}</div></div>
+            </div>
+            {result.atencao && (
+              <div style={{ ...SX.aiHl, borderColor: "rgba(99,102,241,0.3)", background: "rgba(99,102,241,0.05)" }} className="ai-hl">
+                <div style={{ ...SX.aiHlIcon, background: "rgba(99,102,241,0.14)", color: "#6366F1" }}><Target size={18} /></div>
+                <div><div style={SX.aiHlLabel}>Ponto de atenção</div><div style={SX.aiHlText}>{result.atencao}</div></div>
+              </div>
             )}
-            {metas.length === 0 ? (
-              <div className="dash-empty">Nenhum vendedor cadastrado.</div>
-            ) : metas.map((m) => (
-              <div className="meta-row" key={m.id}>
-                <div className="meta-head">
-                  <div className="nm">{iniciais(m.nome) && <span className="rank-av" style={{ width: 24, height: 24, fontSize: 10 }}>{iniciais(m.nome)}</span>}{m.nome}{m.bateu && <span className="bateu">✓ bateu</span>}</div>
-                  <div className="vals">{m.meta > 0 ? `${fmtMoney(m.vendidoMes)} / ${fmtMoney(m.meta)}` : "sem meta"}</div>
-                </div>
-                {m.meta > 0 && <div className="pbar"><div className={"pfill" + (m.bateu ? " done" : "")} style={{ width: m.pct + "%" }} /></div>}
-              </div>
-            ))}
           </div>
-        </div>
-      )}
-      <AnaliseIA user={user} vendedores={vendedores} showToast={showToast} />
-    </div>
-  );
-}
 
-/* ============================================================
-   ANÁLISE POR IA
-   ============================================================ */
-function IAResultado({ res }) {
-  if (!res) return null;
-  return (
-    <div className="ia-res">
-      {res.resumo && <p className="ia-resumo">{res.resumo}</p>}
-      {res.pontosFortes && res.pontosFortes.length > 0 && (
-        <div className="ia-bloco">
-          <div className="ia-bloco-h pos">✓ Pontos fortes</div>
-          <ul>{res.pontosFortes.map((x, i) => <li key={i}>{x}</li>)}</ul>
-        </div>
-      )}
-      {res.pontosMelhorar && res.pontosMelhorar.length > 0 && (
-        <div className="ia-bloco">
-          <div className="ia-bloco-h warn">▲ Pontos a melhorar</div>
-          <ul>{res.pontosMelhorar.map((x, i) => <li key={i}>{x}</li>)}</ul>
-        </div>
-      )}
-      {res.sugestoes && res.sugestoes.length > 0 && (
-        <div className="ia-bloco">
-          <div className="ia-bloco-h sug">💡 Sugestões</div>
-          <ul>{res.sugestoes.map((x, i) => <li key={i}>{x}</li>)}</ul>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function AnaliseIA({ user, vendedores, showToast }) {
-  const isGer = user.role === "gerente";
-  const [eqLoading, setEqLoading] = useState(false);
-  const [eq, setEq] = useState(null);
-  const [eqErro, setEqErro] = useState("");
-  const [vState, setVState] = useState({}); // { [id]: {loading, res, erro, aberto} }
-  const [meu, setMeu] = useState({ loading: false, res: null, erro: "" });
-
-  async function analisarEquipe() {
-    setEqLoading(true); setEqErro("");
-    try { setEq(await api.iaEquipe()); }
-    catch (e) { setEqErro(e.message); }
-    finally { setEqLoading(false); }
-  }
-  async function analisarVendedor(id) {
-    setVState((s) => ({ ...s, [id]: { ...(s[id] || {}), loading: true, erro: "", aberto: true } }));
-    try {
-      const r = await api.iaVendedor(id);
-      setVState((s) => ({ ...s, [id]: { loading: false, res: r, erro: "", aberto: true } }));
-    } catch (e) {
-      setVState((s) => ({ ...s, [id]: { loading: false, res: null, erro: e.message, aberto: true } }));
-    }
-  }
-  async function analisarMeu() {
-    setMeu({ loading: true, res: null, erro: "" });
-    try { setMeu({ loading: false, res: await api.iaVendedor(user.id), erro: "" }); }
-    catch (e) { setMeu({ loading: false, res: null, erro: e.message }); }
-  }
-  function toggle(id) {
-    const st = vState[id];
-    if (st && (st.res || st.erro)) setVState((s) => ({ ...s, [id]: { ...st, aberto: !st.aberto } }));
-    else analisarVendedor(id);
-  }
-
-  // VENDEDOR
-  if (!isGer) {
-    return (
-      <div className="panel ia-panel" style={{ marginTop: 18 }}>
-        <div className="panel-h"><h3>🤖 Minha análise</h3>
-          <button className="btn btn-sm btn-primary" onClick={analisarMeu} disabled={meu.loading}>{meu.loading ? "Analisando..." : "Analisar meu atendimento"}</button>
-        </div>
-        <div style={{ padding: "18px 22px" }}>
-          {meu.loading && <div className="ia-loading">A IA está lendo seus números e conversas... ✨</div>}
-          {meu.erro && <IAErro msg={meu.erro} />}
-          {!meu.loading && !meu.res && !meu.erro && <p className="ia-hint">Clique em "Analisar meu atendimento" pra receber uma avaliação dos seus resultados e do seu jeito de atender, com sugestões pra vender mais.</p>}
-          <IAResultado res={meu.res} />
-        </div>
-      </div>
-    );
-  }
-
-  // GERENTE
-  return (
-    <div className="panel ia-panel" style={{ marginTop: 18 }}>
-      <div className="panel-h"><h3>🤖 Análise inteligente</h3>
-        <button className="btn btn-sm btn-primary" onClick={analisarEquipe} disabled={eqLoading}>{eqLoading ? "Analisando..." : "Analisar equipe"}</button>
-      </div>
-      <div style={{ padding: "18px 22px" }}>
-        {eqLoading && <div className="ia-loading">A IA está analisando o desempenho do time... ✨</div>}
-        {eqErro && <IAErro msg={eqErro} />}
-        {!eqLoading && !eq && !eqErro && <p className="ia-hint">Clique em "Analisar equipe" pra uma visão geral do time com sugestões. Abaixo, você pode analisar cada vendedor individualmente.</p>}
-        {eq && (<><div className="ia-tag-time">Visão da equipe</div><IAResultado res={eq} /></>)}
-
-        {vendedores && vendedores.length > 0 && (
-          <div className="ia-individual">
-            <div className="ia-sub-titulo">Análise individual</div>
-            {vendedores.map((v) => {
-              const st = vState[v.id] || {};
+          <div style={SX.aiSectionTitle}><Users size={17} /> Leitura individual</div>
+          <div style={SX.aiColabGrid}>
+            {result.colaboradoras?.map((c, idx) => {
+              const av = AVAL[c.avaliacao] || AVAL["Regular"]; const AvIcon = av.icon;
               return (
-                <div className="ia-vend" key={v.id}>
-                  <div className="ia-vend-h" onClick={() => toggle(v.id)}>
-                    <div className="ia-vend-nm"><span className="rank-av" style={{ width: 28, height: 28, fontSize: 11 }}>{iniciais(v.nome)}</span>{v.nome}</div>
-                    <button className="btn btn-sm" onClick={(e) => { e.stopPropagation(); analisarVendedor(v.id); }} disabled={st.loading}>
-                      {st.loading ? "Analisando..." : (st.res || st.erro) ? "Atualizar" : "Analisar"}
-                    </button>
-                  </div>
-                  {st.aberto && (
-                    <div className="ia-vend-body">
-                      {st.loading && <div className="ia-loading">Lendo números e conversas... ✨</div>}
-                      {st.erro && <IAErro msg={st.erro} />}
-                      <IAResultado res={st.res} />
+                <div key={idx} style={SX.aiColabCard} className="card-hover rise panel">
+                  <div style={SX.aiColabHead}>
+                    <div style={SX.aiColabAvatar}>{initials(c.nome)}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={SX.aiColabName}>{c.nome}</div>
+                      <span style={{ ...SX.aiAval, background: av.bg, color: av.c }}><AvIcon size={12} /> {c.avaliacao}</span>
                     </div>
-                  )}
+                  </div>
+                  <p style={SX.aiColabLeitura}>{c.leitura}</p>
+                  <div style={SX.aiSugLabel}>Sugestões de melhoria</div>
+                  <ul style={SX.aiSugList}>
+                    {c.sugestoes?.map((s, i) => <li key={i} style={SX.aiSugItem}><Zap size={13} color="#6366F1" style={{ flexShrink: 0, marginTop: 3 }} /> {s}</li>)}
+                  </ul>
                 </div>
               );
             })}
           </div>
-        )}
+
+          <div style={SX.aiActions} className="ai-actions">
+            <div style={SX.aiActionsTitle}><Target size={18} color="#6366F1" /> Ações recomendadas para o setor</div>
+            <div style={SX.aiActionsList}>
+              {result.acoes_setor?.map((a, i) => <div key={i} style={SX.aiActionItem} className="ai-action-item"><span style={SX.aiActionNum}>{i + 1}</span> {a}</div>)}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// resultado da análise individual
+function IndividualResult({ result, AVAL }) {
+  const av = AVAL[result.avaliacao] || AVAL["Regular"];
+  const AvIcon = av.icon;
+  return (
+    <div>
+      {/* cabeçalho da pessoa */}
+      <div style={SX.indHead} className="panel">
+        <div style={SX.indAvatar}>{initials(result.nome)}</div>
+        <div style={{ flex: 1 }}>
+          <div style={SX.indName}>{result.nome}</div>
+          <span style={{ ...SX.aiAval, background: av.bg, color: av.c, marginTop: 6 }}><AvIcon size={13} /> {result.avaliacao}</span>
+        </div>
       </div>
-    </div>
-  );
-}
 
-function IAErro({ msg }) {
-  const semChave = /ANTHROPIC_API_KEY/i.test(msg || "");
-  return (
-    <div className="ia-erro">
-      <b>Não foi possível gerar a análise.</b>
-      <div style={{ marginTop: 6 }}>{msg}</div>
-      {semChave && <div style={{ marginTop: 8, fontSize: 12.5 }}>👉 No Railway, em Variables, adicione <b>ANTHROPIC_API_KEY</b> com a mesma chave do Claude que você já usa no suporte.</div>}
-    </div>
-  );
-}
-
-/* ============================================================
-   GRÁFICOS (SVG, sem dependências)
-   ============================================================ */
-function GraficoBarras({ dados }) {
-  const max = Math.max(1, ...dados.map((d) => d.valor));
-  const W = 560, H = 240, padT = 16, padB = 34, axisW = 36, gap = 18;
-  const n = dados.length || 1;
-  const chartH = H - padT - padB;
-  const areaW = W - axisW - 10;
-  const bw = Math.min(70, (areaW - gap * (n - 1)) / n);
-  const ticks = 4;
-  const tem = dados.some((d) => d.valor > 0);
-  if (!tem) return <div className="chart-empty">Sem vendas no período pra mostrar.</div>;
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="chart-svg" preserveAspectRatio="xMidYMid meet">
-      <defs><linearGradient id="gradBar" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#8b5cf6" /><stop offset="100%" stopColor="#6366f1" /></linearGradient></defs>
-      {Array.from({ length: ticks + 1 }).map((_, i) => {
-        const y = padT + (chartH / ticks) * i;
-        return <g key={i}><line x1={axisW} y1={y} x2={W - 6} y2={y} stroke="var(--line)" strokeDasharray="3 4" /><text x={axisW - 6} y={y + 3} className="chart-axis" textAnchor="end">{Math.round(max - (max / ticks) * i)}</text></g>;
-      })}
-      {dados.map((d, i) => {
-        const h = (d.valor / max) * chartH;
-        const x = axisW + 6 + i * (bw + gap);
-        const y = padT + chartH - h;
-        return <g key={i}>
-          <rect x={x} y={y} width={bw} height={Math.max(2, h)} rx="6" fill={d.cor || "url(#gradBar)"} />
-          {d.valor > 0 && <text x={x + bw / 2} y={y - 6} className="chart-val" textAnchor="middle">{d.rotulo || d.valor}</text>}
-          <text x={x + bw / 2} y={H - 12} className="chart-label" textAnchor="middle">{(d.label || "").slice(0, 9)}</text>
-        </g>;
-      })}
-    </svg>
-  );
-}
-
-function GraficoRosca({ dados }) {
-  const total = dados.reduce((s, d) => s + d.valor, 0);
-  const r = 66, sw = 26, cx = 90, cy = 90, c = 2 * Math.PI * r;
-  let acc = 0;
-  return (
-    <div className="donut-wrap">
-      <svg viewBox="0 0 180 180" className="donut-svg">
-        <circle cx={cx} cy={cy} r={r} fill="none" stroke="var(--line-2)" strokeWidth={sw} />
-        {total > 0 && dados.map((d, i) => {
-          if (d.valor <= 0) return null;
-          const len = (d.valor / total) * c;
-          const el = <circle key={i} cx={cx} cy={cy} r={r} fill="none" stroke={d.cor} strokeWidth={sw} strokeDasharray={`${len} ${c - len}`} strokeDashoffset={-acc} transform={`rotate(-90 ${cx} ${cy})`} />;
-          acc += len;
-          return el;
-        })}
-        <text x={cx} y={cy - 2} textAnchor="middle" className="donut-center-n">{total}</text>
-        <text x={cx} y={cy + 15} textAnchor="middle" className="donut-center-l">leads</text>
-      </svg>
-      <div className="donut-leg">
-        {dados.map((d, i) => <div className="leg-item" key={i}><span className="leg-dot" style={{ background: d.cor }} />{d.label} <b>{d.valor}</b></div>)}
+      {/* resumo */}
+      <div style={SX.aiPanorama} className="panel">
+        <div style={SX.aiPanIcon}><Activity size={20} color="#6366F1" /></div>
+        <div><div style={SX.aiPanLabel}>Resumo do desempenho</div><p style={SX.aiPanText}>{result.resumo}</p></div>
       </div>
+
+      {/* pontos fortes + a melhorar */}
+      <div style={SX.aiHighlights}>
+        <div style={{ ...SX.indCol, borderColor: "rgba(18,161,80,0.3)" }} className="panel">
+          <div style={SX.indColTitle}><Award size={16} color="#12A150" /> Pontos fortes</div>
+          <ul style={SX.aiSugList}>
+            {result.pontos_fortes?.map((s, i) => <li key={i} style={SX.aiSugItem}><CheckCircle2 size={13} color="#12A150" style={{ flexShrink: 0, marginTop: 3 }} /> {s}</li>)}
+          </ul>
+        </div>
+        <div style={{ ...SX.indCol, borderColor: "rgba(99,102,241,0.3)" }} className="panel">
+          <div style={SX.indColTitle}><Target size={16} color="#6366F1" /> Pontos a melhorar</div>
+          <ul style={SX.aiSugList}>
+            {result.pontos_melhoria?.map((s, i) => <li key={i} style={SX.aiSugItem}><TrendingUp size={13} color="#6366F1" style={{ flexShrink: 0, marginTop: 3 }} /> {s}</li>)}
+          </ul>
+        </div>
+      </div>
+
+      {/* sugestões */}
+      <div style={SX.aiActions} className="ai-actions">
+        <div style={SX.aiActionsTitle}><Zap size={18} color="#6366F1" /> Sugestões práticas</div>
+        <div style={SX.aiActionsList}>
+          {result.sugestoes?.map((a, i) => <div key={i} style={SX.aiActionItem} className="ai-action-item"><span style={SX.aiActionNum}>{i + 1}</span> {a}</div>)}
+        </div>
+      </div>
+
+      {/* feedback sugerido */}
+      {result.feedback_sugerido && (
+        <div style={SX.feedbackBox} className="panel feedback-box">
+          <div style={SX.feedbackLabel}><Sparkles size={15} color="#6366F1" /> Feedback sugerido para passar a ela</div>
+          <p style={SX.feedbackText}>"{result.feedback_sugerido}"</p>
+        </div>
+      )}
     </div>
   );
 }
 
-function GraficoLinha({ dados }) {
-  const W = 600, H = 200, padL = 38, padR = 10, padT = 14, padB = 26;
-  const max = Math.max(1, ...dados.map((d) => d.valor));
-  const n = dados.length;
-  const innerW = W - padL - padR, innerH = H - padT - padB, ticks = 4;
-  const x = (i) => padL + (n <= 1 ? innerW / 2 : (innerW / (n - 1)) * i);
-  const y = (v) => padT + innerH - (v / max) * innerH;
-  const pts = dados.map((d, i) => `${x(i)},${y(d.valor)}`).join(" ");
-  const passo = Math.max(1, Math.ceil(n / 7));
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="chart-svg" preserveAspectRatio="xMidYMid meet">
-      <defs><linearGradient id="gradArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#6366f1" stopOpacity="0.32" /><stop offset="100%" stopColor="#6366f1" stopOpacity="0" /></linearGradient></defs>
-      {Array.from({ length: ticks + 1 }).map((_, i) => {
-        const yy = padT + (innerH / ticks) * i;
-        return <g key={i}><line x1={padL} y1={yy} x2={W - padR} y2={yy} stroke="var(--line)" strokeDasharray="3 4" /><text x={padL - 6} y={yy + 3} className="chart-axis" textAnchor="end">{Math.round(max - (max / ticks) * i)}</text></g>;
-      })}
-      {n > 1 && <polygon points={`${padL},${padT + innerH} ${pts} ${x(n - 1)},${padT + innerH}`} fill="url(#gradArea)" />}
-      {n > 1 && <polyline points={pts} fill="none" stroke="#6366f1" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />}
-      {dados.map((d, i) => <circle key={i} cx={x(i)} cy={y(d.valor)} r="3.4" fill="#fff" stroke="#6366f1" strokeWidth="2" />)}
-      {dados.map((d, i) => (i % passo === 0 || i === n - 1) ? <text key={i} x={x(i)} y={H - 8} className="chart-label" textAnchor="middle">{d.label}</text> : null)}
-    </svg>
-  );
-}
+// ============================================================= LISTA
+function Lista({ records, users, can, refresh, goNew }) {
+  const [q, setQ] = useState("");
+  const [fStatus, setFStatus] = useState("todos");
+  const [fColab, setFColab] = useState("todas");
 
-/* ============================================================
-   PAINEL v2
-   ============================================================ */
-const ETAPA_INFO = [
-  { k: "lead", label: "Lead", cor: "#64748b" },
-  { k: "contato", label: "Em contato", cor: "#6366f1" },
-  { k: "sem_resposta", label: "Sem resposta", cor: "#94a3b8" },
-  { k: "negociando", label: "Negociando", cor: "#f59e0b" },
-  { k: "fechou", label: "Fechou", cor: "#10b981" },
-  { k: "perdeu", label: "Perdeu", cor: "#ef4444" },
-];
+  const colabNames = useMemo(() => {
+    const ids = new Set(records.map((r) => r.colaboradoraId));
+    return users.filter((u) => ids.has(u.id));
+  }, [records, users]);
 
-function Painel({ user, showToast, irParaPipeline }) {
-  const isGer = user.role === "gerente";
-  const [cards, setCards] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [preset, setPreset] = useState("mes");
-  const [de, setDe] = useState("");
-  const [ate, setAte] = useState("");
+  const filtered = useMemo(() => records.filter((r) => {
+    if (fStatus !== "todos" && r.status !== fStatus) return false;
+    if (fColab !== "todas" && r.colaboradoraId !== fColab) return false;
+    if (q) { const h = `${r.aluno} ${r.email} ${r.assunto} ${r.solucao} ${r.obs}`.toLowerCase(); if (!h.includes(q.toLowerCase())) return false; }
+    return true;
+  }), [records, q, fStatus, fColab]);
 
-  async function carregar() {
-    setLoading(true);
-    try {
-      setCards(await api.listCards());
-      if (isGer) setUsers(await api.listUsers());
-    } catch (e) { showToast("✗ " + e.message); }
-    finally { setLoading(false); }
+  function exportCSV() {
+    const headers = ["Data", "Colaboradora", "Aluno", "E-mail", "Telefone", "Categoria", "Solução", "Status", "Observações"];
+    const rows = filtered.map((r) => [r.data, nameOf(users, r.colaboradoraId), r.aluno, r.email, r.telefone, r.assunto, r.solucao, STATUS[r.status]?.label, r.obs]);
+    const csv = [headers, ...rows].map((row) => row.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob); const a = document.createElement("a");
+    a.href = url; a.download = `atendimentos_${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(url);
   }
-  useEffect(() => { carregar(); /* eslint-disable-next-line */ }, []);
-
-  // sincroniza as datas com o preset escolhido
-  useEffect(() => {
-    if (preset === "custom") return;
-    const [i, f] = intervaloPeriodo(preset, "", "");
-    const iso = (t) => new Date(t).toISOString().slice(0, 10);
-    setDe(iso(preset === "tudo" ? Date.now() : i));
-    setAte(iso(f));
-    // eslint-disable-next-line
-  }, [preset]);
-
-  if (loading) return <div className="spin" />;
-
-  const [ini, fim] = intervaloPeriodo(preset, de, ate);
-  const dataFech = (c) => c.fechadoEm || c.atualizadoEm || 0;
-  const ativos = cards.filter((c) => !c.arquivado);
-  const noPeriodoVenda = (c) => c.etapa === "fechou" && dataFech(c) >= ini && dataFech(c) <= fim;
-  const noPeriodoLead = (c) => (c.criadoEm || 0) >= ini && (c.criadoEm || 0) <= fim;
-
-  const vendas = ativos.filter(noPeriodoVenda);
-  const totalVendido = vendas.reduce((s, c) => s + (Number(c.valorFinal) || 0), 0);
-  const nVendas = vendas.length;
-  const ticket = nVendas ? totalVendido / nVendas : 0;
-  const leadsPeriodo = ativos.filter(noPeriodoLead);
-  const conversao = leadsPeriodo.length ? Math.round((leadsPeriodo.filter((c) => c.etapa === "fechou").length / leadsPeriodo.length) * 100) : 0;
-
-  // gráfico de linha: vendas por dia (período, máx ~14 pontos)
-  const dias = Math.min(14, Math.max(1, Math.ceil((fim - ini) / 86400000)));
-  const serie = [];
-  for (let d = dias - 1; d >= 0; d--) {
-    const dia = new Date(fim - d * 86400000); dia.setHours(0, 0, 0, 0);
-    const ini2 = dia.getTime(), fim2 = ini2 + 86400000;
-    const v = vendas.filter((c) => dataFech(c) >= ini2 && dataFech(c) < fim2).reduce((s, c) => s + (Number(c.valorFinal) || 0), 0);
-    serie.push({ label: dia.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }), valor: Math.round(v) });
-  }
-
-  // rosca: distribuição do funil (snapshot atual)
-  const rosca = ETAPA_INFO.map((e) => ({ label: e.label, cor: e.cor, valor: ativos.filter((c) => c.etapa === e.k).length }));
-
-  const filtroBar = (
-    <div className="filtro-bar">
-      <div className="seg">
-        {[["hoje", "Hoje"], ["semana", "Semana"], ["mes", "Mês"], ["tudo", "Tudo"]].map(([k, lbl]) => (
-          <button key={k} className={preset === k ? "on" : ""} onClick={() => setPreset(k)}>{lbl}</button>
-        ))}
-      </div>
-      <div className="filtro-datas">
-        <input type="date" value={de} onChange={(e) => { setDe(e.target.value); setPreset("custom"); }} />
-        até
-        <input type="date" value={ate} onChange={(e) => { setAte(e.target.value); setPreset("custom"); }} />
-      </div>
-      <button className="filtro-hoje" onClick={() => setPreset("hoje")}>Hoje</button>
-    </div>
-  );
-
-  /* ---------- VENDEDOR ---------- */
-  if (!isGer) {
-    const vendidoMes = ativos.filter((c) => c.etapa === "fechou" && dataFech(c) >= inicioDoMes()).reduce((s, c) => s + (Number(c.valorFinal) || 0), 0);
-    const meta = Number(user.meta) || 0;
-    const pct = meta > 0 ? Math.min(100, Math.round((vendidoMes / meta) * 100)) : 0;
-    const bateu = meta > 0 && vendidoMes >= meta;
-    const ultimas = [...vendas].sort((a, b) => dataFech(b) - dataFech(a)).slice(0, 8);
-    const roscaV = ETAPA_INFO.map((e) => ({ label: e.label, cor: e.cor, valor: ativos.filter((c) => c.etapa === e.k).length }));
-    return (
-      <div>
-        {filtroBar}
-        <div className="stats">
-          <StatIco ico={I.cash} cor="#10b981" val={fmtMoney(totalVendido)} money lab="Vendido no período" />
-          <StatIco ico={I.check} cor="#6366f1" val={nVendas} lab="Vendas fechadas" />
-          <StatIco ico={I.cash} cor="#f59e0b" val={fmtMoney(ticket)} money lab="Ticket médio" />
-          <StatIco ico={I.target} cor="#8b5cf6" val={conversao + "%"} lab="Conversão" />
-        </div>
-        <div className="comp-card">
-          <div className="comp-info"><div className="lab">Minha meta do mês</div><div className="num">{fmtMoney(vendidoMes)} / {meta > 0 ? fmtMoney(meta) : "—"}</div></div>
-          <div className="comp-bar-wrap"><div className="comp-bar"><div className={"fill" + (bateu ? " done" : "")} style={{ width: pct + "%" }} /></div><div className="comp-pct">{pct}%</div></div>
-        </div>
-        <div className="charts-2">
-          <div className="panel"><div className="panel-h"><h3>Minha evolução<span className="panel-sub">vendas por dia</span></h3></div><div className="chart-body"><GraficoLinha dados={serie} /></div></div>
-          <div className="panel"><div className="panel-h"><h3>Meu funil<span className="panel-sub">situação atual</span></h3></div><div className="chart-body"><GraficoRosca dados={roscaV} /></div></div>
-        </div>
-        <div className="panel">
-          <div className="panel-h"><h3>Minhas últimas vendas</h3></div>
-          {ultimas.length === 0 ? <div className="dash-empty">Nenhuma venda fechada no período. 🎯</div> : ultimas.map((c) => (
-            <div className="deal-row" key={c.id}><div><div className="nm">{c.cliente}</div><div className="dt">{new Date(dataFech(c)).toLocaleDateString("pt-BR")}</div></div><div className="vl">{fmtMoney(c.valorFinal)}</div></div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  /* ---------- GERENTE ---------- */
-  const vendedores = users.filter((u) => u.role === "vendedor");
-  const ranking = vendedores.map((v) => {
-    const vs = vendas.filter((c) => c.responsavelId === v.id);
-    return { ...v, total: vs.reduce((s, c) => s + (Number(c.valorFinal) || 0), 0), qtd: vs.length };
-  }).sort((a, b) => b.total - a.total);
-  const maxRank = Math.max(1, ...ranking.map((r) => r.total));
-  const barras = ranking.slice(0, 7).map((r) => ({ label: r.nome.split(" ")[0], valor: Math.round(r.total), rotulo: r.total >= 1000 ? "R$" + (r.total / 1000).toFixed(1) + "k" : "R$" + r.total }));
-
-  const mesIni = inicioDoMes();
-  const metas = vendedores.map((v) => {
-    const vendidoMes = ativos.filter((c) => c.etapa === "fechou" && c.responsavelId === v.id && dataFech(c) >= mesIni).reduce((s, c) => s + (Number(c.valorFinal) || 0), 0);
-    const meta = Number(v.meta) || 0;
-    return { ...v, vendidoMes, meta, pct: meta > 0 ? Math.min(100, Math.round((vendidoMes / meta) * 100)) : 0, bateu: meta > 0 && vendidoMes >= meta };
-  });
-  const comMeta = metas.filter((m) => m.meta > 0);
-  const bateram = comMeta.filter((m) => m.bateu).length;
-  const somaMetas = comMeta.reduce((s, m) => s + m.meta, 0);
-  const somaVendidoMes = metas.reduce((s, m) => s + m.vendidoMes, 0);
-  const pctMeta = somaMetas > 0 ? Math.min(100, Math.round((somaVendidoMes / somaMetas) * 100)) : 0;
-  const medalhas = ["🥇", "🥈", "🥉"];
 
   return (
     <div>
-      {filtroBar}
-      <div className="stats">
-        <StatIco ico={I.cash} cor="#10b981" val={fmtMoney(totalVendido)} money lab="Total vendido" />
-        <StatIco ico={I.check} cor="#6366f1" val={nVendas} lab="Vendas fechadas" />
-        <StatIco ico={I.cash} cor="#f59e0b" val={fmtMoney(ticket)} money lab="Ticket médio" />
-        <StatIco ico={I.target} cor="#8b5cf6" val={conversao + "%"} lab="Conversão" />
-      </div>
+      <Header title="Atendimentos" subtitle={`${filtered.length} registro${filtered.length !== 1 ? "s" : ""}`}>
+        {can("exportar") && <button onClick={exportCSV} className="btn-ghost" style={SX.btnGhost}><Download size={16} /> Exportar</button>}
+        {can("registrar") && <button onClick={goNew} className="btn-primary" style={SX.btnPrimary}><PlusCircle size={16} /> Novo</button>}
+      </Header>
 
-      {somaMetas > 0 && (
-        <div className="comp-card">
-          <div className="comp-info"><div className="lab">Meta do time este mês — {bateram}/{comMeta.length} bateram</div><div className="num">{fmtMoney(somaVendidoMes)} / {fmtMoney(somaMetas)}</div></div>
-          <div className="comp-bar-wrap"><div className="comp-bar"><div className={"fill" + (pctMeta >= 100 ? " done" : "")} style={{ width: pctMeta + "%" }} /></div><div className="comp-pct">{pctMeta}%</div></div>
+      <div style={SX.filterBar}>
+        <div style={SX.searchWrap}>
+          <Search size={16} color="#A0A2A6" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar aluno, e-mail, assunto…" style={SX.searchInput} />
+          {q && <X size={15} color="#A0A2A6" style={{ cursor: "pointer" }} onClick={() => setQ("")} />}
         </div>
-      )}
-
-      <div className="charts-2">
-        <div className="panel"><div className="panel-h"><h3>Vendas por vendedor<span className="panel-sub">no período</span></h3></div><div className="chart-body"><GraficoBarras dados={barras} /></div></div>
-        <div className="panel"><div className="panel-h"><h3>Distribuição do funil<span className="panel-sub">situação atual</span></h3></div><div className="chart-body"><GraficoRosca dados={rosca} /></div></div>
+        {can("ver_todos") && <Sel value={fColab} onChange={setFColab} opts={[["todas", "Todas colaboradoras"], ...colabNames.map((u) => [u.id, u.nome])]} />}
+        <Sel value={fStatus} onChange={setFStatus} opts={[["todos", "Todos status"], ...Object.entries(STATUS).map(([k, v]) => [k, v.label])]} />
       </div>
 
-      <div className="panel" style={{ marginBottom: 18 }}><div className="panel-h"><h3>Evolução de vendas<span className="panel-sub">últimos dias</span></h3></div><div className="chart-body"><GraficoLinha dados={serie} /></div></div>
-
-      <div className="charts-2">
-        <div className="panel">
-          <div className="panel-h"><h3>Ranking de vendedores</h3></div>
-          {ranking.length === 0 ? <div className="dash-empty">Nenhum vendedor cadastrado.</div> : ranking.map((r, i) => (
-            <div className="rank-row" key={r.id}>
-              <div className="rank-fill" style={{ width: (r.total / maxRank) * 100 + "%" }} />
-              <div className={"rank-pos" + (i < 3 ? " medal" : "")}>{i < 3 && r.total > 0 ? medalhas[i] : i + 1}</div>
-              <div className="rank-av">{iniciais(r.nome)}</div>
-              <div className="rank-mid"><div className="nm">{r.nome}</div><div className="sub">{r.qtd} venda{r.qtd === 1 ? "" : "s"}</div></div>
-              <div className="rank-val">{fmtMoney(r.total)}</div>
-            </div>
-          ))}
+      {filtered.length === 0 ? (
+        <div style={SX.noRes}><Filter size={26} color="#C9CACE" /><p style={{ margin: "10px 0 0", color: "#A0A2A6" }}>Nenhum atendimento encontrado.</p></div>
+      ) : (
+        <div style={SX.tableWrap}>
+          <table style={SX.table}>
+            <thead><tr>{["Data", "Colaboradora", "Aluno", "Contato", "Categoria", "Solução", "Status", ""].map((h) => <th key={h} style={SX.th}>{h}</th>)}</tr></thead>
+            <tbody>
+              {filtered.map((r) => {
+                const st = STATUS[r.status]; const Icon = st.icon;
+                return (
+                  <tr key={r.id} className="trow">
+                    <td style={SX.td}><span style={SX.dataChip}>{fmtDate(r.data)}</span></td>
+                    <td style={SX.td}><span style={SX.colabTag}><span style={SX.colabDot}>{initials(nameOf(users, r.colaboradoraId))}</span>{nameOf(users, r.colaboradoraId)}</span></td>
+                    <td style={SX.td}>{r.aluno}</td>
+                    <td style={SX.td}><div style={SX.contact}>{r.email && <span style={SX.cMain}>{r.email}</span>}{r.telefone && <span style={SX.cSub}>{r.telefone}</span>}</div></td>
+                    <td style={SX.td}>{r.assunto}</td>
+                    <td style={{ ...SX.td, maxWidth: 210 }}><span style={SX.trunc} title={r.solucao}>{r.solucao || "—"}</span></td>
+                    <td style={SX.td}>
+                      <select
+                        value={r.status}
+                        onChange={async (e) => {
+                          const novo = e.target.value;
+                          try { await api.updateRecord(r.id, { status: novo }); refresh(); }
+                          catch (err) { alert(err.message); }
+                        }}
+                        style={{ ...SX.statusSelect, background: st.bg, color: st.color }}
+                        title="Clique para mudar o status"
+                      >
+                        {Object.entries(STATUS).map(([k, v]) => (
+                          <option key={k} value={k} style={{ background: "var(--card)", color: "var(--text)" }}>{v.label}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td style={SX.td}>{can("excluir") && <button onClick={async () => { if (confirm("Excluir este atendimento?")) { try { await api.deleteRecord(r.id); refresh(); } catch (e) { alert(e.message); } } }} className="btn-del" style={SX.btnDel}><Trash2 size={15} /></button>}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
-        <div className="panel">
-          <div className="panel-h"><h3>Metas do mês</h3></div>
-          {metas.length === 0 ? <div className="dash-empty">Nenhum vendedor cadastrado.</div> : metas.map((m) => (
-            <div className="meta-row" key={m.id}>
-              <div className="meta-head"><div className="nm"><span className="rank-av" style={{ width: 24, height: 24, fontSize: 10 }}>{iniciais(m.nome)}</span>{m.nome}{m.bateu && <span className="bateu">✓ bateu</span>}</div><div className="vals">{m.meta > 0 ? `${fmtMoney(m.vendidoMes)} / ${fmtMoney(m.meta)}` : "sem meta"}</div></div>
-              {m.meta > 0 && <div className="pbar"><div className={"pfill" + (m.bateu ? " done" : "")} style={{ width: m.pct + "%" }} /></div>}
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function StatIco({ ico: Ico, cor, val, money, lab }) {
-  return (
-    <div className="stat stat-ico">
-      <div className="badge" style={{ background: cor + "1f", color: cor }}><Ico /></div>
-      <div className="info"><div className={"val" + (money ? " money" : "")}>{val}</div><div className="lab">{lab}</div></div>
-    </div>
-  );
-}
-
-/* ============================================================
-   PÁGINA ANÁLISE IA
-   ============================================================ */
-function PaginaIA({ user, showToast }) {
-  const isGer = user.role === "gerente";
-  const [aba, setAba] = useState("equipe");
-  const [users, setUsers] = useState([]);
-  const [cards, setCards] = useState([]);
-  const [selVend, setSelVend] = useState("");
-  const [eq, setEq] = useState({ loading: false, res: null, erro: "" });
-  const [ind, setInd] = useState({ loading: false, res: null, erro: "" });
-
-  async function carregar() {
-    try {
-      setCards(await api.listCards());
-      if (isGer) {
-        const us = (await api.listUsers()).filter((u) => u.role === "vendedor" && u.ativo);
-        setUsers(us);
-        if (us[0]) setSelVend(us[0].id);
-      }
-    } catch (_) {}
-  }
-  useEffect(() => { carregar(); /* eslint-disable-next-line */ }, []);
-
-  const ativos = cards.filter((c) => !c.arquivado);
-  const nFechou = ativos.filter((c) => c.etapa === "fechou").length;
-  const conv = ativos.length ? Math.round((nFechou / ativos.length) * 100) : 0;
-  const totalV = ativos.filter((c) => c.etapa === "fechou").reduce((s, c) => s + (Number(c.valorFinal) || 0), 0);
-
-  async function gerarEquipe() {
-    setEq({ loading: true, res: null, erro: "" });
-    try { setEq({ loading: false, res: await api.iaEquipe(), erro: "" }); }
-    catch (e) { setEq({ loading: false, res: null, erro: e.message }); }
-  }
-  async function gerarIndividual(id) {
-    setInd({ loading: true, res: null, erro: "" });
-    try { setInd({ loading: false, res: await api.iaVendedor(id), erro: "" }); }
-    catch (e) { setInd({ loading: false, res: null, erro: e.message }); }
-  }
-
-  // VENDEDOR: só a própria análise
-  if (!isGer) {
-    return (
-      <div className="ia-page">
-        <div className="ia-hero">
-          <span className="ia-hero-badge"><I.spark style={{ width: 14, height: 14 }} /> Inteligência Artificial</span>
-          <h2>Análise do meu desempenho</h2>
-          <p>A IA olha seus números de vendas e o seu jeito de atender no WhatsApp (tom, rapidez, educação) e te dá uma leitura honesta com sugestões pra vender mais.</p>
-          <div className="ia-hero-stats"><span><b>{nFechou}</b> vendas</span><span className="sep">•</span><span><b>{fmtMoney(totalV)}</b> vendido</span><span className="sep">•</span><span><b>{conv}%</b> conversão</span></div>
-          <button className="btn-hero" onClick={() => gerarIndividual(user.id)} disabled={ind.loading}><I.spark style={{ width: 17, height: 17 }} /> {ind.loading ? "Analisando..." : "Gerar minha análise"}</button>
-        </div>
-        {ind.loading && <div className="ia-resultado-card"><div className="ia-loading">A IA está lendo seus números e conversas... ✨</div></div>}
-        {ind.erro && <div className="ia-resultado-card"><IAErro msg={ind.erro} /></div>}
-        {ind.res && <div className="ia-resultado-card"><div className="rc-h"><span className="rank-av">{iniciais(user.nome)}</span>{user.nome}</div><IAResultado res={ind.res} /></div>}
-      </div>
-    );
-  }
-
-  // GERENTE
-  return (
-    <div className="ia-page">
-      <div className="ia-tabs">
-        <button className={aba === "equipe" ? "on" : ""} onClick={() => setAba("equipe")}><I.users /> Equipe inteira</button>
-        <button className={aba === "individual" ? "on" : ""} onClick={() => setAba("individual")}><I.team /> Vendedor específico</button>
-      </div>
-
-      {aba === "equipe" && (
-        <>
-          <div className="ia-hero">
-            <span className="ia-hero-badge"><I.spark style={{ width: 14, height: 14 }} /> Inteligência Artificial</span>
-            <h2>Relatório gerencial da equipe</h2>
-            <p>A IA analisa volume de vendas, conversão, metas e o padrão de atendimento de cada vendedor, gerando uma leitura geral e recomendações pra apresentar à diretoria.</p>
-            <div className="ia-hero-stats"><span><b>{nFechou}</b> vendas</span><span className="sep">•</span><span><b>{users.length}</b> vendedores</span><span className="sep">•</span><span><b>{conv}%</b> conversão</span></div>
-            <button className="btn-hero" onClick={gerarEquipe} disabled={eq.loading}><I.spark style={{ width: 17, height: 17 }} /> {eq.loading ? "Analisando..." : "Gerar análise da equipe"}</button>
-          </div>
-          {eq.loading && <div className="ia-resultado-card"><div className="ia-loading">A IA está analisando o time... ✨</div></div>}
-          {eq.erro && <div className="ia-resultado-card"><IAErro msg={eq.erro} /></div>}
-          {eq.res && <div className="ia-resultado-card"><div className="rc-h">📊 Visão geral da equipe</div><IAResultado res={eq.res} /></div>}
-        </>
-      )}
-
-      {aba === "individual" && (
-        <>
-          <div className="ia-pick">
-            <label>Escolha o vendedor</label>
-            <select className="select" style={{ maxWidth: 320 }} value={selVend} onChange={(e) => { setSelVend(e.target.value); setInd({ loading: false, res: null, erro: "" }); }}>
-              {users.length === 0 && <option value="">Nenhum vendedor cadastrado</option>}
-              {users.map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
-            </select>
-          </div>
-          {selVend && (
-            <div className="ia-hero">
-              <span className="ia-hero-badge"><I.spark style={{ width: 14, height: 14 }} /> Inteligência Artificial</span>
-              <h2>Avaliação individual</h2>
-              <p>Análise dos resultados e da qualidade do atendimento de <b>{(users.find((u) => u.id === selVend) || {}).nome}</b>, com pontos fortes, pontos a melhorar e sugestões específicas.</p>
-              <button className="btn-hero" onClick={() => gerarIndividual(selVend)} disabled={ind.loading}><I.spark style={{ width: 17, height: 17 }} /> {ind.loading ? "Analisando..." : "Gerar análise do vendedor"}</button>
-            </div>
-          )}
-          {ind.loading && <div className="ia-resultado-card"><div className="ia-loading">Lendo números e conversas... ✨</div></div>}
-          {ind.erro && <div className="ia-resultado-card"><IAErro msg={ind.erro} /></div>}
-          {ind.res && <div className="ia-resultado-card"><div className="rc-h"><span className="rank-av">{iniciais(ind.res.vendedor || "")}</span>{ind.res.vendedor}</div><IAResultado res={ind.res} /></div>}
-        </>
       )}
     </div>
   );
 }
 
-/* ============================================================
-   IMPORTAR LISTA DE LEADS
-   ============================================================ */
-function parseLeads(texto) {
-  const linhas = (texto || "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-  const out = [];
-  linhas.forEach((l, idx) => {
-    const temNumero = /\d{8,}/.test(l.replace(/\D/g, ""));
-    if (idx === 0 && !temNumero && /(nome|telefone|phone|whats|numero|n[uú]mero|celular|contato)/i.test(l)) return;
-    const partes = l.split(/[,;\t]+/).map((p) => p.trim()).filter(Boolean);
-    let tel = "", nome = "";
-    partes.forEach((p) => {
-      const dig = p.replace(/\D/g, "");
-      if (dig.length >= 8 && !tel) tel = dig;
-      else if (!nome && dig.length < 8) nome = p;
-    });
-    if (tel || nome) out.push({ cliente: nome, telefone: tel });
-  });
-  return out;
-}
-
-function ImportarLeads({ isGer, users, meId, onClose, onImported }) {
-  const [origem, setOrigem] = useState("");
-  const [curso, setCurso] = useState("");
-  const [responsavelId, setResponsavelId] = useState(meId);
-  const [texto, setTexto] = useState("");
+// ============================================================= NOVO REGISTRO
+function NovoRegistro({ me, isAdmin, users, refresh, onDone, prefill }) {
+  const colabs = users.filter((u) => u.ativo);
+  const [form, setForm] = useState(() => ({
+    ...emptyForm(),
+    colaboradoraId: me.id,
+    ...(prefill ? { telefone: prefill.telefone || "", aluno: prefill.nome || "" } : {}),
+  }));
   const [saving, setSaving] = useState(false);
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  const valid = form.colaboradoraId && form.aluno && form.assunto;
 
-  function lerArquivo(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setTexto((t) => (t ? t + "\n" : "") + String(reader.result));
-    reader.readAsText(file);
-    e.target.value = "";
-  }
-
-  const leads = parseLeads(texto);
-
-  async function importar() {
-    if (leads.length === 0 || !origem.trim()) return;
+  async function save() {
+    if (!valid || saving) return;
     setSaving(true);
     try {
-      const r = await api.importCards({ leads, origem, curso, responsavelId });
-      onImported(r.criados);
+      await api.createRecord(form);
+      await refresh();
+      onDone();
     } catch (e) { alert(e.message); setSaving(false); }
   }
-
   return (
-    <div className="modal" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal-box" style={{ maxWidth: 540 }}>
-        <div className="mh"><h3>Importar lista de leads</h3><p>Cole os números (um por linha) ou suba um CSV. Cada linha vira um lead novo no funil.</p></div>
-        <div className="mb">
-          <div className="row2">
-            <div className="field"><label>Origem / Tag *</label><input className="input" value={origem} onChange={(e) => setOrigem(e.target.value)} placeholder="Ex: Lista Instagram Junho" autoFocus /></div>
-            <div className="field"><label>Curso (opcional)</label><input className="input" value={curso} onChange={(e) => setCurso(e.target.value)} placeholder="Ex: Eletrônica" /></div>
-          </div>
-          {isGer && (
-            <div className="field"><label>Atribuir a</label>
-              <select className="select" value={responsavelId} onChange={(e) => setResponsavelId(e.target.value)}>
-                {users.map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
+    <div>
+      <Header title="Novo Registro" subtitle="Registrar um atendimento ao aluno" />
+      <div style={SX.formCard} className="rise panel">
+        <div style={SX.formGrid}>
+          <F label="Data" req><input type="date" value={form.data} onChange={set("data")} style={SX.input} /></F>
+          <F label="Colaboradora" req>
+            {isAdmin ? (
+              <select value={form.colaboradoraId} onChange={set("colaboradoraId")} style={SX.input}>
+                {colabs.map((u) => <option key={u.id} value={u.id}>{u.nome}{u.role === "admin" ? " (você)" : ""}</option>)}
               </select>
-            </div>
-          )}
-          <div className="field">
-            <label>Números (um por linha — pode ser "Nome, telefone")</label>
-            <textarea className="textarea" style={{ minHeight: 130, fontFamily: "'JetBrains Mono', monospace", fontSize: 13 }} value={texto} onChange={(e) => setTexto(e.target.value)} placeholder={"João, 5544999998888\n5544988887777\nMaria; 44 90000-0000"} />
-          </div>
-          <label className="import-file">
-            <I.out style={{ width: 15, height: 15, transform: "rotate(180deg)" }} /> Subir arquivo CSV
-            <input type="file" accept=".csv,text/csv,text/plain" onChange={lerArquivo} hidden />
-          </label>
-          {leads.length > 0 && <div className="import-count">✓ {leads.length} número{leads.length === 1 ? "" : "s"} detectado{leads.length === 1 ? "" : "s"}</div>}
+            ) : <input value={me.nome} disabled style={{ ...SX.input, background: "#F4F4F6", color: "#8A8C90" }} />}
+          </F>
+          <F label="Status" req><select value={form.status} onChange={set("status")} style={SX.input}>{Object.entries(STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</select></F>
+          <F label="Nome do Aluno" req><input value={form.aluno} onChange={set("aluno")} placeholder="Nome completo" style={SX.input} /></F>
+          <F label="E-mail"><input type="email" value={form.email} onChange={set("email")} placeholder="email@exemplo.com" style={SX.input} /></F>
+          <F label="Telefone"><input value={form.telefone} onChange={set("telefone")} placeholder="(00) 00000-0000" style={SX.input} /></F>
+          <F label="Categoria do atendimento" req full>
+            <select value={form.assunto} onChange={set("assunto")} style={SX.input}>
+              <option value="">— selecione a categoria —</option>
+              {CATEGORIAS.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </F>
+          <F label="Solução Aplicada" full><textarea value={form.solucao} onChange={set("solucao")} placeholder="Descreva o que foi feito…" style={{ ...SX.input, minHeight: 82, resize: "vertical", paddingTop: 11 }} /></F>
+          <F label="Observações sobre o atendimento" full><textarea value={form.obs} onChange={set("obs")} placeholder="Escreva os detalhes do caso (ex: aluno não conseguia acessar a aula 3, redefini a senha…)" style={{ ...SX.input, minHeight: 70, resize: "vertical", paddingTop: 11 }} /></F>
         </div>
-        <div className="mf">
-          <button className="btn full" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-primary full" onClick={importar} disabled={saving || leads.length === 0 || !origem.trim()}>{saving ? "Importando..." : `Importar ${leads.length || ""} leads`}</button>
+        <div style={SX.formActions}>
+          <button onClick={onDone} className="btn-ghost" style={SX.btnGhost}>Cancelar</button>
+          <button onClick={save} disabled={!valid} className="btn-primary" style={{ ...SX.btnPrimary, opacity: valid ? 1 : 0.45, cursor: valid ? "pointer" : "not-allowed" }}><CheckCircle2 size={16} /> Salvar</button>
         </div>
       </div>
     </div>
   );
 }
+
+// ============================================================= EQUIPE & ACESSOS
+function Equipe({ refresh }) {
+  const [showNew, setShowNew] = useState(false);
+  const blank = { nome: "", login: "", senha: "", perms: { registrar: true, ver_todos: false, excluir: false, exportar: false, ia: false, gerir_usuarios: false } };
+  const [nf, setNf] = useState(blank);
+  const [users, setUsers] = useState([]);
+  const [counts, setCounts] = useState({});
+
+  async function load() {
+    try {
+      const { users } = await api.listUsers();
+      setUsers(users);
+    } catch (e) { /* sem permissão ou erro */ }
+    try {
+      const { records } = await api.listRecords();
+      const c = {};
+      records.forEach((r) => { c[r.colaboradoraId] = (c[r.colaboradoraId] || 0) + 1; });
+      setCounts(c);
+    } catch {}
+  }
+  useEffect(() => { load(); }, []);
+
+  async function addUser() {
+    if (!nf.nome.trim() || !nf.login.trim() || !nf.senha.trim()) return;
+    try {
+      await api.createUser({ nome: nf.nome.trim(), login: nf.login.trim(), senha: nf.senha.trim(), perms: nf.perms });
+      setNf(blank); setShowNew(false);
+      await load(); refresh && refresh();
+    } catch (e) { alert(e.message); }
+  }
+  async function togglePerm(u, perm) {
+    const novo = { ...u.perms, [perm]: !u.perms[perm] };
+    try { await api.updateUser(u.id, { perms: novo }); await load(); } catch (e) { alert(e.message); }
+  }
+  async function toggleActive(u) {
+    try { await api.updateUser(u.id, { ativo: !u.ativo }); await load(); refresh && refresh(); } catch (e) { alert(e.message); }
+  }
+  async function toggleAnalise(u) {
+    try { await api.updateUser(u.id, { excluirAnalise: !u.excluirAnalise }); await load(); refresh && refresh(); } catch (e) { alert(e.message); }
+  }
+  async function removeUser(id) {
+    if (!confirm("Remover este acesso?")) return;
+    try { await api.deleteUser(id); await load(); refresh && refresh(); } catch (e) { alert(e.message); }
+  }
+  const count = (id) => counts[id] || 0;
+
+  return (
+    <div>
+      <Header title="Equipe & Acessos" subtitle="Crie logins e defina o que cada colaboradora pode fazer">
+        <button onClick={() => setShowNew(!showNew)} className="btn-primary" style={SX.btnPrimary}><UserPlus size={16} /> Novo acesso</button>
+      </Header>
+
+      {showNew && (
+        <div style={SX.newUserCard} className="fade-in">
+          <div style={SX.newUserTitle}><UserPlus size={17} color="#6366F1" /> Criar acesso de colaboradora</div>
+          <div style={SX.newUserGrid}>
+            <F label="Nome" req><input value={nf.nome} onChange={(e) => setNf({ ...nf, nome: e.target.value })} placeholder="Nome da colaboradora" style={SX.input} /></F>
+            <F label="Usuário (login)" req><input value={nf.login} onChange={(e) => setNf({ ...nf, login: e.target.value })} placeholder="ex: ana.paula" style={SX.input} /></F>
+            <F label="Senha" req><input value={nf.senha} onChange={(e) => setNf({ ...nf, senha: e.target.value })} placeholder="senha inicial" style={SX.input} /></F>
+          </div>
+          <div style={SX.permLabel}>Permissões</div>
+          <div style={SX.permGrid}>
+            {Object.entries(PERM_LABELS).map(([k, label]) => (
+              <label key={k} style={SX.permChk}>
+                <input type="checkbox" checked={nf.perms[k]} onChange={() => setNf({ ...nf, perms: { ...nf.perms, [k]: !nf.perms[k] } })} style={SX.checkbox} />
+                {label}
+              </label>
+            ))}
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 18 }}>
+            <button onClick={() => setShowNew(false)} className="btn-ghost" style={SX.btnGhost}>Cancelar</button>
+            <button onClick={addUser} className="btn-primary" style={SX.btnPrimary}><CheckCircle2 size={16} /> Criar acesso</button>
+          </div>
+        </div>
+      )}
+
+      <div style={SX.userGrid}>
+        {users.map((u) => {
+          const admin = u.role === "admin";
+          return (
+            <div key={u.id} style={{ ...SX.userBlock, opacity: u.ativo ? 1 : 0.55 }} className="card-hover panel">
+              <div style={SX.userBlockHead}>
+                <div style={{ ...SX.userBlockAvatar, background: admin ? "linear-gradient(135deg,#6366F1 0%,#7C5CF0 55%,#4F46E5 100%)" : "linear-gradient(135deg,#7E8084,#6E7073)" }}>{initials(u.nome)}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={SX.userBlockName}>{u.nome} {admin && <Crown size={13} color="#6366F1" />}</div>
+                  <div style={SX.userBlockLogin}>@{u.login} · {count(u.id)} atendimento{count(u.id) !== 1 ? "s" : ""}</div>
+                </div>
+                {!admin && (
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button onClick={() => toggleActive(u)} className="btn-ghost" style={SX.miniBtn} title={u.ativo ? "Desativar" : "Ativar"}>{u.ativo ? <Eye size={14} /> : <EyeOff size={14} />}</button>
+                    <button onClick={() => removeUser(u.id)} className="btn-del" style={SX.miniBtnDel} title="Remover"><Trash2 size={14} /></button>
+                  </div>
+                )}
+              </div>
+              {admin ? (
+                <div style={SX.adminNote}><Shield size={13} /> Acesso total ao sistema</div>
+              ) : (
+                <>
+                  <div style={SX.permRow}>
+                    {Object.entries(PERM_LABELS).map(([k, label]) => (
+                      <button key={k} onClick={() => togglePerm(u, k)} title={label} style={{ ...SX.permPill, ...(u.perms[k] ? SX.permPillOn : {}) }}>
+                        {u.perms[k] ? <CheckCircle2 size={11} /> : <X size={11} />} {label}
+                      </button>
+                    ))}
+                  </div>
+                  <button onClick={() => toggleAnalise(u)} style={{ ...SX.analiseToggle, ...(u.excluirAnalise ? SX.analiseToggleOff : {}) }}
+                    title="Quem é gestão (gerente/diretor) pode ficar de fora da análise de produtividade da equipe">
+                    {u.excluirAnalise
+                      ? <><EyeOff size={12} /> Fora da análise de produtividade</>
+                      : <><BarChart3 size={12} /> Entra na análise de produtividade</>}
+                  </button>
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================= CONFIG
+function Config({ me, onUpdated }) {
+  const [nome, setNome] = useState(me.nome);
+  const [login, setLogin] = useState(me.login);
+  const [senha, setSenha] = useState("");
+  const [saved, setSaved] = useState(false);
+  const [err, setErr] = useState("");
+
+  async function save() {
+    setErr("");
+    try {
+      const { user } = await api.updateMe({ nome, login, senha });
+      onUpdated && onUpdated(user);
+      setSaved(true); setSenha(""); setTimeout(() => setSaved(false), 2200);
+    } catch (e) { setErr(e.message); }
+  }
+  return (
+    <div>
+      <Header title="Configurações" subtitle="Seus dados de acesso de administradora" />
+      <div style={SX.formCard} className="rise panel">
+        <div style={SX.formGrid}>
+          <F label="Seu nome" full><input value={nome} onChange={(e) => setNome(e.target.value)} style={SX.input} /></F>
+          <F label="Usuário (login)"><input value={login} onChange={(e) => setLogin(e.target.value)} style={SX.input} /></F>
+          <F label="Nova senha"><input type="text" value={senha} onChange={(e) => setSenha(e.target.value)} placeholder="deixe vazio para manter" style={SX.input} /></F>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 22, flexWrap: "wrap", gap: 12 }}>
+          {saved ? <span style={SX.savedMsg}><CheckCircle2 size={15} /> Alterações salvas!</span> : err ? <span style={{ color: "#E5484D", fontSize: 14, fontWeight: 600 }}>{err}</span> : <span />}
+          <button onClick={save} className="btn-primary" style={SX.btnPrimary}><CheckCircle2 size={16} /> Salvar alterações</button>
+        </div>
+      </div>
+      <div style={SX.configNote}>
+        <Shield size={15} color="#6366F1" />
+        <span>Como administradora, você tem acesso total: dashboard, análise por IA, gestão de toda a equipe e exportações. Use <strong>Equipe & Acessos</strong> para liberar logins às colaboradoras com permissões específicas.</span>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================= TAREFAS
+const PRIORIDADE = {
+  alta: { label: "Alta", color: "#E5484D", bg: "rgba(229,72,77,0.12)" },
+  media: { label: "Média", color: "#6366F1", bg: "rgba(99,102,241,0.13)" },
+  baixa: { label: "Baixa", color: "#12A150", bg: "rgba(18,161,80,0.12)" },
+};
+
+function Tarefas({ me, isAdmin, can, users }) {
+  const podeAtribuir = isAdmin || can("gerir_usuarios");
+  const [tasks, setTasks] = useState([]);
+  const [showNew, setShowNew] = useState(false);
+  const [filtro, setFiltro] = useState("pendentes"); // pendentes | concluidas | todas
+  const blank = { titulo: "", descricao: "", responsavelId: "", prazo: "", prioridade: "media" };
+  const [nf, setNf] = useState(blank);
+
+  const colabs = users.filter((u) => u.ativo !== false);
+
+  async function load() {
+    try { const { tasks } = await api.listTasks(); setTasks(tasks); } catch (e) { /* */ }
+  }
+  useEffect(() => { load(); }, []);
+
+  async function criar() {
+    if (!nf.titulo.trim() || !nf.responsavelId) return;
+    try {
+      await api.createTask(nf);
+      setNf(blank); setShowNew(false); await load();
+    } catch (e) { alert(e.message); }
+  }
+  async function toggle(t) {
+    try { await api.updateTask(t.id, { concluida: !t.concluida }); await load(); } catch (e) { alert(e.message); }
+  }
+  async function remover(id) {
+    if (!confirm("Excluir esta tarefa?")) return;
+    try { await api.deleteTask(id); await load(); } catch (e) { alert(e.message); }
+  }
+
+  const hoje = new Date().toISOString().slice(0, 10);
+  const filtradas = tasks.filter((t) => {
+    if (filtro === "pendentes") return !t.concluida;
+    if (filtro === "concluidas") return t.concluida;
+    return true;
+  });
+  const pendentes = tasks.filter((t) => !t.concluida).length;
+  const atrasadas = tasks.filter((t) => !t.concluida && t.prazo && t.prazo < hoje).length;
+
+  return (
+    <div>
+      <Header title="Tarefas" subtitle={podeAtribuir ? "Atribua e acompanhe as tarefas da equipe" : "Suas tarefas"}>
+        {podeAtribuir && <button onClick={() => setShowNew(!showNew)} className="btn-primary" style={SX.btnPrimary}><PlusCircle size={16} /> Nova tarefa</button>}
+      </Header>
+
+      {/* mini stats */}
+      <div style={SX.taskStats}>
+        <div style={SX.taskStat}><ListTodo size={17} color="#6366F1" /> <strong>{pendentes}</strong> pendente{pendentes !== 1 ? "s" : ""}</div>
+        {atrasadas > 0 && <div style={{ ...SX.taskStat, color: "#E5484D" }}><AlertTriangle size={16} /> <strong>{atrasadas}</strong> atrasada{atrasadas !== 1 ? "s" : ""}</div>}
+      </div>
+
+      {showNew && podeAtribuir && (
+        <div style={SX.newUserCard} className="fade-in panel">
+          <div style={SX.newUserTitle}><ListTodo size={17} color="#6366F1" /> Nova tarefa</div>
+          <div style={SX.formGrid}>
+            <F label="Título" req full><input value={nf.titulo} onChange={(e) => setNf({ ...nf, titulo: e.target.value })} placeholder="Ex: Entrar em contato com alunos pendentes" style={SX.input} /></F>
+            <F label="Responsável" req>
+              <select value={nf.responsavelId} onChange={(e) => setNf({ ...nf, responsavelId: e.target.value })} style={SX.input}>
+                <option value="">Selecione...</option>
+                {colabs.map((u) => <option key={u.id} value={u.id}>{u.nome}{u.role === "admin" ? " (você)" : ""}</option>)}
+              </select>
+            </F>
+            <F label="Prazo"><input type="date" value={nf.prazo} onChange={(e) => setNf({ ...nf, prazo: e.target.value })} style={SX.input} /></F>
+            <F label="Prioridade">
+              <select value={nf.prioridade} onChange={(e) => setNf({ ...nf, prioridade: e.target.value })} style={SX.input}>
+                <option value="alta">Alta</option>
+                <option value="media">Média</option>
+                <option value="baixa">Baixa</option>
+              </select>
+            </F>
+            <F label="Descrição (opcional)" full><textarea value={nf.descricao} onChange={(e) => setNf({ ...nf, descricao: e.target.value })} placeholder="Detalhes da tarefa…" style={{ ...SX.input, minHeight: 70, resize: "vertical", paddingTop: 11 }} /></F>
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 18 }}>
+            <button onClick={() => setShowNew(false)} className="btn-ghost" style={SX.btnGhost}>Cancelar</button>
+            <button onClick={criar} className="btn-primary" style={SX.btnPrimary}><CheckCircle2 size={16} /> Criar tarefa</button>
+          </div>
+        </div>
+      )}
+
+      {/* filtros */}
+      <div style={{ display: "flex", gap: 8, margin: "4px 0 18px" }}>
+        {[["pendentes", "Pendentes"], ["concluidas", "Concluídas"], ["todas", "Todas"]].map(([v, l]) => (
+          <button key={v} onClick={() => setFiltro(v)} className="filter-chip" style={{ ...SX.filterChip, ...(filtro === v ? SX.filterChipOn : {}) }}>{l}</button>
+        ))}
+      </div>
+
+      {filtradas.length === 0 ? (
+        <div style={SX.noRes} className="panel"><ListTodo size={26} color="#C9CACE" /><p style={{ margin: "10px 0 0", color: "#A0A2A6" }}>Nenhuma tarefa {filtro === "concluidas" ? "concluída" : filtro === "pendentes" ? "pendente" : ""} por aqui.</p></div>
+      ) : (
+        <div style={SX.taskList}>
+          {filtradas.map((t) => {
+            const pr = PRIORIDADE[t.prioridade] || PRIORIDADE.media;
+            const atrasada = !t.concluida && t.prazo && t.prazo < hoje;
+            const podeMarcar = t.responsavelId === me.id || podeAtribuir;
+            return (
+              <div key={t.id} style={{ ...SX.taskCard, opacity: t.concluida ? 0.62 : 1 }} className="task-card panel">
+                <button onClick={() => podeMarcar && toggle(t)} className="task-check" style={{ ...SX.taskCheck, ...(t.concluida ? SX.taskCheckOn : {}), cursor: podeMarcar ? "pointer" : "default" }} title={t.concluida ? "Concluída" : "Marcar como concluída"}>
+                  {t.concluida ? <CheckCircle2 size={20} /> : <Circle size={20} />}
+                </button>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ ...SX.taskTitle, textDecoration: t.concluida ? "line-through" : "none" }}>{t.titulo}</div>
+                  {t.descricao && <div style={SX.taskDesc}>{t.descricao}</div>}
+                  <div style={SX.taskMeta}>
+                    {podeAtribuir && <span style={SX.taskMetaItem}><UserCircle size={13} /> {nameOf(users, t.responsavelId)}</span>}
+                    {t.prazo && <span style={{ ...SX.taskMetaItem, color: atrasada ? "#E5484D" : undefined, fontWeight: atrasada ? 700 : 500 }}><CalendarClock size={13} /> {fmtDate(t.prazo)}{atrasada ? " (atrasada)" : ""}</span>}
+                    <span style={{ ...SX.taskPill, background: pr.bg, color: pr.color }}><Flag size={11} /> {pr.label}</span>
+                  </div>
+                </div>
+                {podeAtribuir && <button onClick={() => remover(t.id)} className="btn-del" style={SX.btnDel}><Trash2 size={15} /></button>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================= WHATSAPP
+// componente que baixa e exibe uma mídia (áudio ou imagem) recebida
+function MidiaMsg({ msg, chatId }) {
+  const [carregando, setCarregando] = useState(false);
+  const [dados, setDados] = useState(null);   // { base64, mimetype, tipoMidia }
+  const [erro, setErro] = useState(false);
+
+  async function baixar() {
+    if (carregando || dados) return;
+    setCarregando(true);
+    setErro(false);
+    try {
+      const r = await api.waBaixarMidia(chatId, msg.mediaMsgId);
+      setDados(r);
+    } catch (e) { setErro(true); }
+    setCarregando(false);
+  }
+
+  // áudio e imagem baixam automaticamente ao aparecer
+  useEffect(() => { baixar(); }, []);
+
+  if (carregando) return <span style={{ fontSize: 13, opacity: 0.7 }}>⏳ Carregando {msg.tipoMidia === "audio" ? "áudio" : "imagem"}…</span>;
+  if (erro) return (
+    <span style={{ fontSize: 13 }}>
+      {msg.texto} <button onClick={baixar} style={{ border: "none", background: "transparent", color: "#4F46E5", cursor: "pointer", fontWeight: 700, fontSize: 12 }}>tentar de novo</button>
+    </span>
+  );
+  if (!dados) return <span style={SX.waBubbleText}>{msg.texto || "—"}</span>;
+
+  const src = `data:${dados.mimetype || (msg.tipoMidia === "audio" ? "audio/ogg" : "image/jpeg")};base64,${dados.base64}`;
+  if (msg.tipoMidia === "audio") {
+    return <audio controls src={src} style={{ maxWidth: 240, height: 40 }} />;
+  }
+  if (msg.tipoMidia === "image") {
+    return <img src={src} alt="imagem" style={{ maxWidth: 240, maxHeight: 280, borderRadius: 8, display: "block", cursor: "pointer" }} onClick={() => window.open(src, "_blank")} />;
+  }
+  return <span style={SX.waBubbleText}>{msg.texto || "—"}</span>;
+}
+
+function WhatsApp({ me, isAdmin, can, goNovo }) {
+  const [chats, setChats] = useState([]);
+  const [sel, setSel] = useState(null);          // número selecionado
+  const [chat, setChat] = useState(null);        // conversa aberta
+  const [texto, setTexto] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [enviando, setEnviando] = useState(false);
+  const [showConfig, setShowConfig] = useState(false);
+  const [cfg, setCfg] = useState(null);
+  const [busca, setBusca] = useState("");              // busca de aluno
+  const [filtroInst, setFiltroInst] = useState("");    // filtro por atendente (instância)
+  const [showFiltro, setShowFiltro] = useState(false); // menu do funil de filtro
+  const [novaConv, setNovaConv] = useState(null);      // modal de nova conversa { numero, texto, instance }
+  const [enviandoNova, setEnviandoNova] = useState(false);
+  const [instancias, setInstancias] = useState([]);    // lista de atendentes p/ o filtro
+  const [minhaInst, setMinhaInst] = useState(null);    // { configurado, instancias } da própria pessoa
+  const [meuQr, setMeuQr] = useState(null);            // modal de QR da colaboradora
+  const [showEmoji, setShowEmoji] = useState(false);   // seletor de emoji
+  const [gravando, setGravando] = useState(false);     // gravando áudio
+  const [enviandoMidia, setEnviandoMidia] = useState(false);
+  const msgEndRef = useRef(null);                      // âncora p/ rolar até o fim
+  const msgScrollRef = useRef(null);                   // container das mensagens
+  const fileRef = useRef(null);                        // input de arquivo escondido
+  const mediaRecRef = useRef(null);                    // MediaRecorder
+  const audioChunksRef = useRef([]);                   // pedaços do áudio
+  const podeConfigurar = isAdmin || can("gerir_whatsapp");
+
+  async function loadChats() {
+    try {
+      const r = await api.waListChats();    // sempre traz todas; filtro é local
+      setChats(r.chats || []);
+      setInstancias(r.instancias || []);
+    } catch (e) { /* silencioso */ }
+    setLoading(false);
+  }
+  async function loadCfg() {
+    if (!podeConfigurar) return;
+    try { const r = await api.waGetConfig(); setCfg(r.config); } catch {}
+  }
+  async function loadMinhaInst() {
+    if (podeConfigurar) return;   // gerente usa a config completa
+    try { const r = await api.waMinhaInstancia(); setMinhaInst(r); } catch {}
+  }
+
+  useEffect(() => {
+    loadChats(); loadCfg(); loadMinhaInst();
+    const t = setInterval(loadChats, 8000);   // atualiza a cada 8s
+    return () => clearInterval(t);
+  }, []);
+
+  // colaboradora conecta o próprio WhatsApp
+  async function conectarMeu() {
+    const inst = minhaInst?.instancias?.[0]?.instance;
+    if (!inst) return;
+    setMeuQr({ instance: inst, qr: null, status: "connecting" });
+    try {
+      const r = await api.waConnectInstance(inst);
+      if (r.status === "open") setMeuQr({ instance: inst, qr: null, status: "open" });
+      else if (r.qr) {
+        setMeuQr({ instance: inst, qr: r.qr, status: "connecting" });
+        // fica checando status
+        let n = 0;
+        const timer = setInterval(async () => {
+          n++;
+          try {
+            const s = await api.waInstanceStatus(inst);
+            if (s.state === "open") { clearInterval(timer); setMeuQr((m) => m ? { ...m, status: "open" } : m); loadChats(); }
+          } catch {}
+          if (n > 40) clearInterval(timer);
+        }, 3000);
+      } else {
+        setMeuQr({ instance: inst, qr: null, status: "connecting", aviso: r.aviso || "Aguardando QR…" });
+        setTimeout(conectarMeu, 3500);
+      }
+    } catch (e) { alert(e.message); setMeuQr(null); }
+  }
+
+  // aplica filtro de atendente + busca de aluno (tudo local, instantâneo)
+  const chatsFiltrados = chats.filter((c) => {
+    if (filtroInst && c.instance !== filtroInst) return false;
+    if (busca.trim()) {
+      const q = busca.trim().toLowerCase();
+      const nome = (c.nome || "").toLowerCase();
+      const num = (c.numero || "").toLowerCase();
+      if (!nome.includes(q) && !num.includes(q)) return false;
+    }
+    return true;
+  });
+
+  async function abrir(chatId) {
+    setSel(chatId);
+    try {
+      const r = await api.waGetChat(chatId);
+      setChat(r.chat);
+      setChats((cs) => cs.map((c) => c.id === chatId ? { ...c, naoLidas: 0 } : c));
+    } catch (e) { alert(e.message); }
+  }
+
+  function fecharConversa() { setSel(null); setChat(null); }
+
+  async function enviar() {
+    if (!texto.trim() || enviando || !sel) return;
+    setEnviando(true);
+    try {
+      await api.waSend(sel, texto.trim());
+      setTexto("");
+      const r = await api.waGetChat(sel);
+      setChat(r.chat);
+    } catch (e) { alert(e.message); }
+    setEnviando(false);
+  }
+
+  // anexar arquivo (imagem/documento/vídeo)
+  function escolherArquivo() { if (fileRef.current) fileRef.current.click(); }
+  async function enviarArquivo(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";   // permite re-selecionar o mesmo arquivo depois
+    if (!file || !sel) return;
+    if (file.size > 16 * 1024 * 1024) { alert("Arquivo muito grande (máx. 16MB)."); return; }
+    setEnviandoMidia(true);
+    try {
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const tipo = file.type.startsWith("image/") ? "image" : file.type.startsWith("video/") ? "video" : "document";
+      await api.waSendMedia({ id: sel, base64, mediatype: tipo, mimetype: file.type, filename: file.name });
+      const r = await api.waGetChat(sel);
+      setChat(r.chat);
+    } catch (err) { alert(err.message || "falha ao enviar arquivo"); }
+    setEnviandoMidia(false);
+  }
+
+  // gravar áudio
+  async function toggleGravacao() {
+    if (gravando) {
+      // parar
+      try { mediaRecRef.current?.stop(); } catch {}
+      return;
+    }
+    if (!sel) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const rec = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+      rec.ondataavailable = (ev) => { if (ev.data.size > 0) audioChunksRef.current.push(ev.data); };
+      rec.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        setGravando(false);
+        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        if (blob.size < 1000) return;  // gravação vazia
+        setEnviandoMidia(true);
+        try {
+          const base64 = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+          await api.waSendAudio(sel, base64);
+          const r = await api.waGetChat(sel);
+          setChat(r.chat);
+        } catch (err) { alert(err.message || "falha ao enviar áudio"); }
+        setEnviandoMidia(false);
+      };
+      mediaRecRef.current = rec;
+      rec.start();
+      setGravando(true);
+    } catch (err) {
+      alert("Não consegui acessar o microfone. Verifique a permissão do navegador.");
+    }
+  }
+
+  function criarAtendimento() {
+    if (!chat) return;
+    goNovo({ telefone: chat.numero, nome: chat.nome !== chat.numero ? chat.nome : "" });
+  }
+
+  // iniciar nova conversa
+  function abrirNovaConv() {
+    // escolhe instância padrão: a do filtro ativo, ou a 1ª disponível
+    const instPadrao = filtroInst || instancias[0]?.instance || "";
+    setNovaConv({ numero: "", texto: "", instance: instPadrao });
+  }
+  async function enviarNovaConv() {
+    if (!novaConv || enviandoNova) return;
+    if (!novaConv.numero.trim() || !novaConv.texto.trim()) { alert("Preencha o número e a mensagem."); return; }
+    setEnviandoNova(true);
+    try {
+      const r = await api.waNovaConversa(novaConv.instance, novaConv.numero, novaConv.texto);
+      setNovaConv(null);
+      await loadChats();
+      if (r.id) abrir(r.id);   // já abre a conversa criada
+    } catch (e) { alert(e.message); }
+    setEnviandoNova(false);
+  }
+
+  // tecla ESC fecha a conversa aberta
+  useEffect(() => {
+    function onKey(e) { if (e.key === "Escape") fecharConversa(); }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // auto-atualiza a conversa aberta (novas mensagens) a cada 5s
+  useEffect(() => {
+    if (!sel) return;
+    const t = setInterval(async () => {
+      try { const r = await api.waGetChat(sel); setChat(r.chat); } catch {}
+    }, 5000);
+    return () => clearInterval(t);
+  }, [sel]);
+
+  // rola até a última mensagem sempre que a conversa muda/cresce
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (msgScrollRef.current) {
+        msgScrollRef.current.scrollTop = msgScrollRef.current.scrollHeight;
+      }
+    }, 80);
+    return () => clearTimeout(t);
+  }, [chat?.id, chat?.mensagens?.length]);
+
+  // adiciona um emoji ao texto
+  function addEmoji(e) {
+    setTexto((t) => t + e);
+  }
+
+  // ---- tela de configuração (só admin) ----
+  if (showConfig && podeConfigurar) {
+    return <WhatsAppConfig cfg={cfg} onBack={() => { setShowConfig(false); loadCfg(); }} />;
+  }
+
+  return (
+    <div>
+      <Header title="WhatsApp" subtitle="Conversas dos alunos em tempo real">
+        <button onClick={loadChats} className="btn-ghost" style={SX.btnGhost} title="Atualizar">
+          <RefreshCw size={15} /> Atualizar
+        </button>
+        {/* colaboradora: conectar o próprio WhatsApp */}
+        {!podeConfigurar && minhaInst?.instancias?.length > 0 && (
+          <button onClick={conectarMeu} className="btn-primary" style={SX.btnPrimary}>
+            <MessageCircle size={15} /> Conectar meu WhatsApp
+          </button>
+        )}
+        {podeConfigurar && (
+          <button onClick={() => setShowConfig(true)} className="btn-ghost" style={SX.btnGhost}>
+            <Link2 size={15} /> Configurar conexão
+          </button>
+        )}
+      </Header>
+
+      {/* aviso para colaboradora sem instância vinculada */}
+      {!podeConfigurar && minhaInst && minhaInst.instancias.length === 0 && (
+        <div style={SX.waNoInst}>
+          <AlertCircle size={16} style={{ color: "#4F46E5", flexShrink: 0 }} />
+          <span>Seu WhatsApp ainda não foi configurado pela gerente. Peça para ela vincular seu número.</span>
+        </div>
+      )}
+
+      <div style={SX.waWrap} className="panel">
+        {/* LISTA DE CONVERSAS */}
+        <div style={SX.waList}>
+          <div style={SX.waListHead}>
+            <MessageCircle size={16} /> Conversas
+            <span style={SX.waCount}>{chatsFiltrados.length}</span>
+            <div style={{ display: "flex", gap: 6, marginLeft: "auto", alignItems: "center" }}>
+              {/* botão NOVA CONVERSA */}
+              <button onClick={abrirNovaConv} style={SX.waNovaBtn} title="Iniciar nova conversa">
+                <PlusSquare size={16} />
+              </button>
+              {/* FUNIL de filtro por atendente */}
+              {instancias.length >= 1 && (
+                <div style={{ position: "relative" }}>
+                  <button onClick={() => setShowFiltro((v) => !v)}
+                    style={{ ...SX.waFunil, ...(filtroInst ? SX.waFunilOn : {}) }}
+                    title="Filtrar por atendente">
+                    <Filter size={16} />
+                    {filtroInst && <span style={SX.waFunilDot} />}
+                  </button>
+                  {showFiltro && (
+                    <>
+                      <div style={SX.waFunilBackdrop} onClick={() => setShowFiltro(false)} />
+                      <div style={SX.waFunilMenu}>
+                        <div style={SX.waFunilTitle}>Ver conversas de:</div>
+                        <button onClick={() => { setFiltroInst(""); setShowFiltro(false); }}
+                          style={{ ...SX.waFunilItem, ...(filtroInst === "" ? SX.waFunilItemOn : {}) }}>
+                          <Users size={15} /> Todos os atendentes
+                        {filtroInst === "" && <CheckCircle2 size={15} style={{ marginLeft: "auto", color: "#6366F1" }} />}
+                      </button>
+                      {instancias.map((i) => (
+                        <button key={i.instance} onClick={() => { setFiltroInst(i.instance); setShowFiltro(false); }}
+                          style={{ ...SX.waFunilItem, ...(filtroInst === i.instance ? SX.waFunilItemOn : {}) }}>
+                          <div style={SX.waFunilAvatar}>{(i.colaboradoraNome || i.instance).slice(0, 1).toUpperCase()}</div>
+                          {i.colaboradoraNome || i.instance}
+                          {filtroInst === i.instance && <CheckCircle2 size={15} style={{ marginLeft: "auto", color: "#6366F1" }} />}
+                        </button>
+                      ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* etiqueta do filtro ativo */}
+          {filtroInst && (
+            <div style={SX.waFiltroAtivo}>
+              <span>Mostrando: <b>{instancias.find((i) => i.instance === filtroInst)?.colaboradoraNome || filtroInst}</b></span>
+              <button onClick={() => setFiltroInst("")} style={SX.waFiltroLimpar} title="Limpar filtro"><X size={13} /> limpar</button>
+            </div>
+          )}
+
+          {/* busca de aluno */}
+          <div style={SX.waSearchWrap}>
+            <Search size={15} style={{ color: "var(--muted)", flexShrink: 0 }} />
+            <input
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              placeholder="Buscar aluno por nome ou número…"
+              style={SX.waSearchInput}
+            />
+            {busca && <button onClick={() => setBusca("")} style={SX.waSearchClear}><X size={14} /></button>}
+          </div>
+
+          <div style={SX.waListScroll}>
+            {loading ? (
+              <div style={SX.waEmpty}>Carregando…</div>
+            ) : chatsFiltrados.length === 0 ? (
+              <div style={SX.waEmpty}>
+                <MessageCircle size={32} style={{ opacity: 0.3, marginBottom: 8 }} />
+                <div>{chats.length === 0 ? "Nenhuma conversa ainda." : "Nenhuma conversa encontrada."}</div>
+                <div style={{ fontSize: 12, opacity: 0.6, marginTop: 4 }}>
+                  {chats.length === 0 ? "As mensagens aparecem aqui quando os alunos escreverem." : "Tente outro filtro ou busca."}
+                </div>
+              </div>
+            ) : (
+              chatsFiltrados.map((c) => (
+                <button key={c.id} onClick={() => abrir(c.id)}
+                  className="wa-chat-item"
+                  style={{ ...SX.waChatItem, ...(sel === c.id ? SX.waChatItemActive : {}) }}>
+                  <div style={{ ...SX.waAvatar, background: c.ehGrupo ? "linear-gradient(135deg,#5B8DB8,#3E6A92)" : "linear-gradient(135deg,#6366F1 0%,#7C5CF0 55%,#4F46E5 100%)" }}>
+                    {c.ehGrupo ? <Users size={20} /> : (c.nome || c.numero).slice(0, 2).toUpperCase()}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={SX.waChatName}>{c.ehGrupo ? "👥 " : ""}{c.nome || c.numero}</div>
+                    <div style={SX.waChatPreview}>{c.ultima || "—"}</div>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                    {c.naoLidas > 0 && <span style={SX.waBadge}>{c.naoLidas}</span>}
+                    {c.atendente && <span style={SX.waAtendenteTag}>{c.atendente}</span>}
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* CONVERSA ABERTA */}
+        <div style={SX.waConvo}>
+          {!chat ? (
+            <div style={SX.waConvoEmpty}>
+              <MessageCircle size={48} style={{ opacity: 0.2 }} />
+              <div style={{ marginTop: 12, opacity: 0.6 }}>Selecione uma conversa para ver as mensagens</div>
+            </div>
+          ) : (
+            <>
+              <div style={SX.waConvoHead}>
+                <div style={SX.waAvatar}>{(chat.nome || chat.numero).slice(0, 2).toUpperCase()}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={SX.waChatName}>{chat.nome || chat.numero}</div>
+                  <div style={SX.waChatPreview}>
+                    <Phone size={11} style={{ verticalAlign: "middle" }} /> {chat.numero}
+                    {(() => {
+                      const inst = instancias.find((i) => i.instance === chat.instance);
+                      const nomeAtendente = inst?.colaboradoraNome || chat.instance;
+                      return nomeAtendente ? <span style={SX.waConvoAtendente}>• Atendente: {nomeAtendente}</span> : null;
+                    })()}
+                  </div>
+                </div>
+                {can("registrar") && (
+                  <button onClick={criarAtendimento} className="btn-primary" style={SX.btnPrimarySm}>
+                    <PlusSquare size={15} /> Registrar atendimento
+                  </button>
+                )}
+                <button onClick={fecharConversa} style={SX.waCloseConvo} title="Fechar (ESC)" type="button">
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div style={SX.waMessages} className="wa-messages" ref={msgScrollRef}>
+                {chat.mensagens.length === 0 ? (
+                  <div style={SX.waEmpty}>Sem mensagens nesta conversa.</div>
+                ) : (
+                  chat.mensagens.map((m, i) => {
+                    const prev = chat.mensagens[i - 1];
+                    const agrupado = prev && prev.fromMe === m.fromMe;   // mesma "pessoa" seguida
+                    return (
+                      <div key={m.id} style={{ ...SX.waBubbleRow, justifyContent: m.fromMe ? "flex-end" : "flex-start", marginTop: agrupado ? 2 : 10 }}>
+                        <div style={{ ...SX.waBubble, ...(m.fromMe ? SX.waBubbleMe : SX.waBubbleThem) }}>
+                          {(!m.fromMe && m.tipoMidia && (m.tipoMidia === "audio" || m.tipoMidia === "image")) ? (
+                            <MidiaMsg msg={m} chatId={sel} fromMe={m.fromMe} />
+                          ) : (
+                            <span style={SX.waBubbleText}>{m.texto || "—"}</span>
+                          )}
+                          <span style={{ ...SX.waTime, color: m.fromMe ? "rgba(255,255,255,0.85)" : "var(--muted)" }}>
+                            {new Date(m.ts).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+                <div ref={msgEndRef} />
+              </div>
+
+              {showEmoji && (
+                <div style={SX.emojiPanel}>
+                  {EMOJIS.map((e) => (
+                    <button key={e} onClick={() => addEmoji(e)} style={SX.emojiBtn} type="button">{e}</button>
+                  ))}
+                </div>
+              )}
+
+              <div style={SX.waInputBar}>
+                <button onClick={() => setShowEmoji((v) => !v)} style={SX.waIconBtn} title="Emojis" type="button">
+                  <Smile size={22} />
+                </button>
+                <button onClick={escolherArquivo} disabled={enviandoMidia} style={SX.waIconBtn} title="Anexar arquivo" type="button">
+                  <Paperclip size={21} />
+                </button>
+                <input ref={fileRef} type="file" onChange={enviarArquivo} style={{ display: "none" }}
+                  accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt,.zip" />
+                <input
+                  value={texto}
+                  onChange={(e) => setTexto(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") { enviar(); setShowEmoji(false); } }}
+                  placeholder={gravando ? "Gravando áudio…" : enviandoMidia ? "Enviando…" : "Escreva uma mensagem…"}
+                  disabled={gravando}
+                  style={SX.waInput}
+                />
+                {texto.trim() ? (
+                  <button onClick={() => { enviar(); setShowEmoji(false); }} disabled={enviando} style={SX.waSendBtn} title="Enviar">
+                    <Send size={18} />
+                  </button>
+                ) : (
+                  <button onClick={toggleGravacao} disabled={enviandoMidia} style={{ ...SX.waSendBtn, ...(gravando ? SX.waRecBtn : {}) }} title={gravando ? "Parar e enviar" : "Gravar áudio"}>
+                    {gravando ? <Square size={18} /> : <Mic size={20} />}
+                  </button>
+                )}
+              </div>
+              {gravando && (
+                <div style={SX.waRecBar}>
+                  <span style={SX.waRecDot} /> Gravando… toque no quadrado pra enviar
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* MODAL NOVA CONVERSA */}
+      {novaConv && (
+        <div style={SX.qrOverlay} onClick={(e) => { if (e.target === e.currentTarget) setNovaConv(null); }}>
+          <div style={{ ...SX.qrCard, maxWidth: 440 }}>
+            <button onClick={() => setNovaConv(null)} style={SX.qrClose}><X size={18} /></button>
+            <h3 style={{ margin: "0 0 4px", color: "var(--text)" }}>Nova conversa</h3>
+            <p style={{ color: "var(--muted)", fontSize: 13, marginTop: 0, marginBottom: 18 }}>
+              Mande a primeira mensagem para um número novo.
+            </p>
+            <div style={{ display: "grid", gap: 14 }}>
+              {/* escolher de qual WhatsApp enviar (se tiver mais de um e for gerente) */}
+              {instancias.length > 1 && (
+                <div>
+                  <label style={SX.waCfgLabel}>Enviar pelo WhatsApp de:</label>
+                  <select value={novaConv.instance} onChange={(e) => setNovaConv({ ...novaConv, instance: e.target.value })} style={SX.input}>
+                    {instancias.map((i) => <option key={i.instance} value={i.instance}>{i.colaboradoraNome || i.instance}</option>)}
+                  </select>
+                </div>
+              )}
+              <div>
+                <label style={SX.waCfgLabel}>Número (com DDD)</label>
+                <input value={novaConv.numero} onChange={(e) => setNovaConv({ ...novaConv, numero: e.target.value })}
+                  placeholder="Ex: 5544999998888" style={SX.input} />
+                <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 5 }}>
+                  Use código do país + DDD + número. Ex: 55 44 99999-8888 → 5544999998888
+                </div>
+              </div>
+              <div>
+                <label style={SX.waCfgLabel}>Mensagem</label>
+                <textarea value={novaConv.texto} onChange={(e) => setNovaConv({ ...novaConv, texto: e.target.value })}
+                  placeholder="Escreva a primeira mensagem…" rows={3}
+                  style={{ ...SX.input, height: "auto", paddingTop: 10, resize: "vertical" }} />
+              </div>
+              <button onClick={enviarNovaConv} disabled={enviandoNova} className="btn-primary" style={SX.btnPrimary}>
+                {enviandoNova ? "Enviando…" : <><Send size={15} /> Enviar e abrir conversa</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL QR DA COLABORADORA */}
+      {meuQr && (
+        <div style={SX.qrOverlay} onClick={(e) => { if (e.target === e.currentTarget) setMeuQr(null); }}>
+          <div style={SX.qrCard}>
+            <button onClick={() => setMeuQr(null)} style={SX.qrClose}><X size={18} /></button>
+            {meuQr.status === "open" ? (
+              <div style={{ textAlign: "center", padding: "20px 10px" }}>
+                <div style={SX.qrSuccessIcon}><CheckCircle2 size={40} /></div>
+                <h3 style={{ margin: "16px 0 6px", color: "var(--text)" }}>Conectado! 🎉</h3>
+                <p style={{ color: "var(--muted)", fontSize: 14, margin: 0 }}>Seu WhatsApp foi conectado com sucesso.</p>
+                <button onClick={() => setMeuQr(null)} className="btn-primary" style={{ ...SX.btnPrimary, marginTop: 20 }}>Fechar</button>
+              </div>
+            ) : (
+              <div style={{ textAlign: "center" }}>
+                <h3 style={{ margin: "0 0 4px", color: "var(--text)" }}>Conectar meu WhatsApp</h3>
+                <p style={{ color: "var(--muted)", fontSize: 13.5, marginTop: 0, marginBottom: 18 }}>
+                  Abra o WhatsApp no celular → <b>Aparelhos conectados</b> → <b>Conectar aparelho</b> → escaneie:
+                </p>
+                {meuQr.qr ? (
+                  <img src={meuQr.qr} alt="QR Code" style={SX.qrImg} />
+                ) : (
+                  <div style={SX.qrLoading}>
+                    <RefreshCw size={28} className="pulse" />
+                    <div style={{ marginTop: 10, fontSize: 13 }}>{meuQr.aviso || "Gerando QR code…"}</div>
+                  </div>
+                )}
+                <div style={{ marginTop: 16, fontSize: 12, color: "var(--muted)" }}>
+                  Esperando a leitura… atualiza sozinho quando conectar.
+                </div>
+                <button onClick={conectarMeu} className="btn-ghost" style={{ ...SX.btnGhost, marginTop: 14, height: 38 }}>
+                  <RefreshCw size={14} /> Gerar novo QR
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// tela de configuração da conexão WhatsApp (múltiplas instâncias)
+function WhatsAppConfig({ cfg, onBack }) {
+  const [url, setUrl] = useState(cfg?.url || "");
+  const [apiKey, setApiKey] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [token, setToken] = useState(cfg?.webhookToken || "");
+  const [salvo, setSalvo] = useState(false);
+  const [colabs, setColabs] = useState([]);          // colaboradoras do sistema
+  const [instEvolution, setInstEvolution] = useState([]);  // instâncias reais na Evolution
+  const [limpando, setLimpando] = useState(false);
+  const [excluindo, setExcluindo] = useState("");
+  // lista de instâncias: cada uma com nome técnico + colaboradora vinculada
+  const [instancias, setInstancias] = useState(
+    (cfg?.instancias && cfg.instancias.length)
+      ? cfg.instancias.map((i) => ({ ...i }))
+      : [{ instance: "", colaboradoraId: "", colaboradoraNome: "" }]
+  );
+
+  useEffect(() => {
+    api.listUserNames().then((r) => setColabs(r.users || [])).catch(() => {});
+    carregarInstEvolution();
+  }, []);
+
+  function carregarInstEvolution() {
+    api.waInstanciasEvolution().then((r) => setInstEvolution(r.instancias || [])).catch(() => {});
+  }
+
+  async function excluirInstancia(nome) {
+    if (!confirm(`Desconectar e excluir o WhatsApp "${nome}"? O celular será desconectado.`)) return;
+    setExcluindo(nome);
+    try {
+      await api.waDeleteInstance(nome);
+      carregarInstEvolution();
+      // tira da lista de edição também
+      setInstancias((arr) => arr.filter((i) => i.instance !== nome));
+    } catch (e) { alert(e.message); }
+    setExcluindo("");
+  }
+
+  async function limparTodasConversas() {
+    if (!confirm("Apagar TODAS as conversas do sistema? Isso não dá pra desfazer. (Não desconecta os WhatsApps, só limpa o histórico de conversas.)")) return;
+    setLimpando(true);
+    try {
+      await api.waLimparConversas();
+      alert("Conversas apagadas! ✅");
+    } catch (e) { alert(e.message); }
+    setLimpando(false);
+  }
+
+  function setInst(idx, campo, valor) {
+    setInstancias((arr) => arr.map((it, i) => {
+      if (i !== idx) return it;
+      const novo = { ...it, [campo]: valor };
+      // se escolheu a colaboradora, guarda o nome dela junto
+      if (campo === "colaboradoraId") {
+        const c = colabs.find((u) => String(u.id) === String(valor));
+        novo.colaboradoraNome = c ? c.nome : "";
+      }
+      return novo;
+    }));
+  }
+  function addInst() {
+    setInstancias((arr) => [...arr, { instance: "", colaboradoraId: "", colaboradoraNome: "" }]);
+  }
+  function removeInst(idx) {
+    setInstancias((arr) => arr.filter((_, i) => i !== idx));
+  }
+
+  // ---- status de cada instância (conectado/desconectado) ----
+  const [statusInst, setStatusInst] = useState({});   // { nomeInstancia: "open"|"close"|... }
+  const [acaoInst, setAcaoInst] = useState("");        // instância em ação (loading)
+
+  async function checarStatusTodas() {
+    const nomes = instancias.map((i) => i.instance).filter(Boolean);
+    const novo = {};
+    for (const nome of nomes) {
+      try { const r = await api.waInstanceStatus(nome); novo[nome] = r.state; } catch {}
+    }
+    setStatusInst(novo);
+  }
+  useEffect(() => {
+    if (cfg?.temApiKey) checarStatusTodas();
+    // eslint-disable-next-line
+  }, []);
+
+  async function desconectar(nome) {
+    if (!nome) return;
+    if (!confirm(`Desconectar o WhatsApp "${nome}"?\n\nEle vai parar de receber mensagens até reconectar (escanear o QR de novo).`)) return;
+    setAcaoInst(nome);
+    try {
+      await api.waLogoutInstance(nome);
+      setStatusInst((s) => ({ ...s, [nome]: "close" }));
+    } catch (e) { alert(e.message); }
+    setAcaoInst("");
+  }
+
+  async function excluir(nome, idx) {
+    if (!nome) { removeInst(idx); return; }
+    if (!confirm(`EXCLUIR a instância "${nome}" de vez?\n\nIsso apaga a conexão na Evolution. Para usar de novo, terá que criar e escanear o QR outra vez.`)) return;
+    setAcaoInst(nome);
+    try {
+      await api.waDeleteInstance(nome);
+      setInstancias((arr) => arr.filter((_, i) => i !== idx));
+    } catch (e) { alert(e.message); }
+    setAcaoInst("");
+  }
+
+  // ---- conexão via QR ----
+  const [qrModal, setQrModal] = useState(null);   // { instance, qr, status }
+  const [qrLoading, setQrLoading] = useState(false);
+
+  async function conectar(nomeInstancia) {
+    const nome = (nomeInstancia || "").trim();
+    if (!nome) { alert("Preencha o nome da instância primeiro."); return; }
+    if (!url.trim()) { alert("Preencha o endereço da Evolution primeiro."); return; }
+    if (!cfg?.temApiKey && !apiKey.trim()) { alert("Preencha a chave da API primeiro."); return; }
+    // garante que a config (url/apiKey) está salva antes de conectar
+    setQrLoading(true);
+    setQrModal({ instance: nome, qr: null, status: "connecting" });
+    try {
+      // salva config primeiro (pra Evolution ter url/key/webhook)
+      const payloadCfg = { url, instancias: instancias.filter((i) => i.instance.trim()) };
+      if (apiKey.trim()) payloadCfg.apiKey = apiKey.trim();
+      await api.waSetConfig(payloadCfg);
+      // pede o QR
+      const r = await api.waConnectInstance(nome);
+      if (r.status === "open") {
+        setQrModal({ instance: nome, qr: null, status: "open" });
+      } else if (r.qr) {
+        setQrModal({ instance: nome, qr: r.qr, status: "connecting" });
+        iniciarChecagem(nome);
+      } else {
+        setQrModal({ instance: nome, qr: null, status: "connecting", aviso: r.aviso || "Aguardando QR…" });
+        // tenta de novo em 3s
+        setTimeout(() => conectar(nome), 3500);
+      }
+    } catch (e) {
+      alert(e.message);
+      setQrModal(null);
+    }
+    setQrLoading(false);
+  }
+
+  // fica checando se conectou; quando "open", fecha o modal
+  function iniciarChecagem(nome) {
+    let tentativas = 0;
+    const timer = setInterval(async () => {
+      tentativas++;
+      try {
+        const r = await api.waInstanceStatus(nome);
+        if (r.state === "open") {
+          clearInterval(timer);
+          setQrModal((m) => m ? { ...m, status: "open" } : m);
+        }
+      } catch {}
+      if (tentativas > 40) clearInterval(timer);  // ~2 min e para
+    }, 3000);
+  }
+
+  function fecharQr() { setQrModal(null); }
+
+  async function salvar() {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const payload = { url, instancias: instancias.filter((i) => i.instance.trim()) };
+      if (apiKey.trim()) payload.apiKey = apiKey.trim();
+      const r = await api.waSetConfig(payload);
+      if (r.webhookToken) setToken(r.webhookToken);
+      setSalvo(true);
+      setTimeout(() => setSalvo(false), 3000);
+    } catch (e) { alert(e.message); }
+    setSaving(false);
+  }
+
+  const base = (typeof window !== "undefined") ? window.location.origin : "";
+  const webhookUrl = token ? `${base}/api/wa/webhook/${token}` : "(salve para gerar)";
+
+  return (
+    <div>
+      <Header title="Configurar WhatsApp" subtitle="Conecte os WhatsApps das colaboradoras">
+        <button onClick={onBack} className="btn-ghost" style={SX.btnGhost}><ArrowLeft size={15} /> Voltar</button>
+      </Header>
+
+      <div style={SX.formCard} className="rise panel">
+        <div style={{ display: "grid", gap: 18, maxWidth: 720 }}>
+          {/* dados gerais da Evolution */}
+          <F label="Endereço da Evolution (URL)" req>
+            <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://evolution-api-production-xxxx.up.railway.app" style={SX.input} />
+          </F>
+          <F label="Chave da API (AUTHENTICATION_API_KEY)" req>
+            <input value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder={cfg?.temApiKey ? "•••••• (já salva — preencha só para trocar)" : "cole a chave aqui"} style={SX.input} />
+          </F>
+
+          {/* lista de WhatsApps (instâncias) */}
+          <div>
+            <div style={SX.waCfgTitle}>
+              <Phone size={15} /> WhatsApps das colaboradoras
+            </div>
+            <div style={SX.waCfgHint}>
+              Para cada WhatsApp: escolha um nome (sem espaços, ex: <b>vitoria</b>), vincule a colaboradora e clique em <b>Conectar</b> para escanear o QR code.
+            </div>
+
+            <div style={{ display: "grid", gap: 12, marginTop: 14 }}>
+              {instancias.map((inst, idx) => {
+                const st = statusInst[inst.instance];
+                const conectado = st === "open";
+                const emAcao = acaoInst === inst.instance;
+                return (
+                <div key={idx} style={SX.waCfgRow}>
+                  <div style={{ flex: 1 }}>
+                    <label style={SX.waCfgLabel}>Nome da instância</label>
+                    <input value={inst.instance} onChange={(e) => setInst(idx, "instance", e.target.value.replace(/\s/g, ""))} placeholder="ex: vitoria" style={SX.input} />
+                    {inst.instance && st && (
+                      <div style={SX.waStatusLine}>
+                        <span style={{ ...SX.waStatusDot, background: conectado ? "#12A150" : "#E5484D" }} />
+                        {conectado ? "Conectado" : "Desconectado"}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={SX.waCfgLabel}>Colaboradora</label>
+                    <select value={inst.colaboradoraId} onChange={(e) => setInst(idx, "colaboradoraId", e.target.value)} style={SX.input}>
+                      <option value="">— selecione —</option>
+                      {colabs.map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
+                    </select>
+                  </div>
+                  <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                    {conectado ? (
+                      <button onClick={() => desconectar(inst.instance)} disabled={emAcao} style={SX.waDisconnectBtn} title="Desconectar">
+                        {emAcao ? "…" : <><Power size={15} /> Desconectar</>}
+                      </button>
+                    ) : (
+                      <button onClick={() => conectar(inst.instance)} className="btn-primary" style={SX.waConnectBtn} title="Conectar / ver QR code">
+                        <MessageCircle size={15} /> Conectar
+                      </button>
+                    )}
+                    <button onClick={() => excluir(inst.instance, idx)} disabled={emAcao} style={SX.waCfgDel} title="Excluir instância de vez">
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
+                );
+              })}
+            </div>
+
+            <button onClick={addInst} className="btn-ghost" style={{ ...SX.btnGhost, marginTop: 12, height: 40 }}>
+              <PlusSquare size={15} /> Adicionar outro WhatsApp
+            </button>
+          </div>
+
+          <button onClick={salvar} disabled={saving} className="btn-primary" style={SX.btnPrimary}>
+            {saving ? "Salvando…" : "Salvar conexão"}
+          </button>
+
+          {salvo && <div style={SX.waOk}><CheckCircle2 size={15} /> Conexão salva!</div>}
+
+          <div style={SX.waWebhookBox}>
+            <div style={{ fontWeight: 600, marginBottom: 6, fontSize: 13 }}>
+              <CheckCircle2 size={14} style={{ verticalAlign: "middle", color: "#12A150" }} /> Webhook automático
+            </div>
+            <div style={{ fontSize: 12, opacity: 0.7 }}>
+              Quando você conecta um WhatsApp pelo botão acima, o sistema já configura tudo sozinho — não precisa mexer no painel da Evolution. 🎉
+            </div>
+          </div>
+
+          {/* ZONA DE LIMPEZA */}
+          <div style={SX.waZonaLimpeza}>
+            <div style={{ fontWeight: 700, fontSize: 14, color: "#C0392B", marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
+              <AlertCircle size={16} /> Zona de limpeza
+            </div>
+            <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 16 }}>
+              Desconecte WhatsApps de teste ou apague o histórico de conversas. Use com cuidado.
+            </div>
+
+            {/* WhatsApps conectados na Evolution */}
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text)", marginBottom: 8 }}>
+              WhatsApps conectados:
+            </div>
+            {instEvolution.length === 0 ? (
+              <div style={{ fontSize: 12.5, color: "var(--muted)", padding: "8px 0 14px" }}>
+                Nenhum WhatsApp conectado no momento.
+              </div>
+            ) : (
+              <div style={{ display: "grid", gap: 8, marginBottom: 16 }}>
+                {instEvolution.map((i) => (
+                  <div key={i.instance} style={SX.waInstRow}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                      <span style={{ ...SX.waInstDot, background: i.state === "open" ? "#12A150" : "#E5A100" }} />
+                      <span style={{ fontWeight: 600, fontSize: 13.5, color: "var(--text)" }}>{i.instance}</span>
+                      <span style={{ fontSize: 11.5, color: "var(--muted)" }}>
+                        {i.state === "open" ? "conectado" : i.state === "connecting" ? "conectando" : "desconectado"}
+                      </span>
+                    </div>
+                    <button onClick={() => excluirInstancia(i.instance)} disabled={excluindo === i.instance} style={SX.waInstDel}>
+                      {excluindo === i.instance ? "Excluindo…" : <><Power size={13} /> Desconectar</>}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button onClick={carregarInstEvolution} style={SX.waRefreshInst} type="button">
+              <RefreshCw size={13} /> Atualizar lista
+            </button>
+
+            {/* apagar conversas */}
+            <div style={{ borderTop: "1px solid rgba(192,57,43,0.18)", marginTop: 16, paddingTop: 16 }}>
+              <button onClick={limparTodasConversas} disabled={limpando} style={SX.waLimparConv}>
+                {limpando ? "Apagando…" : "🗑️ Apagar todas as conversas do sistema"}
+              </button>
+              <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 7 }}>
+                Limpa só o histórico de conversas no sistema. Não desconecta os WhatsApps.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* MODAL DO QR CODE */}
+      {qrModal && (
+        <div style={SX.qrOverlay} onClick={(e) => { if (e.target === e.currentTarget) fecharQr(); }}>
+          <div style={SX.qrCard}>
+            <button onClick={fecharQr} style={SX.qrClose}><X size={18} /></button>
+            {qrModal.status === "open" ? (
+              <div style={{ textAlign: "center", padding: "20px 10px" }}>
+                <div style={SX.qrSuccessIcon}><CheckCircle2 size={40} /></div>
+                <h3 style={{ margin: "16px 0 6px", color: "var(--text)" }}>Conectado! 🎉</h3>
+                <p style={{ color: "var(--muted)", fontSize: 14, margin: 0 }}>
+                  O WhatsApp <b>{qrModal.instance}</b> foi conectado com sucesso.
+                </p>
+                <button onClick={fecharQr} className="btn-primary" style={{ ...SX.btnPrimary, marginTop: 20 }}>Fechar</button>
+              </div>
+            ) : (
+              <div style={{ textAlign: "center" }}>
+                <h3 style={{ margin: "0 0 4px", color: "var(--text)" }}>Conectar WhatsApp</h3>
+                <p style={{ color: "var(--muted)", fontSize: 13.5, marginTop: 0, marginBottom: 18 }}>
+                  Abra o WhatsApp no celular → <b>Aparelhos conectados</b> → <b>Conectar aparelho</b> → escaneie:
+                </p>
+                {qrModal.qr ? (
+                  <img src={qrModal.qr} alt="QR Code" style={SX.qrImg} />
+                ) : (
+                  <div style={SX.qrLoading}>
+                    <RefreshCw size={28} className="pulse" />
+                    <div style={{ marginTop: 10, fontSize: 13 }}>{qrModal.aviso || "Gerando QR code…"}</div>
+                  </div>
+                )}
+                <div style={{ marginTop: 16, fontSize: 12, color: "var(--muted)" }}>
+                  Esperando a leitura… isso atualiza sozinho quando conectar.
+                </div>
+                <button onClick={() => conectar(qrModal.instance)} className="btn-ghost" style={{ ...SX.btnGhost, marginTop: 14, height: 38 }}>
+                  <RefreshCw size={14} /> Gerar novo QR
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================= SHARED
+function Header({ title, subtitle, children }) {
+  return (<div style={SX.header}><div><h1 style={SX.h1}>{title}</h1><p style={SX.sub}>{subtitle}</p></div>{children && <div style={SX.headerActions}>{children}</div>}</div>);
+}
+function CardBox({ title, sub, children, wide }) {
+  return (<div style={{ ...SX.chartCard, gridColumn: wide ? "span 2" : "span 1" }} className="card-hover panel"><div style={SX.chartHead}><div><div style={SX.chartTitle}>{title}</div>{sub && <div style={SX.chartSub}>{sub}</div>}</div></div>{children}</div>);
+}
+function F({ label, children, req, full }) {
+  return <div style={{ gridColumn: full ? "1 / -1" : "auto" }}><label style={SX.label}>{label}{req && <span style={{ color: "#E5484D" }}> *</span>}</label>{children}</div>;
+}
+function Sel({ value, onChange, opts }) {
+  return <select value={value} onChange={(e) => onChange(e.target.value)} style={SX.filterSel}>{opts.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>;
+}
+function Empty() {
+  return (<div style={SX.empty}><div style={SX.emptyIcon}><ClipboardList size={34} color="#6366F1" /></div><h3 style={SX.emptyTitle}>Nenhum atendimento ainda</h3><p style={SX.emptyText}>Os registros e gráficos aparecem aqui assim que os atendimentos forem cadastrados.</p></div>);
+}
+
+// ============================================================= LOGIC
+function buildStats(records, users) {
+  const total = records.length;
+  const byStatus = { resolvido: 0, andamento: 0, pendente: 0 };
+  records.forEach((r) => { byStatus[r.status] = (byStatus[r.status] || 0) + 1; });
+  const taxa = total ? Math.round((byStatus.resolvido / total) * 100) : 0;
+  // IDs de gestão (admin ou marcados pra excluir da análise) não entram no ranking de colaboradoras
+  const idsGestao = new Set((users || []).filter((u) => u.role === "admin" || u.excluirAnalise).map((u) => u.id));
+  const cm = {}; records.forEach((r) => { if (!idsGestao.has(r.colaboradoraId)) cm[r.colaboradoraId] = (cm[r.colaboradoraId] || 0) + 1; });
+  const byColab = Object.entries(cm).map(([id, value]) => ({ name: shortName(nameOf(users, id)), value })).sort((a, b) => b.value - a.value);
+  const am = {}; records.forEach((r) => { const k = r.assunto || "—"; am[k] = (am[k] || 0) + 1; });
+  const byAssunto = Object.entries(am).map(([name, value]) => ({ name: name.length > 22 ? name.slice(0, 21) + "…" : name, value })).sort((a, b) => b.value - a.value).slice(0, 6);
+  const dm = {}; records.forEach((r) => { if (r.data) dm[r.data] = (dm[r.data] || 0) + 1; });
+  const byDay = Object.entries(dm).map(([d, value]) => ({ data: d.slice(8, 10) + "/" + d.slice(5, 7), value })).sort((a, b) => a.data.localeCompare(b.data)).slice(-14);
+  const statusData = Object.entries(byStatus).filter(([, v]) => v > 0).map(([k, v]) => ({ name: STATUS[k].label, value: v, key: k }));
+  return { total, byStatus, taxa, byColab, byAssunto, byDay, statusData };
+}
+// ============================================================= HELPERS
+function initials(n) { if (!n) return "?"; const p = n.trim().split(" "); return (p[0][0] + (p[1]?.[0] || "")).toUpperCase(); }
+function shortName(n) { if (!n) return "—"; const p = n.trim().split(" "); return p.length > 1 ? `${p[0]} ${p[1][0]}.` : p[0]; }
+function nameOf(users, id) { return users.find((u) => u.id === id)?.nome || "—"; }
+function fmtDate(d) { if (!d) return "—"; const [y, m, day] = d.split("-"); return `${day}/${m}/${y.slice(2)}`; }
+
+const TT = { background: "#fff", border: "1px solid #EBEBEE", borderRadius: 12, fontSize: 12, boxShadow: "0 8px 28px rgba(60,55,45,0.12)", padding: "8px 12px" };
+
+// ============================================================= STYLES
+const SX = {
+  // tema toggle
+  themeToggle: { display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", marginBottom: 10, borderRadius: 11, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.04)", color: "#B4B6BA", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", transition: "all .2s" },
+
+  // tarefas
+  taskStats: { display: "flex", gap: 18, marginBottom: 16, flexWrap: "wrap" },
+  taskStat: { display: "inline-flex", alignItems: "center", gap: 7, fontSize: 14, color: "var(--text-soft)", fontWeight: 500 },
+  taskList: { display: "flex", flexDirection: "column", gap: 10 },
+  taskCard: { display: "flex", alignItems: "flex-start", gap: 14, background: "var(--card)", border: "1px solid var(--border)", borderRadius: 14, padding: "16px 18px", boxShadow: "0 1px 3px rgba(60,55,45,0.04)", transition: "all .2s" },
+  taskCheck: { width: 36, height: 36, borderRadius: 10, border: "none", background: "transparent", color: "#C4C4C8", display: "grid", placeItems: "center", flexShrink: 0, transition: "all .15s" },
+  taskCheckOn: { color: "#12A150" },
+  taskTitle: { fontSize: 15, fontWeight: 700, color: "var(--text)", marginBottom: 3 },
+  taskDesc: { fontSize: 13, color: "var(--text-soft)", marginBottom: 8, lineHeight: 1.5 },
+  taskMeta: { display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", marginTop: 6 },
+  taskMetaItem: { display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12.5, color: "var(--text-soft)", fontWeight: 500 },
+  taskPill: { display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11.5, fontWeight: 700, padding: "3px 9px", borderRadius: 20 },
+
+  // filtros (chips)
+  filterChip: { display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 11, border: "1px solid var(--border)", background: "var(--card)", color: "var(--text-soft)", fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", transition: "all .15s" },
+  filterChipOn: { background: "linear-gradient(120deg,#6366F1 0%,#7C5CF0 55%,#4F46E5 100%)", color: "#fff", borderColor: "transparent", boxShadow: "0 3px 10px rgba(99,102,241,0.3)" },
+
+  // análise individual
+  indHead: { display: "flex", alignItems: "center", gap: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: 18, padding: "22px 24px", marginBottom: 16, boxShadow: "0 1px 3px rgba(60,55,45,0.04)" },
+  indAvatar: { width: 56, height: 56, borderRadius: 16, background: "linear-gradient(135deg,#6366F1 0%,#7C5CF0 55%,#4F46E5 100%)", display: "grid", placeItems: "center", color: "#fff", fontWeight: 700, fontSize: 20, flexShrink: 0 },
+  indName: { fontSize: 21, fontWeight: 800, color: "var(--text)" },
+  indCol: { background: "var(--card)", border: "1px solid", borderRadius: 16, padding: "18px 20px", boxShadow: "0 1px 3px rgba(60,55,45,0.04)" },
+  indColTitle: { display: "flex", alignItems: "center", gap: 8, fontSize: 14.5, fontWeight: 700, color: "var(--text)", marginBottom: 12 },
+  feedbackBox: { background: "linear-gradient(120deg,#FBF4EA,#FDF6EC)", border: "1px solid #F2E6D2", borderRadius: 16, padding: "20px 24px", marginTop: 16 },
+  feedbackLabel: { display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 700, color: "#4F46E5", textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 10 },
+  feedbackText: { margin: 0, fontSize: 15, lineHeight: 1.65, color: "#5A4E3C", fontStyle: "italic" },
+
+  app: { display: "flex", minHeight: "100vh", background: "transparent", fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif", color: "var(--text)", position: "relative" },
+  bgGlow: { position: "fixed", top: -180, right: -120, width: 520, height: 520, background: "radial-gradient(circle, rgba(99,102,241,0.09), transparent 70%)", pointerEvents: "none", zIndex: 0 },
+
+  sidebar: { width: 262, background: "linear-gradient(180deg,#1E2235 0%,#171A28 100%)", display: "flex", flexDirection: "column", padding: "28px 16px 20px", position: "sticky", top: 0, height: "100vh", zIndex: 2, boxShadow: "1px 0 0 rgba(255,255,255,0.04), 8px 0 40px rgba(15,18,30,0.35)", borderRight: "1px solid rgba(255,255,255,0.05)" },
+  brand: { padding: "0 6px", marginBottom: 6 },
+  brandLogo: { width: "100%", maxWidth: 188, display: "block" },
+  brandTag: { color: "#9A9CA0", fontSize: 11.5, fontWeight: 600, padding: "0 8px", marginBottom: 30, letterSpacing: "0.3px" },
+  nav: { display: "flex", flexDirection: "column", gap: 4, flex: 1 },
+  navBtn: { display: "flex", alignItems: "center", gap: 12, padding: "11px 14px", borderRadius: 12, border: "none", background: "transparent", color: "#B4B6BA", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", transition: "all .2s", position: "relative" },
+  navBtnActive: { background: "linear-gradient(100deg,rgba(99,102,241,0.95),rgba(79,70,229,0.9))", color: "#fff", boxShadow: "0 4px 14px rgba(99,102,241,0.35)" },
+
+  userCard: { marginTop: "auto", display: "flex", alignItems: "center", gap: 11, padding: "12px", background: "rgba(255,255,255,0.05)", borderRadius: 14, border: "1px solid rgba(255,255,255,0.07)" },
+  avatar: { width: 38, height: 38, borderRadius: 11, background: "linear-gradient(135deg,#6366F1 0%,#7C5CF0 55%,#4F46E5 100%)", display: "grid", placeItems: "center", color: "#fff", fontWeight: 700, fontSize: 14, flexShrink: 0 },
+  userName: { color: "#fff", fontSize: 13.5, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
+  userRole: { color: "#9A9CA0", fontSize: 11, display: "flex", alignItems: "center", gap: 4, marginTop: 1 },
+  logoutBtn: { width: 32, height: 32, borderRadius: 9, border: "none", background: "rgba(255,255,255,0.06)", color: "#B4B6BA", cursor: "pointer", display: "grid", placeItems: "center", flexShrink: 0, transition: "all .15s" },
+
+  main: { flex: 1, padding: "36px 44px 70px", maxWidth: 1340, margin: "0 auto", width: "100%", position: "relative", zIndex: 1, overflowY: "auto", height: "100vh" },
+  mainWide: { flex: 1, padding: "28px 32px 20px", width: "100%", position: "relative", zIndex: 1, overflowY: "auto", height: "100vh" },
+  header: { display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 26, flexWrap: "wrap", gap: 16 },
+  h1: { margin: 0, fontSize: 29, fontWeight: 800, letterSpacing: "-0.6px", color: "#2A2B2E" },
+  sub: { margin: "5px 0 0", color: "#82848A", fontSize: 14.5, fontWeight: 500 },
+  headerActions: { display: "flex", gap: 10 },
+
+  periodoBar: { display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", marginBottom: 18, padding: "12px 16px", borderRadius: 14, background: "var(--card)", border: "1px solid var(--line)" },
+  periodoBtns: { display: "flex", gap: 6 },
+  periodoBtn: { padding: "7px 16px", borderRadius: 9, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", cursor: "pointer", fontSize: 13.5, fontWeight: 600, fontFamily: "inherit" },
+  periodoBtnOn: { background: "linear-gradient(135deg,#6366F1 0%,#7C5CF0 55%,#4F46E5 100%)", color: "#fff", border: "1px solid transparent", boxShadow: "0 4px 12px rgba(99,102,241,0.3)" },
+  periodoCustom: { display: "flex", alignItems: "center", gap: 8, paddingLeft: 14, borderLeft: "1px solid var(--line)" },
+  periodoData: { padding: "6px 10px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--input-bg)", color: "var(--text)", fontSize: 13, fontFamily: "inherit" },
+  periodoRotulo: { marginLeft: "auto", fontSize: 13, fontWeight: 700, color: "#4F46E5", background: "rgba(99,102,241,0.08)", padding: "6px 14px", borderRadius: 8 },
+  kpiGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(218px,1fr))", gap: 15, marginBottom: 16 },
+  kpiCard: { background: "#fff", borderRadius: 18, padding: "20px 22px", display: "flex", alignItems: "center", gap: 15, border: "1px solid #ECECEE", boxShadow: "0 1px 3px rgba(60,55,45,0.04)" },
+  kpiIcon: { width: 50, height: 50, borderRadius: 14, display: "grid", placeItems: "center", flexShrink: 0 },
+  kpiValue: { fontSize: 30, fontWeight: 800, color: "#2A2B2E", lineHeight: 1 },
+  kpiLabel: { fontSize: 12.5, color: "#82848A", marginTop: 5, fontWeight: 500 },
+
+  taxaCard: { background: "linear-gradient(110deg,#2C2D30,#46474A)", borderRadius: 18, padding: "24px 28px", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 18, boxShadow: "0 12px 32px rgba(44,45,48,0.26)", position: "relative", overflow: "hidden" },
+  taxaShine: { position: "absolute", top: -60, right: -40, width: 240, height: 240, background: "radial-gradient(circle,rgba(99,102,241,0.32),transparent 70%)" },
+  taxaLabel: { color: "#fff", fontSize: 17, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 },
+  taxaSub: { color: "#B4B6BA", fontSize: 13, marginTop: 4 },
+  taxaRight: { display: "flex", alignItems: "center", gap: 18, flex: 1, maxWidth: 440, minWidth: 240, position: "relative" },
+  taxaTrack: { flex: 1, height: 13, background: "rgba(255,255,255,0.14)", borderRadius: 20, overflow: "hidden" },
+  taxaFill: { height: "100%", background: "linear-gradient(90deg,#818CF8,#6366F1)", borderRadius: 20, transition: "width 1s cubic-bezier(.4,0,.2,1)", boxShadow: "0 0 12px rgba(99,102,241,0.55)" },
+  taxaPct: { color: "#fff", fontSize: 34, fontWeight: 800, minWidth: 76, textAlign: "right" },
+
+  chartGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 15 },
+  chartCard: { background: "#fff", borderRadius: 18, padding: "20px 22px 14px", border: "1px solid #ECECEE", boxShadow: "0 1px 3px rgba(60,55,45,0.04)" },
+  chartHead: { display: "flex", justifyContent: "space-between", marginBottom: 16 },
+  chartTitle: { fontSize: 15, fontWeight: 700, color: "#2A2B2E" },
+  chartSub: { fontSize: 12, color: "#969A9E", marginTop: 2, fontWeight: 500 },
+
+  aiHero: { background: "linear-gradient(120deg,#2C2D30 0%,#46474A 55%,#5A4326 100%)", borderRadius: 22, padding: "30px 32px", display: "flex", gap: 24, marginBottom: 22, position: "relative", overflow: "hidden", boxShadow: "0 16px 40px rgba(44,45,48,0.28)" },
+  aiHeroGlow: { position: "absolute", top: -80, right: -60, width: 320, height: 320, background: "radial-gradient(circle,rgba(99,102,241,0.4),transparent 70%)" },
+  aiBadge: { display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(99,102,241,0.2)", color: "#FFD9A0", fontSize: 12, fontWeight: 600, padding: "5px 12px", borderRadius: 20, border: "1px solid rgba(99,102,241,0.35)" },
+  aiHeroTitle: { color: "#fff", fontSize: 25, fontWeight: 800, margin: "14px 0 8px", letterSpacing: "-0.5px" },
+  aiHeroText: { color: "#C4C6CA", fontSize: 14.5, lineHeight: 1.6, maxWidth: 620, margin: 0 },
+  aiMeta: { display: "flex", alignItems: "center", gap: 14, margin: "18px 0 22px", color: "#DADCE0", fontSize: 13.5, flexWrap: "wrap" },
+  dot: { width: 4, height: 4, borderRadius: 4, background: "rgba(255,255,255,0.3)" },
+  aiCta: { display: "inline-flex", alignItems: "center", gap: 9, background: "#6366F1", color: "#fff", border: "none", borderRadius: 13, padding: "0 24px", height: 48, fontSize: 14.5, fontWeight: 700, fontFamily: "inherit", boxShadow: "0 8px 24px rgba(99,102,241,0.4)", transition: "transform .15s" },
+  aiError: { display: "flex", alignItems: "center", gap: 8, background: "rgba(229,72,77,0.08)", border: "1px solid rgba(229,72,77,0.25)", color: "#C13B30", padding: "13px 16px", borderRadius: 13, fontSize: 14, marginBottom: 16 },
+  aiLoading: { display: "flex", flexDirection: "column", gap: 12 },
+  skel: { height: 90, background: "linear-gradient(90deg,#EEEEF0,#F7F7F8,#EEEEF0)", backgroundSize: "200% 100%", borderRadius: 16 },
+
+  aiPanorama: { display: "flex", gap: 16, background: "#fff", border: "1px solid #ECECEE", borderRadius: 18, padding: "22px 24px", marginBottom: 16, boxShadow: "0 1px 3px rgba(60,55,45,0.04)" },
+  aiPanIcon: { width: 46, height: 46, borderRadius: 13, background: "rgba(99,102,241,0.1)", display: "grid", placeItems: "center", flexShrink: 0 },
+  aiPanLabel: { fontSize: 12.5, fontWeight: 700, color: "#6366F1", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6 },
+  aiPanText: { margin: 0, fontSize: 15.5, lineHeight: 1.6, color: "#3C3D40", fontWeight: 500 },
+
+  aiHighlights: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 24 },
+  aiHl: { display: "flex", gap: 14, padding: "18px 20px", borderRadius: 16, border: "1px solid" },
+  aiHlIcon: { width: 42, height: 42, borderRadius: 12, display: "grid", placeItems: "center", flexShrink: 0 },
+  aiHlLabel: { fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", color: "#82848A", marginBottom: 4 },
+  aiHlText: { fontSize: 14.5, color: "#2E2F32", fontWeight: 600, lineHeight: 1.45 },
+
+  aiSectionTitle: { display: "flex", alignItems: "center", gap: 8, fontSize: 17, fontWeight: 800, color: "#2A2B2E", marginBottom: 14 },
+  aiColabGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(330px,1fr))", gap: 15, marginBottom: 26 },
+  aiColabCard: { background: "#fff", border: "1px solid #ECECEE", borderRadius: 18, padding: "20px 22px", boxShadow: "0 1px 3px rgba(60,55,45,0.04)" },
+  aiColabHead: { display: "flex", alignItems: "center", gap: 13, marginBottom: 14 },
+  aiColabAvatar: { width: 44, height: 44, borderRadius: 13, background: "linear-gradient(135deg,#6366F1 0%,#7C5CF0 55%,#4F46E5 100%)", display: "grid", placeItems: "center", color: "#fff", fontWeight: 700, fontSize: 15, flexShrink: 0 },
+  aiColabName: { fontSize: 15.5, fontWeight: 700, color: "#2A2B2E", marginBottom: 5 },
+  aiAval: { display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, fontWeight: 700, padding: "3px 10px", borderRadius: 20 },
+  aiColabLeitura: { fontSize: 14, lineHeight: 1.55, color: "#4C4E52", margin: "0 0 16px", fontWeight: 500 },
+  aiSugLabel: { fontSize: 11.5, fontWeight: 700, color: "#82848A", textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 9 },
+  aiSugList: { listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 9 },
+  aiSugItem: { display: "flex", gap: 9, fontSize: 13.5, lineHeight: 1.5, color: "#3C3D40" },
+
+  aiActions: { background: "linear-gradient(120deg,#FBF4EA,#FDF6EC)", border: "1px solid #F2E6D2", borderRadius: 18, padding: "24px 26px" },
+  aiActionsTitle: { display: "flex", alignItems: "center", gap: 9, fontSize: 16.5, fontWeight: 800, color: "#2A2B2E", marginBottom: 16 },
+  aiActionsList: { display: "flex", flexDirection: "column", gap: 11 },
+  aiActionItem: { display: "flex", alignItems: "flex-start", gap: 12, fontSize: 14.5, color: "#3C3D40", lineHeight: 1.5, fontWeight: 500 },
+  aiActionNum: { width: 24, height: 24, borderRadius: 8, background: "#6366F1", color: "#fff", fontSize: 12.5, fontWeight: 700, display: "grid", placeItems: "center", flexShrink: 0 },
+
+  filterBar: { display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap" },
+  searchWrap: { display: "flex", alignItems: "center", gap: 9, background: "#fff", border: "1px solid #E6E6E9", borderRadius: 13, padding: "0 15px", flex: 1, minWidth: 220, height: 44 },
+  searchInput: { border: "none", outline: "none", background: "transparent", flex: 1, fontSize: 14, fontFamily: "inherit", color: "#2A2B2E" },
+  filterSel: { background: "#fff", border: "1px solid #E6E6E9", borderRadius: 13, padding: "0 15px", height: 44, fontSize: 13.5, fontFamily: "inherit", color: "#2A2B2E", cursor: "pointer", outline: "none", fontWeight: 500 },
+
+  tableWrap: { background: "#fff", borderRadius: 18, border: "1px solid #ECECEE", overflow: "hidden", boxShadow: "0 1px 3px rgba(60,55,45,0.04)" },
+  table: { width: "100%", borderCollapse: "collapse", fontSize: 13.5 },
+  th: { textAlign: "left", padding: "14px 16px", fontSize: 11, fontWeight: 700, color: "#969A9E", textTransform: "uppercase", letterSpacing: "0.5px", borderBottom: "1px solid #ECECEE", background: "#FAFAFA", whiteSpace: "nowrap" },
+  td: { padding: "13px 16px", borderBottom: "1px solid #F2F2F3", color: "#46484C", verticalAlign: "middle" },
+  dataChip: { fontVariantNumeric: "tabular-nums", fontWeight: 700, color: "#4F46E5", fontSize: 13 },
+  colabTag: { display: "inline-flex", alignItems: "center", gap: 8, fontWeight: 600, color: "#2E2F32" },
+  colabDot: { width: 24, height: 24, borderRadius: 7, background: "linear-gradient(135deg,#6366F1 0%,#7C5CF0 55%,#4F46E5 100%)", color: "#fff", fontSize: 10, fontWeight: 700, display: "grid", placeItems: "center", flexShrink: 0 },
+  contact: { display: "flex", flexDirection: "column", gap: 1 },
+  cMain: { fontSize: 12.5, color: "#46484C" },
+  cSub: { fontSize: 12, color: "#969A9E" },
+  trunc: { display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  pill: { display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 11px", borderRadius: 20, fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" },
+  statusSelect: { padding: "5px 10px", borderRadius: 20, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", fontFamily: "inherit", appearance: "none", WebkitAppearance: "none", textAlign: "center", outline: "none" },
+  btnDel: { width: 32, height: 32, borderRadius: 9, border: "1px solid #F3D7D8", background: "#fff", color: "#E5484D", cursor: "pointer", display: "grid", placeItems: "center", transition: "all .15s" },
+  noRes: { background: "#fff", borderRadius: 18, border: "1px dashed #E6E6E9", padding: "48px 20px", textAlign: "center" },
+
+  formCard: { background: "#fff", borderRadius: 18, border: "1px solid #ECECEE", padding: 28, maxWidth: 880, boxShadow: "0 1px 3px rgba(60,55,45,0.04)" },
+  formGrid: { display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 18 },
+  label: { display: "block", fontSize: 13, fontWeight: 600, color: "#5C5E62", marginBottom: 7 },
+  input: { width: "100%", boxSizing: "border-box", height: 44, padding: "0 14px", border: "1px solid #DCDCDF", borderRadius: 11, fontSize: 14, fontFamily: "inherit", color: "#2A2B2E", outline: "none", background: "#fff", transition: "all .15s" },
+  formActions: { display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 26 },
+
+  btnPrimary: { display: "inline-flex", alignItems: "center", gap: 8, background: "linear-gradient(120deg,#6366F1 0%,#7C5CF0 55%,#4F46E5 100%)", color: "#fff", border: "none", borderRadius: 12, padding: "0 20px", height: 44, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 4px 14px rgba(99,102,241,0.35)", transition: "all .15s" },
+  btnGhost: { display: "inline-flex", alignItems: "center", gap: 8, background: "#fff", color: "#5C5E62", border: "1px solid #DCDCDF", borderRadius: 12, padding: "0 18px", height: 44, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", transition: "all .15s" },
+
+  newUserCard: { background: "#fff", borderRadius: 18, border: "1px solid #F2E6D2", padding: 26, marginBottom: 22, boxShadow: "0 8px 28px rgba(99,102,241,0.1)" },
+  newUserTitle: { display: "flex", alignItems: "center", gap: 9, fontSize: 16, fontWeight: 700, color: "#2A2B2E", marginBottom: 20 },
+  newUserGrid: { display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, marginBottom: 20 },
+  permLabel: { fontSize: 12.5, fontWeight: 700, color: "#82848A", textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 12 },
+  permGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 10 },
+  permChk: { display: "flex", alignItems: "center", gap: 9, fontSize: 13.5, color: "#46484C", fontWeight: 500, cursor: "pointer", padding: "8px 0" },
+  checkbox: { width: 17, height: 17, accentColor: "#6366F1", cursor: "pointer" },
+
+  userGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(420px,1fr))", gap: 15 },
+  userBlock: { background: "#fff", borderRadius: 18, border: "1px solid #ECECEE", padding: "20px 22px", boxShadow: "0 1px 3px rgba(60,55,45,0.04)", transition: "all .2s" },
+  userBlockHead: { display: "flex", alignItems: "center", gap: 13, marginBottom: 14 },
+  userBlockAvatar: { width: 46, height: 46, borderRadius: 13, display: "grid", placeItems: "center", color: "#fff", fontWeight: 700, fontSize: 15, flexShrink: 0 },
+  userBlockName: { fontSize: 15.5, fontWeight: 700, color: "#2A2B2E", display: "flex", alignItems: "center", gap: 6 },
+  userBlockLogin: { fontSize: 12.5, color: "#969A9E", marginTop: 2, fontWeight: 500 },
+  miniBtn: { width: 32, height: 32, borderRadius: 9, border: "1px solid #DCDCDF", background: "#fff", color: "#5C5E62", cursor: "pointer", display: "grid", placeItems: "center", padding: 0 },
+  miniBtnDel: { width: 32, height: 32, borderRadius: 9, border: "1px solid #F3D7D8", background: "#fff", color: "#E5484D", cursor: "pointer", display: "grid", placeItems: "center", padding: 0 },
+  adminNote: { display: "inline-flex", alignItems: "center", gap: 7, fontSize: 13, fontWeight: 600, color: "#4F46E5", background: "rgba(99,102,241,0.1)", padding: "8px 14px", borderRadius: 10 },
+  permRow: { display: "flex", flexWrap: "wrap", gap: 7 },
+  permPill: { display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, fontWeight: 600, padding: "6px 11px", borderRadius: 9, border: "1px solid #E6E6E9", background: "#F8F8F9", color: "#969A9E", cursor: "pointer", fontFamily: "inherit", transition: "all .15s" },
+  permPillOn: { background: "rgba(99,102,241,0.1)", color: "#4F46E5", borderColor: "rgba(99,102,241,0.35)" },
+  analiseToggle: { display: "inline-flex", alignItems: "center", gap: 6, marginTop: 10, padding: "7px 12px", borderRadius: 9, border: "1px solid rgba(18,161,80,0.3)", background: "rgba(18,161,80,0.08)", color: "#12A150", cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: "inherit", width: "100%", justifyContent: "center" },
+  analiseToggleOff: { border: "1px solid rgba(120,120,130,0.3)", background: "rgba(120,120,130,0.08)", color: "var(--muted)" },
+
+  savedMsg: { display: "inline-flex", alignItems: "center", gap: 7, color: "#12A150", fontSize: 14, fontWeight: 600 },
+  configNote: { display: "flex", gap: 11, marginTop: 18, padding: "16px 18px", background: "rgba(99,102,241,0.05)", border: "1px solid rgba(99,102,241,0.16)", borderRadius: 14, fontSize: 13.5, color: "#4C4E52", lineHeight: 1.55, maxWidth: 880 },
+
+  empty: { background: "#fff", borderRadius: 20, border: "1px dashed #DCDCDF", padding: "56px 24px", textAlign: "center", maxWidth: 540, margin: "20px auto" },
+  emptyIcon: { width: 72, height: 72, borderRadius: 20, background: "rgba(99,102,241,0.09)", display: "grid", placeItems: "center", margin: "0 auto 18px" },
+  emptyTitle: { margin: 0, fontSize: 20, fontWeight: 800, color: "#2A2B2E" },
+  emptyText: { margin: "10px 0 0", color: "#82848A", fontSize: 14.5, lineHeight: 1.6 },
+
+  loginWrap: { minHeight: "100vh", background: "linear-gradient(135deg,#2C2D30 0%,#3E3F42 50%,#4A3A22 100%)", display: "grid", placeItems: "center", fontFamily: "'Plus Jakarta Sans',system-ui,sans-serif", position: "relative", overflow: "hidden", padding: 20 },
+  loginGlow: { position: "absolute", top: "18%", left: "50%", transform: "translateX(-50%)", width: 600, height: 600, background: "radial-gradient(circle,rgba(99,102,241,0.22),transparent 65%)", pointerEvents: "none" },
+  loginCard: { background: "rgba(255,255,255,0.98)", borderRadius: 24, padding: "40px 38px", width: "100%", maxWidth: 410, boxShadow: "0 30px 80px rgba(0,0,0,0.4)", position: "relative", zIndex: 1, border: "1px solid rgba(255,255,255,0.5)" },
+  loginSub: { textAlign: "center", color: "#82848A", fontSize: 14, margin: "12px 0 0", fontWeight: 500 },
+  loginLabel: { display: "block", fontSize: 13, fontWeight: 600, color: "#5C5E62", marginBottom: 8 },
+  loginField: { display: "flex", alignItems: "center", gap: 10, background: "#F6F5F3", border: "1px solid #E4E2DE", borderRadius: 13, padding: "0 15px", height: 50, transition: "all .15s" },
+  loginInput: { border: "none", outline: "none", background: "transparent", flex: 1, fontSize: 14.5, fontFamily: "inherit", color: "#2A2B2E" },
+  eyeBtn: { border: "none", background: "transparent", color: "#A0A2A6", cursor: "pointer", padding: 4, display: "grid", placeItems: "center" },
+  loginErr: { display: "flex", alignItems: "center", gap: 7, color: "#E5484D", fontSize: 13, fontWeight: 600, marginTop: 14, justifyContent: "center" },
+  loginBtn: { width: "100%", marginTop: 22, height: 50, background: "linear-gradient(120deg,#6366F1 0%,#7C5CF0 55%,#4F46E5 100%)", color: "#fff", border: "none", borderRadius: 13, fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, boxShadow: "0 10px 28px rgba(99,102,241,0.4)", transition: "transform .15s" },
+  loginHint: { marginTop: 24, padding: "13px 15px", background: "rgba(99,102,241,0.07)", border: "1px solid rgba(99,102,241,0.16)", borderRadius: 12, fontSize: 12.5, color: "#6E6A62", lineHeight: 1.6, textAlign: "center" },
+  code: { background: "#2C2D30", color: "#818CF8", padding: "1px 7px", borderRadius: 6, fontSize: 12, fontFamily: "monospace", fontWeight: 600 },
+  loginFoot: { position: "absolute", bottom: 22, color: "rgba(255,255,255,0.4)", fontSize: 12.5, zIndex: 1 },
+
+  onbIcon: { width: 52, height: 52, borderRadius: 16, background: "rgba(99,102,241,0.1)", display: "grid", placeItems: "center", margin: "18px auto 0" },
+  onbTitle: { textAlign: "center", fontSize: 23, fontWeight: 800, color: "#2A2B2E", margin: "14px 0 0" },
+  onbText: { textAlign: "center", color: "#82848A", fontSize: 14, lineHeight: 1.55, margin: "10px 0 0" },
+  onbHint: { textAlign: "center", color: "#A0A2A6", fontSize: 12.5, marginTop: 16 },
+
+  // ---- WhatsApp ----
+  btnPrimarySm: { display: "inline-flex", alignItems: "center", gap: 7, background: "linear-gradient(120deg,#6366F1 0%,#7C5CF0 55%,#4F46E5 100%)", color: "#fff", border: "none", borderRadius: 10, padding: "0 14px", height: 38, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 4px 12px rgba(99,102,241,0.3)", whiteSpace: "nowrap" },
+  waWrap: { display: "grid", gridTemplateColumns: "340px 1fr", height: "calc(100vh - 138px)", minHeight: 400, borderRadius: 16, overflow: "hidden", border: "1px solid var(--line)", background: "var(--card)", boxShadow: "0 10px 40px -12px rgba(0,0,0,0.18)" },
+  waList: { display: "flex", flexDirection: "column", borderRight: "1px solid var(--line)", minWidth: 0, minHeight: 0, height: "100%", overflow: "hidden", background: "var(--card)" },
+  waListHead: { display: "flex", alignItems: "center", gap: 8, padding: "16px 18px", fontWeight: 700, fontSize: 14, color: "var(--text)", borderBottom: "1px solid var(--line)" },
+  waCount: { marginLeft: "auto", fontSize: 12, fontWeight: 700, color: "#fff", background: "#6366F1", borderRadius: 20, padding: "1px 9px" },
+  waListScroll: { flex: 1, minHeight: 0, overflowY: "auto" },
+  waEmpty: { padding: "36px 20px", textAlign: "center", color: "var(--muted)", fontSize: 14, display: "flex", flexDirection: "column", alignItems: "center" },
+  waChatItem: { display: "flex", alignItems: "center", gap: 11, width: "100%", padding: "12px 16px", border: "none", borderBottom: "1px solid var(--line)", background: "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left", transition: "background .12s" },
+  waChatItemActive: { background: "rgba(99,102,241,0.1)" },
+  waAvatar: { width: 42, height: 42, borderRadius: 12, background: "linear-gradient(135deg,#6366F1 0%,#7C5CF0 55%,#4F46E5 100%)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 700, fontSize: 14, flexShrink: 0 },
+  waChatName: { fontSize: 14, fontWeight: 700, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
+  waChatPreview: { fontSize: 12.5, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginTop: 2 },
+  waBadge: { fontSize: 11, fontWeight: 700, color: "#fff", background: "#12A150", borderRadius: 20, padding: "1px 7px", flexShrink: 0 },
+  waConvo: { display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0, height: "100%", overflow: "hidden", background: "var(--bg)" },
+  waConvoEmpty: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "var(--muted)", fontSize: 14 },
+  waConvoHead: { display: "flex", alignItems: "center", gap: 12, padding: "14px 18px", borderBottom: "1px solid var(--line)", background: "var(--card)" },
+  waMessages: { flex: 1, minHeight: 0, overflowY: "auto", padding: "20px 28px", display: "flex", flexDirection: "column", backgroundColor: "var(--wa-chat-bg)", backgroundImage: "radial-gradient(var(--wa-chat-dot) 1px, transparent 1px)", backgroundSize: "22px 22px" },
+  waBubbleRow: { display: "flex", width: "100%" },
+  waBubble: { position: "relative", maxWidth: "65%", padding: "7px 11px 7px 12px", borderRadius: 12, fontSize: 14.2, lineHeight: 1.4, wordBreak: "break-word", boxShadow: "0 1px 1px rgba(0,0,0,0.08)", display: "flex", alignItems: "flex-end", gap: 8 },
+  waBubbleText: { whiteSpace: "pre-wrap" },
+  waBubbleThem: { background: "var(--wa-bubble-them)", color: "var(--text)", borderTopLeftRadius: 3 },
+  waBubbleMe: { background: "linear-gradient(135deg,#F8A93C,#4F46E5)", color: "#fff", borderTopRightRadius: 3 },
+  waTime: { fontSize: 10, fontWeight: 500, flexShrink: 0, alignSelf: "flex-end", marginBottom: 1, whiteSpace: "nowrap" },
+  waInputBar: { display: "flex", alignItems: "center", gap: 8, padding: "12px 16px", borderTop: "1px solid var(--line)", background: "var(--card)" },
+  waIconBtn: { width: 42, height: 42, borderRadius: 12, border: "none", background: "transparent", color: "var(--muted)", cursor: "pointer", display: "grid", placeItems: "center", flexShrink: 0 },
+  waInput: { flex: 1, border: "1px solid var(--line)", borderRadius: 22, padding: "0 18px", height: 44, fontSize: 14.2, fontFamily: "inherit", background: "var(--bg)", color: "var(--text)", outline: "none" },
+  waSendBtn: { width: 46, height: 46, borderRadius: "50%", border: "none", background: "linear-gradient(135deg,#6366F1 0%,#7C5CF0 55%,#4F46E5 100%)", color: "#fff", cursor: "pointer", display: "grid", placeItems: "center", boxShadow: "0 4px 12px rgba(99,102,241,0.35)", flexShrink: 0 },
+  waRecBtn: { background: "linear-gradient(135deg,#E5484D,#C1383C)", boxShadow: "0 4px 12px rgba(229,72,77,0.4)" },
+  waRecBar: { display: "flex", alignItems: "center", gap: 8, padding: "8px 18px", fontSize: 13, fontWeight: 600, color: "#E5484D", background: "var(--card)", borderTop: "1px solid var(--line)" },
+  waRecDot: { width: 10, height: 10, borderRadius: "50%", background: "#E5484D", animation: "pulse 1s infinite" },
+  waCloseConvo: { width: 40, height: 40, borderRadius: 10, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", cursor: "pointer", display: "grid", placeItems: "center", flexShrink: 0 },
+  emojiPanel: { display: "flex", flexWrap: "wrap", gap: 2, padding: "10px 14px", borderTop: "1px solid var(--line)", background: "var(--card)", maxHeight: 140, overflowY: "auto" },
+  emojiBtn: { border: "none", background: "transparent", cursor: "pointer", fontSize: 22, lineHeight: 1, padding: "5px 6px", borderRadius: 8 },
+  waOk: { display: "inline-flex", alignItems: "center", gap: 7, color: "#12A150", fontSize: 14, fontWeight: 600 },
+  waWebhookBox: { marginTop: 8, padding: "16px 18px", background: "rgba(99,102,241,0.05)", border: "1px solid rgba(99,102,241,0.16)", borderRadius: 14 },
+  waCode: { display: "block", background: "#2C2D30", color: "#818CF8", padding: "10px 13px", borderRadius: 9, fontSize: 12.5, fontFamily: "monospace", fontWeight: 600, wordBreak: "break-all", lineHeight: 1.5 },
+  // busca + filtro
+  waSearchWrap: { display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "1px solid var(--line)" },
+  waSearchInput: { flex: 1, border: "none", outline: "none", background: "transparent", fontSize: 13.5, fontFamily: "inherit", color: "var(--text)" },
+  waSearchClear: { border: "none", background: "transparent", color: "var(--muted)", cursor: "pointer", padding: 2, display: "grid", placeItems: "center" },
+  waFunil: { position: "relative", width: 34, height: 34, borderRadius: 9, border: "1px solid var(--line)", background: "transparent", color: "var(--muted)", cursor: "pointer", display: "grid", placeItems: "center", padding: 0 },
+  waNovaBtn: { width: 34, height: 34, borderRadius: 9, border: "none", background: "linear-gradient(135deg,#6366F1 0%,#7C5CF0 55%,#4F46E5 100%)", color: "#fff", cursor: "pointer", display: "grid", placeItems: "center", padding: 0, boxShadow: "0 3px 10px rgba(99,102,241,0.3)" },
+  waZonaLimpeza: { marginTop: 20, padding: 18, borderRadius: 14, border: "1px solid rgba(192,57,43,0.25)", background: "rgba(192,57,43,0.035)" },
+  waInstRow: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", background: "var(--card)" },
+  waInstDot: { width: 9, height: 9, borderRadius: "50%", flexShrink: 0 },
+  waInstDel: { display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 12px", borderRadius: 8, border: "1px solid rgba(192,57,43,0.3)", background: "transparent", color: "#C0392B", cursor: "pointer", fontSize: 12.5, fontWeight: 600, fontFamily: "inherit", flexShrink: 0 },
+  waRefreshInst: { display: "inline-flex", alignItems: "center", gap: 5, border: "none", background: "transparent", color: "var(--muted)", cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: "inherit", padding: 0 },
+  waLimparConv: { width: "100%", padding: "11px", borderRadius: 10, border: "1px solid rgba(192,57,43,0.35)", background: "rgba(192,57,43,0.06)", color: "#C0392B", cursor: "pointer", fontSize: 13.5, fontWeight: 700, fontFamily: "inherit" },
+  waFunilOn: { background: "rgba(99,102,241,0.12)", color: "#4F46E5", borderColor: "rgba(99,102,241,0.4)" },
+  waFunilDot: { position: "absolute", top: -3, right: -3, width: 9, height: 9, borderRadius: "50%", background: "#6366F1", border: "2px solid var(--card)" },
+  waFunilBackdrop: { position: "fixed", inset: 0, zIndex: 40 },
+  waFunilMenu: { position: "absolute", top: "calc(100% + 8px)", right: 0, width: 250, background: "var(--card)", border: "1px solid var(--line)", borderRadius: 14, boxShadow: "0 16px 44px -10px rgba(0,0,0,0.3)", padding: 8, zIndex: 41 },
+  waFunilTitle: { fontSize: 11.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.4px", padding: "6px 10px 8px" },
+  waFunilItem: { display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "9px 10px", border: "none", background: "transparent", color: "var(--text)", cursor: "pointer", fontFamily: "inherit", fontSize: 13.5, fontWeight: 600, borderRadius: 9, textAlign: "left" },
+  waFunilItemOn: { background: "rgba(99,102,241,0.08)" },
+  waFunilAvatar: { width: 26, height: 26, borderRadius: 8, background: "linear-gradient(135deg,#6366F1 0%,#7C5CF0 55%,#4F46E5 100%)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 700, fontSize: 12, flexShrink: 0 },
+  waFiltroAtivo: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 14px", fontSize: 12.5, color: "var(--text)", background: "rgba(99,102,241,0.06)", borderBottom: "1px solid var(--line)" },
+  waFiltroLimpar: { display: "inline-flex", alignItems: "center", gap: 3, border: "none", background: "transparent", color: "#4F46E5", cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "inherit" },
+  waAtendenteTag: { fontSize: 10, fontWeight: 600, color: "var(--muted)", background: "var(--bg)", border: "1px solid var(--line)", borderRadius: 6, padding: "1px 6px", whiteSpace: "nowrap", maxWidth: 90, overflow: "hidden", textOverflow: "ellipsis" },
+  waConvoAtendente: { marginLeft: 8, color: "#4F46E5", fontWeight: 600 },
+  // config multi-instância
+  waCfgTitle: { display: "flex", alignItems: "center", gap: 8, fontSize: 14.5, fontWeight: 700, color: "var(--text)", marginBottom: 4 },
+  waCfgHint: { fontSize: 12.5, color: "var(--muted)", lineHeight: 1.5 },
+  waCfgRow: { display: "flex", gap: 12, alignItems: "flex-end", padding: "14px", borderRadius: 12, border: "1px solid var(--line)", background: "var(--bg)" },
+  waCfgLabel: { display: "block", fontSize: 12, fontWeight: 600, color: "var(--muted)", marginBottom: 6 },
+  waCfgDel: { width: 44, height: 44, borderRadius: 10, border: "1px solid #F3D7D8", background: "transparent", color: "#E5484D", cursor: "pointer", display: "grid", placeItems: "center", flexShrink: 0 },
+  waConnectBtn: { display: "inline-flex", alignItems: "center", gap: 6, background: "linear-gradient(120deg,#6366F1 0%,#7C5CF0 55%,#4F46E5 100%)", color: "#fff", border: "none", borderRadius: 10, padding: "0 14px", height: 44, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", flexShrink: 0 },
+  waDisconnectBtn: { display: "inline-flex", alignItems: "center", gap: 6, background: "transparent", color: "#E5484D", border: "1px solid #F3D7D8", borderRadius: 10, padding: "0 14px", height: 44, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", flexShrink: 0 },
+  waStatusLine: { display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: "var(--muted)", marginTop: 6 },
+  waStatusDot: { width: 8, height: 8, borderRadius: "50%", flexShrink: 0 },
+  // modal QR
+  qrOverlay: { position: "fixed", inset: 0, background: "rgba(20,18,15,0.55)", backdropFilter: "blur(3px)", display: "grid", placeItems: "center", zIndex: 1000, padding: 20 },
+  qrCard: { position: "relative", background: "var(--card)", borderRadius: 20, padding: "32px 28px", maxWidth: 380, width: "100%", boxShadow: "0 30px 80px rgba(0,0,0,0.35)", border: "1px solid var(--line)" },
+  qrClose: { position: "absolute", top: 14, right: 14, width: 32, height: 32, borderRadius: 9, border: "none", background: "var(--bg)", color: "var(--muted)", cursor: "pointer", display: "grid", placeItems: "center" },
+  qrImg: { width: 260, height: 260, borderRadius: 12, background: "#fff", padding: 8, display: "block", margin: "0 auto" },
+  qrLoading: { width: 260, height: 260, borderRadius: 12, background: "var(--bg)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", margin: "0 auto", color: "var(--muted)" },
+  qrSuccessIcon: { width: 72, height: 72, borderRadius: "50%", background: "rgba(18,161,80,0.12)", color: "#12A150", display: "grid", placeItems: "center", margin: "0 auto" },
+  waNoInst: { display: "flex", alignItems: "center", gap: 10, padding: "14px 18px", background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.2)", borderRadius: 12, fontSize: 13.5, color: "var(--text)", marginBottom: 16 },
+};
+
+const CSS = `
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap');
+* { box-sizing: border-box; }
+body { margin: 0; }
+
+/* ======================= TEMA — PALETA PREMIUM ======================= */
+.theme-dark {
+  --bg: #0C0D10;
+  --bg-2: #121317;
+  --card: rgba(255,255,255,0.045);
+  --card-solid: #16181D;
+  --card-hi: rgba(255,255,255,0.07);
+  --border: rgba(255,255,255,0.08);
+  --border-hi: rgba(255,255,255,0.14);
+  --text: #F4F4F2;
+  --text-soft: #A0A3AB;
+  --text-faint: #6A6E78;
+  --table-head: rgba(255,255,255,0.03);
+  --input-bg: rgba(255,255,255,0.04);
+  --shadow: 0 18px 50px -12px rgba(0,0,0,0.6);
+  --mesh-1: rgba(99,102,241,0.16);
+  --mesh-2: rgba(139,92,246,0.09);
+  --line: rgba(255,255,255,0.08);
+  --muted: #A0A3AB;
+  --wa-chat-bg: #0E0F13;
+  --wa-chat-dot: rgba(255,255,255,0.025);
+  --wa-bubble-them: #1E2025;
+}
+.theme-light {
+  --bg: #F5F6FA;
+  --bg-2: #FFFFFF;
+  --card: #FFFFFF;
+  --card-solid: #FFFFFF;
+  --card-hi: #FFFFFF;
+  --border: #E6E8F0;
+  --border-hi: #D6D9E6;
+  --text: #161A23;
+  --text-soft: #5A6072;
+  --text-faint: #98A0B3;
+  --table-head: #F8F9FC;
+  --input-bg: #FFFFFF;
+  --shadow: 0 18px 50px -18px rgba(40,44,70,0.22);
+  --mesh-1: rgba(99,102,241,0.12);
+  --mesh-2: rgba(139,92,246,0.08);
+  --line: #E6E8F0;
+  --muted: #5A6072;
+  --wa-chat-bg: #EEF0F6;
+  --wa-chat-dot: rgba(80,90,130,0.07);
+  --wa-bubble-them: #FFFFFF;
+}
+
+/* fundo com gradient mesh atmosférico */
+.app-root { background: var(--bg) !important; color: var(--text); position: relative; }
+.app-root::before {
+  content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background:
+    radial-gradient(680px 520px at 78% -8%, var(--mesh-1), transparent 60%),
+    radial-gradient(560px 460px at 12% 8%, var(--mesh-2), transparent 55%),
+    radial-gradient(700px 600px at 90% 100%, var(--mesh-2), transparent 60%);
+}
+/* textura de grão sutil */
+.app-root::after {
+  content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ======================= TIPOGRAFIA ======================= */
+.app-root { font-family: 'Plus Jakarta Sans', system-ui, sans-serif; }
+.app-root h1, .login-card h1 { font-family: 'Fraunces', Georgia, serif !important; font-weight: 600 !important; letter-spacing: -0.5px; }
+main h1 { color: var(--text) !important; font-size: 30px !important; }
+main p { color: var(--text-soft); }
+/* números/KPIs em mono elegante */
+.kpi-value, .taxa-pct { font-family: 'JetBrains Mono', monospace !important; letter-spacing: -1px; }
+
+/* ======================= SIDEBAR PREMIUM ======================= */
+.theme-dark .sidebar { background: linear-gradient(185deg, #141519, #0E0F12) !important; border-right: 1px solid rgba(255,255,255,0.06); box-shadow: none !important; }
+.theme-light .sidebar { background: linear-gradient(185deg, #1F2024, #161719) !important; }
+.navbtn { border-radius: 13px !important; transition: all .22s cubic-bezier(.2,.7,.3,1) !important; }
+.navbtn:hover { background: rgba(255,255,255,0.06) !important; color: #fff !important; transform: translateX(2px); }
+.logout-btn:hover { background: rgba(255,90,95,0.18) !important; color: #FF8A8E !important; }
+.theme-toggle { border-radius: 13px !important; }
+.theme-toggle:hover { background: rgba(255,255,255,0.08) !important; color: #fff !important; }
+
+/* ======================= CARTÕES (glassmorphism) ======================= */
+.theme-dark .panel, .theme-dark .card, .theme-dark .card-hover, .theme-dark .kpi {
+  background: var(--card) !important; border: 1px solid var(--border) !important;
+  backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  box-shadow: var(--shadow) !important; border-radius: 20px !important;
+}
+.theme-light .panel, .theme-light .card, .theme-light .card-hover, .theme-light .kpi {
+  background: var(--card) !important; border: 1px solid var(--border) !important;
+  box-shadow: var(--shadow) !important; border-radius: 20px !important;
+}
+.card-hover { transition: transform .26s cubic-bezier(.2,.7,.3,1), box-shadow .26s, border-color .26s; }
+.card-hover:hover { transform: translateY(-3px); border-color: var(--border-hi) !important; }
+.theme-dark .card-hover:hover { box-shadow: 0 24px 60px -14px rgba(0,0,0,0.7), 0 0 0 1px rgba(99,102,241,0.12) !important; }
+.theme-light .card-hover:hover { box-shadow: 0 22px 55px -16px rgba(60,55,45,0.24) !important; }
+
+/* inputs refinados */
+.theme-dark input, .theme-dark select, .theme-dark textarea { background: var(--input-bg) !important; border: 1px solid var(--border) !important; color: var(--text) !important; }
+.theme-light input, .theme-light select, .theme-light textarea { background: var(--input-bg) !important; border-color: var(--border) !important; color: var(--text) !important; }
+.theme-dark input::placeholder, .theme-dark textarea::placeholder { color: #5E626B !important; }
+input, select, textarea { border-radius: 12px !important; transition: all .18s !important; }
+input:focus, textarea:focus, select:focus { border-color: #6366F1 !important; box-shadow: 0 0 0 3.5px rgba(99,102,241,0.16) !important; outline: none; }
+
+/* tabelas */
+.theme-dark table thead th { background: var(--table-head) !important; color: var(--text-soft) !important; border-color: var(--border) !important; }
+.theme-dark table td { color: var(--text) !important; border-color: var(--border) !important; }
+.theme-dark .trow:hover td { background: rgba(255,255,255,0.035) !important; }
+.theme-light .trow:hover td { background: var(--table-head); }
+
+/* botões */
+.btn-primary { border-radius: 13px !important; background: linear-gradient(120deg,#6366F1 0%,#7C5CF0 55%,#4F46E5 100%) !important; box-shadow: 0 6px 20px -4px rgba(99,102,241,0.5) !important; transition: all .22s cubic-bezier(.2,.7,.3,1) !important; }
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 12px 30px -6px rgba(99,102,241,0.6) !important; filter: brightness(1.05); }
+.theme-dark .btn-ghost { background: var(--card) !important; border: 1px solid var(--border) !important; color: var(--text-soft) !important; border-radius: 13px !important; }
+.theme-dark .btn-ghost:hover { background: rgba(255,255,255,0.06) !important; color: var(--text) !important; }
+.btn-ghost { border-radius: 13px !important; }
+.btn-del:hover { background: #FF5A5F !important; color: #fff !important; border-color: #FF5A5F !important; }
+
+/* chips de filtro */
+.filter-chip { border-radius: 13px !important; transition: all .18s !important; }
+.theme-dark .filter-chip { background: var(--card) !important; border: 1px solid var(--border) !important; color: var(--text-soft) !important; }
+.filter-chip:hover { border-color: #6366F1 !important; color: #6366F1 !important; }
+
+/* tarefas */
+.theme-dark .task-card { background: var(--card) !important; border: 1px solid var(--border) !important; backdrop-filter: blur(14px); box-shadow: var(--shadow) !important; border-radius: 18px !important; }
+.task-card { transition: transform .22s, box-shadow .22s, border-color .22s; border-radius: 18px !important; }
+.task-card:hover { transform: translateY(-2px); border-color: var(--border-hi) !important; }
+.task-check:hover { background: rgba(45,212,160,0.14) !important; color: #2DD4A0 !important; }
+
+/* IA */
+.theme-dark .ai-actions { background: linear-gradient(135deg, rgba(99,102,241,0.10), rgba(99,102,241,0.04)) !important; border: 1px solid rgba(99,102,241,0.2) !important; border-radius: 20px !important; }
+.theme-dark .ai-hl { background: rgba(255,255,255,0.035) !important; border-radius: 16px !important; }
+.theme-dark .ai-action-item { color: var(--text) !important; }
+.theme-dark .feedback-box { background: linear-gradient(135deg, rgba(99,102,241,0.10), rgba(99,102,241,0.05)) !important; border: 1px solid rgba(99,102,241,0.22) !important; border-radius: 20px !important; }
+.theme-dark .feedback-box p { color: #E9C9A0 !important; }
+.theme-dark .panel { color: var(--text); }
+
+/* hero da IA — vidro escuro premium nos dois temas */
+.ai-hero { border-radius: 24px !important; }
+
+/* login premium */
+.theme-dark .login-card { background: rgba(22,24,29,0.8) !important; border: 1px solid var(--border) !important; backdrop-filter: blur(20px); }
+
+/* scrollbar */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+.theme-dark ::-webkit-scrollbar-thumb { background: #2C2E34; border-radius: 8px; }
+.theme-light ::-webkit-scrollbar-thumb { background: #D6D4D0; border-radius: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb:hover { background: #6366F1; }
+
+/* ======================= ANIMAÇÕES ======================= */
+.ai-dot { width: 7px; height: 7px; border-radius: 8px; background: linear-gradient(135deg,#FFB14E,#6366F1); box-shadow: 0 0 10px rgba(99,102,241,0.9); animation: pulse 1.8s ease-in-out infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.45; transform: scale(0.85); } }
+.pulse { animation: pulse 1.4s ease-in-out infinite; }
+.spin { display: inline-flex; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.skel { animation: shimmer 1.6s ease-in-out infinite; }
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+.fade-in { animation: fadeIn .5s cubic-bezier(.2,.7,.3,1); }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+.rise { animation: rise .6s cubic-bezier(.2,.7,.3,1) both; }
+@keyframes rise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+.kpi { animation: rise .6s cubic-bezier(.2,.7,.3,1) both; }
+.kpi:nth-child(1){animation-delay:.04s}.kpi:nth-child(2){animation-delay:.1s}.kpi:nth-child(3){animation-delay:.16s}.kpi:nth-child(4){animation-delay:.22s}
+.login-rise { animation: loginRise .7s cubic-bezier(.2,.7,.3,1) both; }
+@keyframes loginRise { from { opacity: 0; transform: translateY(28px) scale(.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
+.shake { animation: shake .4s ease; }
+@keyframes shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+@media (max-width: 900px) { aside { display: none; } .chartCard { grid-column: span 2 !important; } main { padding: 20px !important; } }
+`;

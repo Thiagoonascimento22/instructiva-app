@@ -1,836 +1,1094 @@
 import express from "express";
-import fs from "fs";
-import path from "path";
-import crypto from "crypto";
+import cors from "cors";
 import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+import crypto from "crypto";
+import fs from "fs";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const ROOT = join(__dirname, "..");
+
 const app = express();
+app.use(cors());
 app.use(express.json({ limit: "25mb" }));
 
-/* ============================================================
-   BANCO EM ARQUIVO JSON (com espera do volume do Railway)
-   ============================================================ */
-const DB_PATH = process.env.DB_PATH || "/data/crm.json";
+// ---------------------------------------------------------------------------
+// Armazenamento em arquivo JSON (JavaScript puro — sem compilação nativa).
+// No Railway, monte um volume e aponte DB_PATH para dentro dele
+// (ex.: DB_PATH=/data/instructiva.json) para os dados persistirem.
+// ---------------------------------------------------------------------------
+let DB_PATH = process.env.DB_PATH || join(ROOT, "instructiva.json");
+// se vier com extensão .db (config antiga), troca para .json
+if (DB_PATH.endsWith(".db")) DB_PATH = DB_PATH.replace(/\.db$/, ".json");
 
-async function aguardarVolume() {
-  const dir = path.dirname(DB_PATH);
-  // O volume do Railway monta alguns segundos DEPOIS do servidor subir.
-  // Esperamos a pasta aparecer antes de ler/gravar (senão os dados somem).
-  for (let i = 0; i < 30; i++) {
-    if (fs.existsSync(dir)) {
-      console.log("Volume pronto. Banco em:", DB_PATH);
-      return;
+const DB_DIR = dirname(DB_PATH);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Espera o volume montar. No Railway o volume pode montar alguns segundos
+// DEPOIS do servidor iniciar; se gravarmos antes, o mount "cobre" os dados.
+async function aguardarVolume(maxTentativas = 30) {
+  for (let i = 0; i < maxTentativas; i++) {
+    try {
+      if (!fs.existsSync(DB_DIR)) {
+        try { fs.mkdirSync(DB_DIR, { recursive: true }); } catch {}
+      }
+      const testFile = join(DB_DIR, ".write-test");
+      fs.writeFileSync(testFile, "ok");
+      fs.unlinkSync(testFile);
+      return true;
+    } catch (e) {
+      await sleep(1000);
     }
-    console.log(`Aguardando volume em ${dir}... (${i + 1})`);
-    await new Promise((r) => setTimeout(r, 1000));
   }
-  // Sem volume (ex: rodando local) — cria a pasta pra funcionar mesmo assim
-  try {
-    fs.mkdirSync(dir, { recursive: true });
-  } catch (_) {}
-  console.log("Volume não detectado, usando pasta local:", dir);
+  console.warn("⚠ Volume não confirmado após espera; seguindo mesmo assim.");
+  return false;
 }
-
-function novoToken() {
-  return crypto.randomBytes(18).toString("hex");
-}
-
-function dbVazio() {
-  return {
-    users: [
-      {
-        id: "u_admin",
-        nome: "Gerente Comercial",
-        login: "gerente",
-        senha: "admin123",
-        role: "gerente",
-        meta: 0,
-        ativo: true,
-        token: null,
-        precisaOnboarding: true,
-        criadoEm: Date.now(),
-      },
-    ],
-    cards: [],
-    waConfig: {
-      url: "",
-      apiKey: "",
-      publicUrl: "",
-      webhookToken: crypto.randomBytes(12).toString("hex"),
-      instancias: [], // [{ instance, vendedorId }]
-    },
-    waChats: {}, // { "instance::numero": { ...conversa } }
-    seq: 1,
-  };
-}
-
-let db = dbVazio();
 
 function loadDB() {
   try {
     if (fs.existsSync(DB_PATH)) {
-      const raw = fs.readFileSync(DB_PATH, "utf8");
-      db = JSON.parse(raw);
-      // migrações leves / campos que podem faltar
-      if (!Array.isArray(db.users)) db.users = dbVazio().users;
-      if (!Array.isArray(db.cards)) db.cards = [];
-      if (typeof db.seq !== "number") db.seq = 1;
-      if (!db.waConfig) db.waConfig = dbVazio().waConfig;
-      if (!db.waConfig.webhookToken)
-        db.waConfig.webhookToken = crypto.randomBytes(12).toString("hex");
-      if (!Array.isArray(db.waConfig.instancias)) db.waConfig.instancias = [];
-      if (!db.waChats || typeof db.waChats !== "object") db.waChats = {};
-      db.users.forEach((u) => {
-        if (typeof u.meta !== "number") u.meta = 0;
-        if (typeof u.ativo !== "boolean") u.ativo = true;
-      });
-      console.log(
-        `Banco carregado. Usuários: ${db.users.length} | Cards: ${db.cards.length}`
-      );
-    } else {
-      db = dbVazio();
-      saveDB();
-      console.log("Banco novo criado. Admin: gerente / admin123");
+      const d = JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
+      // garante que todos os campos existam (migração de bancos antigos)
+      if (!d.users) d.users = [];
+      if (!d.records) d.records = [];
+      if (!d.tasks) d.tasks = [];
+      if (!d.sessions) d.sessions = {};
+      if (!d.waChats) d.waChats = {};       // conversas do WhatsApp
+      if (!d.waConfig) d.waConfig = {};      // config da conexão (url, key, instâncias)
+      // MIGRAÇÃO: conversas antigas usavam a chave = número. Agora é "instancia::numero".
+      // Converte as que ainda estão no formato velho (sem o campo id ou chave sem "::").
+      const novasChaves = {};
+      let migrou = false;
+      for (const [chave, chat] of Object.entries(d.waChats)) {
+        if (chave.includes("::") && chat.id) {
+          novasChaves[chave] = chat;   // já está no formato novo
+        } else {
+          // formato antigo: monta a chave nova
+          const inst = chat.instance || "?";
+          const numero = chat.numero || chave;
+          const novaChave = `${inst}::${numero}`;
+          chat.id = novaChave;
+          chat.numero = numero;
+          if (chat.ehGrupo === undefined) chat.ehGrupo = false;
+          novasChaves[novaChave] = chat;
+          migrou = true;
+        }
+      }
+      d.waChats = novasChaves;
+      if (migrou) { try { fs.writeFileSync(DB_PATH, JSON.stringify(d, null, 2)); } catch {} }
+      return d;
     }
-  } catch (e) {
-    console.error("Erro ao ler banco, criando novo:", e.message);
-    db = dbVazio();
-    saveDB();
+  } catch (e) { console.error("Erro ao ler banco:", e.message); }
+  return { users: [], records: [], tasks: [], sessions: {}, waChats: {}, waConfig: {} };
+}
+function saveDB(database) {
+  try { fs.writeFileSync(DB_PATH, JSON.stringify(database, null, 2)); }
+  catch (e) { console.error("Erro ao salvar banco:", e.message); }
+}
+
+let db = { users: [], records: [], tasks: [], sessions: {}, waChats: {}, waConfig: {} };
+
+// Inicialização assíncrona: espera o volume, carrega o banco, cria admin,
+// e SÓ ENTÃO sobe o servidor.
+async function iniciar() {
+  console.log("Aguardando volume em:", DB_DIR);
+  await aguardarVolume();
+  console.log("Volume pronto. Usando banco em:", DB_PATH);
+
+  db = loadDB();
+
+  // cria a conta admin padrão se não existir nenhuma
+  if (!db.users.some((u) => u.role === "admin")) {
+    db.users.push({
+      id: "admin",
+      nome: "",
+      login: "gerente",
+      senha: hash("admin123"),
+      role: "admin",
+      perms: { ver_todos: true, registrar: true, excluir: true, exportar: true, ia: true, gerir_usuarios: true },
+      ativo: true,
+    });
+    saveDB(db);
+    console.log("→ Conta admin criada: login 'gerente' / senha 'admin123'");
+  } else {
+    console.log("→ Banco já existe. Usuários:", db.users.length, "| Atendimentos:", db.records.length);
   }
+
+  const PORT = process.env.PORT || 3001;
+  app.listen(PORT, () => console.log(`✓ Servidor rodando na porta ${PORT}`));
 }
 
-function saveDB() {
-  try {
-    fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
-  } catch (e) {
-    console.error("Erro ao salvar banco:", e.message);
-  }
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+function hash(senha) {
+  return crypto.createHash("sha256").update(senha + "::instructiva-salt").digest("hex");
 }
-// grava na hora a cada mudança (garante que nada se perde em restart/deploy)
-function saveSoon() {
-  saveDB();
+function newToken() { return crypto.randomBytes(24).toString("hex"); }
+function publicUser(u) {
+  return { id: u.id, nome: u.nome, login: u.login, role: u.role, perms: u.perms, ativo: !!u.ativo, excluirAnalise: !!u.excluirAnalise };
 }
-
-function proximoId(prefixo) {
-  const n = db.seq++;
-  saveSoon();
-  return `${prefixo}_${n}_${crypto.randomBytes(3).toString("hex")}`;
+function userFromToken(req) {
+  const auth = req.headers.authorization || "";
+  const token = auth.replace("Bearer ", "");
+  if (!token) return null;
+  const userId = db.sessions[token];
+  if (!userId) return null;
+  return db.users.find((u) => u.id === userId) || null;
 }
-
-/* ============================================================
-   AUTENTICAÇÃO
-   ============================================================ */
-function semSenha(u) {
-  if (!u) return u;
-  const { senha, token, ...resto } = u;
-  return resto;
-}
-
-function auth(req, res, next) {
-  const t = (req.headers.authorization || "").replace("Bearer ", "").trim();
-  const user = db.users.find((u) => u.token && u.token === t);
-  if (!user || !user.ativo)
-    return res.status(401).json({ error: "Não autenticado" });
-  req.user = user;
+function requireAuth(req, res, next) {
+  const u = userFromToken(req);
+  if (!u) return res.status(401).json({ error: "não autenticado" });
+  req.user = u;
+  req.perms = u.perms || {};
+  req.isAdmin = u.role === "admin";
   next();
 }
-function gerenteOnly(req, res, next) {
-  if (req.user.role !== "gerente")
-    return res.status(403).json({ error: "Acesso restrito ao gerente" });
-  next();
-}
+function can(req, perm) { return req.isAdmin || req.perms?.[perm]; }
 
+// ---------------------------------------------------------------------------
+// AUTH
+// ---------------------------------------------------------------------------
 app.post("/api/login", (req, res) => {
-  const { login, senha } = req.body || {};
-  const user = db.users.find(
-    (u) => u.login.toLowerCase() === String(login || "").toLowerCase()
-  );
-  if (!user || user.senha !== senha)
-    return res.status(401).json({ error: "Login ou senha incorretos" });
-  if (!user.ativo)
-    return res.status(403).json({ error: "Usuário desativado" });
-  user.token = novoToken();
-  saveSoon();
-  res.json({ token: user.token, user: semSenha(user) });
+  const { login, senha } = req.body;
+  const u = db.users.find((x) => x.login.toLowerCase() === String(login || "").trim().toLowerCase() && x.ativo);
+  if (!u || u.senha !== hash(senha || "")) return res.status(401).json({ error: "usuário ou senha incorretos" });
+  const token = newToken();
+  db.sessions[token] = u.id;
+  saveDB(db);
+  res.json({ token, user: publicUser(u) });
 });
 
-app.get("/api/me", auth, (req, res) => res.json(semSenha(req.user)));
-
-app.put("/api/me", auth, (req, res) => {
-  const { nome, senha } = req.body || {};
-  if (nome && nome.trim()) req.user.nome = nome.trim();
-  if (senha && senha.length >= 3) req.user.senha = senha;
-  req.user.precisaOnboarding = false;
-  saveSoon();
-  res.json(semSenha(req.user));
+app.post("/api/logout", requireAuth, (req, res) => {
+  const auth = (req.headers.authorization || "").replace("Bearer ", "");
+  delete db.sessions[auth];
+  saveDB(db);
+  res.json({ ok: true });
 });
 
-/* ============================================================
-   EQUIPE (somente gerente)
-   ============================================================ */
-app.get("/api/users", auth, gerenteOnly, (req, res) => {
-  res.json(db.users.map(semSenha));
+app.get("/api/me", requireAuth, (req, res) => res.json({ user: publicUser(req.user) }));
+
+app.put("/api/me", requireAuth, (req, res) => {
+  const { nome, login, senha } = req.body;
+  const u = req.user;
+  const novoNome = (nome ?? u.nome).trim() || u.nome;
+  const novoLogin = (login ?? u.login).trim() || u.login;
+  if (novoLogin.toLowerCase() !== u.login.toLowerCase()) {
+    if (db.users.some((x) => x.login.toLowerCase() === novoLogin.toLowerCase() && x.id !== u.id))
+      return res.status(400).json({ error: "esse usuário já existe" });
+  }
+  u.nome = novoNome;
+  u.login = novoLogin;
+  if (senha && senha.trim()) u.senha = hash(senha.trim());
+  saveDB(db);
+  res.json({ user: publicUser(u) });
 });
 
-app.post("/api/users", auth, gerenteOnly, (req, res) => {
-  const { nome, login, senha, role, meta } = req.body || {};
-  if (!nome || !login || !senha)
-    return res.status(400).json({ error: "Nome, login e senha são obrigatórios" });
-  if (db.users.some((u) => u.login.toLowerCase() === login.toLowerCase()))
-    return res.status(400).json({ error: "Já existe alguém com esse login" });
+// ---------------------------------------------------------------------------
+// USERS
+// ---------------------------------------------------------------------------
+app.get("/api/users", requireAuth, (req, res) => {
+  if (!can(req, "gerir_usuarios")) return res.status(403).json({ error: "sem permissão" });
+  const sorted = [...db.users].sort((a, b) => (b.role === "admin") - (a.role === "admin") || (a.nome || "").localeCompare(b.nome || ""));
+  res.json({ users: sorted.map(publicUser) });
+});
+
+app.get("/api/users/names", requireAuth, (req, res) => {
+  res.json({ users: db.users.map((u) => ({ id: u.id, nome: u.nome, role: u.role, ativo: !!u.ativo })) });
+});
+
+app.post("/api/users", requireAuth, (req, res) => {
+  if (!can(req, "gerir_usuarios")) return res.status(403).json({ error: "sem permissão" });
+  const { nome, login, senha, perms } = req.body;
+  if (!nome?.trim() || !login?.trim() || !senha?.trim()) return res.status(400).json({ error: "preencha nome, login e senha" });
+  if (db.users.some((u) => u.login.toLowerCase() === login.trim().toLowerCase())) return res.status(400).json({ error: "esse usuário já existe" });
+  const defaultPerms = { registrar: true, ver_todos: false, excluir: false, exportar: false, ia: false, gerir_usuarios: false };
   const novo = {
-    id: proximoId("u"),
-    nome: nome.trim(),
-    login: login.trim(),
-    senha,
-    role: role === "gerente" ? "gerente" : "vendedor",
-    meta: Number(meta) || 0,
-    ativo: true,
-    token: null,
-    criadoEm: Date.now(),
+    id: "u" + Date.now() + crypto.randomBytes(2).toString("hex"),
+    nome: nome.trim(), login: login.trim(), senha: hash(senha.trim()),
+    role: "colaboradora", perms: { ...defaultPerms, ...(perms || {}) }, ativo: true,
   };
   db.users.push(novo);
-  saveSoon();
-  res.json(semSenha(novo));
+  saveDB(db);
+  res.json({ user: publicUser(novo) });
 });
 
-app.put("/api/users/:id", auth, gerenteOnly, (req, res) => {
+app.put("/api/users/:id", requireAuth, (req, res) => {
+  if (!can(req, "gerir_usuarios")) return res.status(403).json({ error: "sem permissão" });
   const u = db.users.find((x) => x.id === req.params.id);
-  if (!u) return res.status(404).json({ error: "Usuário não encontrado" });
-  const { nome, senha, role, meta, ativo } = req.body || {};
-  if (nome && nome.trim()) u.nome = nome.trim();
-  if (senha && senha.length >= 3) u.senha = senha;
-  if (role) u.role = role === "gerente" ? "gerente" : "vendedor";
-  if (meta !== undefined) u.meta = Number(meta) || 0;
+  if (!u) return res.status(404).json({ error: "não encontrado" });
+  if (u.role === "admin") return res.status(400).json({ error: "não é possível editar o admin por aqui" });
+  const { perms, ativo, nome, senha, excluirAnalise } = req.body;
+  if (perms) u.perms = perms;
   if (ativo !== undefined) u.ativo = !!ativo;
-  saveSoon();
-  res.json(semSenha(u));
+  if (nome !== undefined) u.nome = nome.trim() || u.nome;
+  if (senha && senha.trim()) u.senha = hash(senha.trim());
+  if (excluirAnalise !== undefined) u.excluirAnalise = !!excluirAnalise;
+  saveDB(db);
+  res.json({ user: publicUser(u) });
 });
 
-app.delete("/api/users/:id", auth, gerenteOnly, (req, res) => {
-  if (req.params.id === req.user.id)
-    return res.status(400).json({ error: "Você não pode excluir a si mesmo" });
-  const i = db.users.findIndex((x) => x.id === req.params.id);
-  if (i < 0) return res.status(404).json({ error: "Usuário não encontrado" });
-  db.users.splice(i, 1);
-  saveSoon();
+app.delete("/api/users/:id", requireAuth, (req, res) => {
+  if (!can(req, "gerir_usuarios")) return res.status(403).json({ error: "sem permissão" });
+  const u = db.users.find((x) => x.id === req.params.id);
+  if (!u) return res.status(404).json({ error: "não encontrado" });
+  if (u.role === "admin") return res.status(400).json({ error: "não é possível remover o admin" });
+  db.users = db.users.filter((x) => x.id !== req.params.id);
+  saveDB(db);
   res.json({ ok: true });
 });
 
-/* ============================================================
-   PIPELINE — CARDS
-   ============================================================ */
-const ETAPAS = ["lead", "contato", "sem_resposta", "negociando", "fechou", "perdeu"];
-
-function podeVerCard(user, card) {
-  if (user.role === "gerente") return true;
-  return card.responsavelId === user.id;
-}
-
-app.get("/api/cards", auth, (req, res) => {
-  let cards = db.cards.filter((c) => !c.arquivado);
-  if (req.user.role === "vendedor") {
-    cards = cards.filter((c) => c.responsavelId === req.user.id);
-  } else if (req.query.responsavel && req.query.responsavel !== "todos") {
-    cards = cards.filter((c) => c.responsavelId === req.query.responsavel);
-  }
-  res.json(cards);
+// ---------------------------------------------------------------------------
+// RECORDS
+// ---------------------------------------------------------------------------
+app.get("/api/records", requireAuth, (req, res) => {
+  let rows = can(req, "ver_todos") ? db.records : db.records.filter((r) => r.colaboradoraId === req.user.id);
+  rows = [...rows].sort((a, b) => (b.data || "").localeCompare(a.data || "") || (b.criadoEm || "").localeCompare(a.criadoEm || ""));
+  res.json({ records: rows });
 });
 
-app.post("/api/cards", auth, (req, res) => {
-  const { cliente, telefone, valorEstimado, responsavelId, etapa, obs, curso, origem } =
-    req.body || {};
-  if (!cliente || !cliente.trim())
-    return res.status(400).json({ error: "Nome do cliente é obrigatório" });
-  // vendedor só cria card pra si mesmo; gerente escolhe o responsável
-  let resp = req.user.id;
-  if (req.user.role === "gerente" && responsavelId) resp = responsavelId;
-  const card = {
-    id: proximoId("c"),
-    cliente: cliente.trim(),
-    telefone: (telefone || "").trim(),
-    valorEstimado: Number(valorEstimado) || 0,
-    valorFinal: 0,
-    etapa: ETAPAS.includes(etapa) ? etapa : "lead",
-    responsavelId: resp,
-    curso: (curso || "").trim(),
-    origem: (origem || "").trim(),
-    obs: (obs || "").trim(),
-    arquivado: false,
-    fechadoEm: ETAPAS.includes(etapa) && etapa === "fechou" ? Date.now() : null,
-    criadoEm: Date.now(),
-    atualizadoEm: Date.now(),
+app.post("/api/records", requireAuth, (req, res) => {
+  if (!can(req, "registrar")) return res.status(403).json({ error: "sem permissão para registrar" });
+  const b = req.body;
+  if (!b.aluno?.trim() || !b.assunto?.trim()) return res.status(400).json({ error: "aluno e assunto são obrigatórios" });
+  const colabId = req.isAdmin && b.colaboradoraId ? b.colaboradoraId : req.user.id;
+  const rec = {
+    id: Date.now() + "-" + crypto.randomBytes(3).toString("hex"),
+    data: b.data || new Date().toISOString().slice(0, 10),
+    colaboradoraId: colabId,
+    aluno: b.aluno?.trim() || "", email: b.email?.trim() || "", telefone: b.telefone?.trim() || "",
+    assunto: b.assunto?.trim() || "", solucao: b.solucao?.trim() || "", status: b.status || "resolvido",
+    obs: b.obs?.trim() || "", criadoEm: new Date().toISOString(),
   };
-  db.cards.push(card);
-  saveSoon();
-  res.json(card);
+  db.records.unshift(rec);
+  saveDB(db);
+  res.json({ record: rec });
 });
 
-app.put("/api/cards/:id", auth, (req, res) => {
-  const card = db.cards.find((c) => c.id === req.params.id);
-  if (!card || card.arquivado)
-    return res.status(404).json({ error: "Card não encontrado" });
-  if (!podeVerCard(req.user, card))
-    return res.status(403).json({ error: "Sem acesso a esse card" });
+app.delete("/api/records/:id", requireAuth, (req, res) => {
+  const rec = db.records.find((r) => r.id === req.params.id);
+  if (!rec) return res.status(404).json({ error: "não encontrado" });
+  if (!can(req, "excluir")) return res.status(403).json({ error: "sem permissão para excluir" });
+  db.records = db.records.filter((r) => r.id !== req.params.id);
+  saveDB(db);
+  res.json({ ok: true });
+});
 
-  const b = req.body || {};
-  if (b.cliente !== undefined) card.cliente = String(b.cliente).trim();
-  if (b.telefone !== undefined) card.telefone = String(b.telefone).trim();
-  if (b.valorEstimado !== undefined)
-    card.valorEstimado = Number(b.valorEstimado) || 0;
-  if (b.valorFinal !== undefined) card.valorFinal = Number(b.valorFinal) || 0;
-  if (b.obs !== undefined) card.obs = String(b.obs).trim();
-  if (b.curso !== undefined) card.curso = String(b.curso).trim();
-  if (b.origem !== undefined) card.origem = String(b.origem).trim();
-  if (b.etapa !== undefined && ETAPAS.includes(b.etapa)) card.etapa = b.etapa;
-  // registra/limpa a data de fechamento (pro dashboard filtrar por período)
-  if (card.etapa === "fechou") {
-    if (!card.fechadoEm) card.fechadoEm = Date.now();
+// ---- atualizar um atendimento (editar status, solução, etc) ----
+app.put("/api/records/:id", requireAuth, (req, res) => {
+  const rec = db.records.find((r) => r.id === req.params.id);
+  if (!rec) return res.status(404).json({ error: "não encontrado" });
+  // quem registrou pode editar o próprio; quem tem ver_todos pode editar qualquer um
+  const ehDono = rec.colaboradoraId === req.user.id;
+  if (!ehDono && !can(req, "ver_todos")) {
+    return res.status(403).json({ error: "sem permissão para editar este atendimento" });
+  }
+  // campos que podem ser editados
+  const editaveis = ["status", "solucao", "obs", "assunto", "aluno", "email", "telefone", "data"];
+  editaveis.forEach((campo) => {
+    if (req.body[campo] !== undefined) rec[campo] = req.body[campo];
+  });
+  saveDB(db);
+  res.json({ record: rec });
+});
+
+// ---------------------------------------------------------------------------
+// TASKS (tarefas com prazo) — a gerente atribui, a colaboradora vê as dela
+// ---------------------------------------------------------------------------
+app.get("/api/tasks", requireAuth, (req, res) => {
+  // admin/quem vê todos: todas as tarefas; colaboradora: só as atribuídas a ela
+  let rows = can(req, "ver_todos") ? db.tasks : db.tasks.filter((t) => t.responsavelId === req.user.id);
+  rows = [...rows].sort((a, b) => {
+    // não concluídas primeiro, depois por prazo
+    if (a.concluida !== b.concluida) return a.concluida ? 1 : -1;
+    return (a.prazo || "9999").localeCompare(b.prazo || "9999");
+  });
+  res.json({ tasks: rows });
+});
+
+app.post("/api/tasks", requireAuth, (req, res) => {
+  // só admin (ou quem gerencia usuários) pode criar/atribuir tarefas
+  if (!req.isAdmin && !can(req, "gerir_usuarios")) return res.status(403).json({ error: "sem permissão para atribuir tarefas" });
+  const b = req.body;
+  if (!b.titulo?.trim() || !b.responsavelId) return res.status(400).json({ error: "título e responsável são obrigatórios" });
+  const task = {
+    id: "t" + Date.now() + crypto.randomBytes(2).toString("hex"),
+    titulo: b.titulo.trim(),
+    descricao: b.descricao?.trim() || "",
+    responsavelId: b.responsavelId,
+    prazo: b.prazo || "",
+    prioridade: b.prioridade || "media", // baixa | media | alta
+    concluida: false,
+    criadaPor: req.user.id,
+    criadaEm: new Date().toISOString(),
+    concluidaEm: null,
+  };
+  db.tasks.unshift(task);
+  saveDB(db);
+  res.json({ task });
+});
+
+app.put("/api/tasks/:id", requireAuth, (req, res) => {
+  const t = db.tasks.find((x) => x.id === req.params.id);
+  if (!t) return res.status(404).json({ error: "não encontrada" });
+  const b = req.body;
+  const ehDono = req.isAdmin || can(req, "gerir_usuarios");
+  const ehResponsavel = t.responsavelId === req.user.id;
+  // a colaboradora responsável pode marcar concluída/desmarcar; o dono pode editar tudo
+  if (b.concluida !== undefined && (ehResponsavel || ehDono)) {
+    t.concluida = !!b.concluida;
+    t.concluidaEm = b.concluida ? new Date().toISOString() : null;
+  }
+  if (ehDono) {
+    if (b.titulo !== undefined) t.titulo = b.titulo.trim() || t.titulo;
+    if (b.descricao !== undefined) t.descricao = b.descricao.trim();
+    if (b.responsavelId !== undefined) t.responsavelId = b.responsavelId;
+    if (b.prazo !== undefined) t.prazo = b.prazo;
+    if (b.prioridade !== undefined) t.prioridade = b.prioridade;
+  }
+  if (!ehResponsavel && !ehDono) return res.status(403).json({ error: "sem permissão" });
+  saveDB(db);
+  res.json({ task: t });
+});
+
+app.delete("/api/tasks/:id", requireAuth, (req, res) => {
+  if (!req.isAdmin && !can(req, "gerir_usuarios")) return res.status(403).json({ error: "sem permissão" });
+  const t = db.tasks.find((x) => x.id === req.params.id);
+  if (!t) return res.status(404).json({ error: "não encontrada" });
+  db.tasks = db.tasks.filter((x) => x.id !== req.params.id);
+  saveDB(db);
+  res.json({ ok: true });
+});
+
+// ---------------------------------------------------------------------------
+// IA — análise de desempenho (chave protegida no servidor)
+// ---------------------------------------------------------------------------
+app.post("/api/analise", requireAuth, async (req, res) => {
+  if (!can(req, "ia")) return res.status(403).json({ error: "sem permissão" });
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: "IA não configurada (defina ANTHROPIC_API_KEY no Railway)" });
+
+  const users = db.users.filter((u) => u.ativo);
+  const records = db.records;
+  const colaboradoraId = req.body?.colaboradoraId || null;
+
+  let prompt;
+  if (colaboradoraId) {
+    // ---- ANÁLISE INDIVIDUAL ----
+    const alvo = db.users.find((u) => u.id === colaboradoraId);
+    if (!alvo) return res.status(404).json({ error: "colaboradora não encontrada" });
+    const resumoInd = buildIndividualPayload(records, db.tasks, alvo);
+    prompt = `Você é um especialista em gestão de equipes de atendimento ao cliente / suporte ao aluno. Analise o desempenho INDIVIDUAL da colaboradora abaixo e produza um parecer em português do Brasil.
+
+DADOS DA COLABORADORA:
+${resumoInd}
+
+Retorne SOMENTE um JSON válido (sem markdown, sem crases) com esta estrutura exata:
+{
+  "individual": true,
+  "nome": "nome exato da colaboradora",
+  "avaliacao": "Excelente" | "Bom" | "Regular" | "Precisa atenção",
+  "resumo": "2-3 frases sobre o desempenho geral dela, baseado nos números",
+  "pontos_fortes": ["ponto forte 1", "ponto forte 2"],
+  "pontos_melhoria": ["ponto a melhorar 1", "ponto a melhorar 2"],
+  "sugestoes": ["sugestão prática e acionável 1", "sugestão 2", "sugestão 3"],
+  "feedback_sugerido": "um parágrafo curto de feedback que a gerente poderia dar diretamente a ela, em tom construtivo"
+}
+Seja específico usando os números reais. Tom profissional, construtivo e acionável.`;
   } else {
-    card.fechadoEm = null;
-  }
-  // transferência: gerente transfere pra qualquer um; vendedor pode repassar o próprio card
-  if (b.responsavelId !== undefined) {
-    const destino = db.users.find((u) => u.id === b.responsavelId);
-    if (destino) card.responsavelId = destino.id;
-  }
-  card.atualizadoEm = Date.now();
-  saveSoon();
-  res.json(card);
-});
+    // ---- ANÁLISE DA EQUIPE (padrão) ----
+    const resumo = buildAIPayload(records, users);
+    prompt = `Você é um especialista em gestão de equipes de atendimento ao cliente / suporte ao aluno. Analise os dados de desempenho da equipe abaixo e produza um relatório gerencial em português do Brasil.
 
-app.delete("/api/cards/:id", auth, (req, res) => {
-  const card = db.cards.find((c) => c.id === req.params.id);
-  if (!card) return res.status(404).json({ error: "Card não encontrado" });
-  if (!podeVerCard(req.user, card))
-    return res.status(403).json({ error: "Sem acesso a esse card" });
-  card.arquivado = true;
-  card.atualizadoEm = Date.now();
-  saveSoon();
-  res.json({ ok: true });
-});
+DADOS DA EQUIPE (período completo registrado):
+${resumo}
 
-// importação de leads em massa (planilha de números)
-app.post("/api/cards/import", auth, (req, res) => {
-  const { leads, origem, curso, responsavelId } = req.body || {};
-  if (!Array.isArray(leads) || leads.length === 0)
-    return res.status(400).json({ error: "Nenhum lead pra importar" });
-  let resp = req.user.id;
-  if (req.user.role === "gerente" && responsavelId) resp = responsavelId;
-  const agora = Date.now();
-  let criados = 0;
-  leads.slice(0, 5000).forEach((l) => {
-    const tel = String((l && l.telefone) || "").trim();
-    const nome = String((l && l.cliente) || "").trim() || tel || "Sem nome";
-    if (!tel && !(l && l.cliente)) return;
-    db.cards.push({
-      id: proximoId("c"),
-      cliente: nome,
-      telefone: tel,
-      valorEstimado: 0,
-      valorFinal: 0,
-      etapa: "lead",
-      responsavelId: resp,
-      curso: String((l && l.curso) || curso || "").trim(),
-      origem: String(origem || "").trim(),
-      obs: "",
-      arquivado: false,
-      fechadoEm: null,
-      criadoEm: agora,
-      atualizadoEm: agora,
-    });
-    criados++;
-  });
-  saveSoon();
-  res.json({ criados });
-});
-
-// lista enxuta de vendedores ativos (pra transferência — acessível a todos)
-app.get("/api/vendedores", auth, (req, res) => {
-  res.json(
-    db.users
-      .filter((u) => u.role === "vendedor" && u.ativo)
-      .map((u) => ({ id: u.id, nome: u.nome }))
-  );
-});
-
-/* ============================================================
-   WHATSAPP (Evolution API)
-   ============================================================ */
-function instanciaLimpa(nome) {
-  return String(nome || "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9_-]/g, "");
+Retorne SOMENTE um JSON válido (sem markdown, sem crases) com esta estrutura exata:
+{
+  "panorama": "2-3 frases sobre a situação geral do setor",
+  "destaque": "nome da colaboradora com melhor desempenho e por quê (1 frase)",
+  "atencao": "nome da colaboradora que precisa de mais apoio e por quê, de forma construtiva (1 frase), ou null se todas vão bem",
+  "colaboradoras": [
+    { "nome": "nome exato", "avaliacao": "Excelente" | "Bom" | "Regular" | "Precisa atenção", "leitura": "1-2 frases sobre como ela está, baseado nos números", "sugestoes": ["sugestão prática 1", "sugestão prática 2"] }
+  ],
+  "acoes_setor": ["ação recomendada para o setor 1", "ação 2", "ação 3"]
 }
-function instanciasDoUser(user) {
-  const insts = db.waConfig.instancias || [];
-  if (user.role === "gerente") {
-    // gerente: todas as cadastradas + as que aparecem em conversas
-    const set = new Set(insts.map((i) => i.instance));
-    Object.values(db.waChats).forEach((c) => set.add(c.instance));
-    return [...set];
+Seja específico usando os números reais. Tom profissional, construtivo e acionável.`;
   }
-  return insts.filter((i) => i.vendedorId === user.id).map((i) => i.instance);
-}
-function vendedorDaInstancia(instance) {
-  const m = (db.waConfig.instancias || []).find((i) => i.instance === instance);
-  return m ? m.vendedorId : null;
-}
-async function evo(method, caminho, body) {
-  const cfg = db.waConfig;
-  if (!cfg.url || !cfg.apiKey) throw new Error("Conexão Evolution não configurada");
-  const base = cfg.url.replace(/\/+$/, "");
-  const res = await fetch(base + caminho, {
-    method,
-    headers: { "Content-Type": "application/json", apikey: cfg.apiKey },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  let data = null;
-  try { data = await res.json(); } catch (_) {}
-  if (!res.ok) {
-    const msg = (data && (data.message || data.error)) || "Erro Evolution " + res.status;
-    throw new Error(Array.isArray(msg) ? msg.join("; ") : String(msg));
-  }
-  return data;
-}
-function webhookUrl() {
-  const base = (db.waConfig.publicUrl || "").replace(/\/+$/, "");
-  return base ? `${base}/api/wa/webhook/${db.waConfig.webhookToken}` : "";
-}
-async function configurarWebhook(instance) {
-  const url = webhookUrl();
-  if (!url) return;
+
   try {
-    await evo("POST", `/webhook/set/${instance}`, {
-      webhook: {
-        enabled: true,
-        url,
-        webhookByEvents: false,
-        webhookBase64: true,
-        events: ["MESSAGES_UPSERT"],
-      },
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 2000, messages: [{ role: "user", content: prompt }] }),
     });
+    const data = await r.json();
+    if (data.error) return res.status(502).json({ error: data.error.message || "erro na IA" });
+    const text = (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("\n");
+    const clean = text.replace(/```json/g, "").replace(/```/g, "").trim();
+    res.json({ result: JSON.parse(clean) });
   } catch (e) {
-    console.error("Falha ao configurar webhook:", e.message);
+    console.error("Erro IA:", e);
+    res.status(502).json({ error: "não foi possível gerar a análise agora" });
   }
+});
+
+function buildAIPayload(records, users) {
+  // gestores (gerente/diretor) não entram na análise de produtividade
+  const equipe = users.filter((u) => !u.excluirAnalise && u.role !== "admin");
+  const lines = equipe.map((u) => {
+    const rs = records.filter((r) => r.colaboradoraId === u.id);
+    if (rs.length === 0) return `- ${u.nome || u.login}: nenhum atendimento registrado`;
+    const resolv = rs.filter((r) => r.status === "resolvido").length;
+    const and = rs.filter((r) => r.status === "andamento").length;
+    const pen = rs.filter((r) => r.status === "pendente").length;
+    const taxa = Math.round((resolv / rs.length) * 100);
+    const assuntos = {};
+    rs.forEach((r) => { const k = r.assunto || "outros"; assuntos[k] = (assuntos[k] || 0) + 1; });
+    const topA = Object.entries(assuntos).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([a, n]) => `${a} (${n})`).join(", ");
+    return `- ${u.nome || u.login}: ${rs.length} atendimentos | ${resolv} resolvidos, ${and} em andamento, ${pen} pendentes | taxa de resolução ${taxa}% | principais assuntos: ${topA}`;
+  });
+  // total considera só atendimentos da equipe operacional
+  const idsEquipe = new Set(equipe.map((u) => u.id));
+  const recordsEquipe = records.filter((r) => idsEquipe.has(r.colaboradoraId));
+  const total = recordsEquipe.length;
+  const totalRes = recordsEquipe.filter((r) => r.status === "resolvido").length;
+  return `Total geral: ${total} atendimentos | Taxa de resolução do setor: ${total ? Math.round((totalRes / total) * 100) : 0}%\n\nPor colaboradora:\n${lines.join("\n")}`;
 }
 
-/* ---- WEBHOOK (Evolution chama aqui quando chega mensagem) ---- */
+function buildIndividualPayload(records, tasks, alvo) {
+  const rs = records.filter((r) => r.colaboradoraId === alvo.id);
+  const resolv = rs.filter((r) => r.status === "resolvido").length;
+  const and = rs.filter((r) => r.status === "andamento").length;
+  const pen = rs.filter((r) => r.status === "pendente").length;
+  const taxa = rs.length ? Math.round((resolv / rs.length) * 100) : 0;
+  const assuntos = {};
+  rs.forEach((r) => { const k = r.assunto || "outros"; assuntos[k] = (assuntos[k] || 0) + 1; });
+  const topA = Object.entries(assuntos).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([a, n]) => `${a} (${n})`).join(", ") || "nenhum";
+
+  // tarefas atribuídas a ela
+  const ts = (tasks || []).filter((t) => t.responsavelId === alvo.id);
+  const tConcl = ts.filter((t) => t.concluida).length;
+  const hoje = new Date().toISOString().slice(0, 10);
+  const tAtrasadas = ts.filter((t) => !t.concluida && t.prazo && t.prazo < hoje).length;
+
+  // média geral do setor para comparação
+  const totalSetor = records.length;
+  const resSetor = records.filter((r) => r.status === "resolvido").length;
+  const taxaSetor = totalSetor ? Math.round((resSetor / totalSetor) * 100) : 0;
+
+  return `Nome: ${alvo.nome || alvo.login}
+Atendimentos: ${rs.length} no total
+- Resolvidos: ${resolv}
+- Em andamento: ${and}
+- Pendentes: ${pen}
+- Taxa de resolução individual: ${taxa}%
+Principais assuntos que ela atende: ${topA}
+
+Tarefas atribuídas: ${ts.length} (${tConcl} concluídas, ${tAtrasadas} atrasadas)
+
+Comparação com o setor: a taxa de resolução média do setor é ${taxaSetor}%. A dela é ${taxa}%.`;
+}
+
+// ---------------------------------------------------------------------------
+// WHATSAPP (integração com Evolution API)
+// ---------------------------------------------------------------------------
+
+// helper: normaliza um número de telefone (tira sufixos do whatsapp)
+function normalizeJid(jid) {
+  if (!jid) return "";
+  return String(jid).split("@")[0].split(":")[0];
+}
+
+// ---- WEBHOOK: a Evolution chama aqui quando chega/sai mensagem ----
+// Não exige login (é a Evolution chamando), mas valida um token simples na URL.
 app.post("/api/wa/webhook/:token", (req, res) => {
-  if (req.params.token !== db.waConfig.webhookToken)
+  // valida o token configurado (evita qualquer um chamar)
+  const expected = db.waConfig?.webhookToken;
+  if (expected && req.params.token !== expected) {
     return res.status(403).json({ error: "token inválido" });
-  try {
-    const b = req.body || {};
-    const instance = b.instance || (b.sender && b.sender.instanceName) || "";
-    const data = b.data || {};
-    const key = data.key || {};
-    const jid = key.remoteJid || "";
-    if (!instance || !jid || jid.endsWith("@g.us")) {
-      return res.json({ ok: true }); // ignora grupos / sem dados
-    }
-    const numero = jid.split("@")[0];
-    const fromMe = !!key.fromMe;
-    const msg = data.message || {};
-    const texto =
-      msg.conversation ||
-      (msg.extendedTextMessage && msg.extendedTextMessage.text) ||
-      (msg.imageMessage && "[imagem]") ||
-      (msg.audioMessage && "[áudio]") ||
-      (msg.documentMessage && "[documento]") ||
-      (msg.videoMessage && "[vídeo]") ||
-      "";
-    if (!texto) return res.json({ ok: true });
+  }
 
-    const id = `${instance}::${numero}`;
-    let chat = db.waChats[id];
-    if (!chat) {
-      chat = {
-        id, instance, numero,
-        nome: data.pushName || numero,
-        mensagens: [], naoLidas: 0, atualizadoEm: Date.now(),
-      };
-      db.waChats[id] = chat;
+  try {
+    const body = req.body || {};
+    const event = body.event || body.type || "";
+    const instance = body.instance || body.instanceName || "";
+
+    // a Evolution manda eventos de mensagem como "messages.upsert"
+    if (event === "messages.upsert" || event === "messages.update" || body.data?.message) {
+      const data = body.data || {};
+      const key = data.key || {};
+      const remoteJid = key.remoteJid || "";
+      const numero = normalizeJid(remoteJid);
+      const ehGrupo = remoteJid.includes("@g.us");
+      // ignora status/broadcast
+      if (numero && !remoteJid.includes("status@broadcast")) {
+        const fromMe = !!key.fromMe;
+        // extrai o texto da mensagem (vários formatos possíveis)
+        const msg = data.message || {};
+        // detecta o tipo de mídia
+        let tipoMidia = null;
+        if (msg.audioMessage) tipoMidia = "audio";
+        else if (msg.imageMessage) tipoMidia = "image";
+        else if (msg.videoMessage) tipoMidia = "video";
+        else if (msg.documentMessage) tipoMidia = "document";
+        else if (msg.stickerMessage) tipoMidia = "sticker";
+        const texto =
+          msg.conversation ||
+          msg.extendedTextMessage?.text ||
+          msg.imageMessage?.caption ||
+          msg.videoMessage?.caption ||
+          (tipoMidia === "audio" ? "🎤 Áudio" : "") ||
+          (tipoMidia === "image" ? "📷 Imagem" : "") ||
+          (tipoMidia === "video" ? "🎥 Vídeo" : "") ||
+          (tipoMidia === "document" ? "📄 Documento" : "") ||
+          (tipoMidia === "sticker" ? "Figurinha" : "") ||
+          "";
+        const pushName = data.pushName || "";
+        const ts = (data.messageTimestamp ? Number(data.messageTimestamp) * 1000 : Date.now());
+        // chave única: junta instância + número (mesma pessoa em WhatsApps diferentes = conversas separadas)
+        const chaveId = `${instance || "?"}::${numero}`;
+
+        if (!db.waChats[chaveId]) {
+          db.waChats[chaveId] = { id: chaveId, numero, nome: pushName || numero, instance, ehGrupo, mensagens: [], atualizadoEm: ts, naoLidas: 0 };
+        }
+        const chat = db.waChats[chaveId];
+        if (pushName && !fromMe) chat.nome = pushName;
+        chat.instance = instance || chat.instance;
+        chat.ehGrupo = ehGrupo;
+        chat.numero = numero;
+        // guarda a mensagem; se for mídia, guarda o messageId pra baixar depois
+        const novaMsg = { id: key.id || (Date.now() + "-" + Math.random()), fromMe, texto, ts };
+        if (tipoMidia && tipoMidia !== "sticker") {
+          novaMsg.tipoMidia = tipoMidia;
+          novaMsg.mediaMsgId = key.id;       // usado pra baixar a mídia da Evolution
+          novaMsg.mimetype = msg[`${tipoMidia}Message`]?.mimetype || "";
+          if (tipoMidia === "document") novaMsg.fileName = msg.documentMessage?.fileName || "documento";
+        }
+        chat.mensagens.push(novaMsg);
+        // mantém só as últimas 200 mensagens por conversa (evita crescer demais)
+        if (chat.mensagens.length > 200) chat.mensagens = chat.mensagens.slice(-200);
+        chat.atualizadoEm = ts;
+        if (!fromMe) chat.naoLidas = (chat.naoLidas || 0) + 1;
+        saveDB(db);
+      }
     }
-    if (!fromMe && data.pushName) chat.nome = data.pushName;
-    chat.mensagens.push({
-      role: fromMe ? "me" : "them",
-      content: texto,
-      ts: Date.now(),
-    });
-    if (chat.mensagens.length > 300) chat.mensagens = chat.mensagens.slice(-300);
-    if (!fromMe) chat.naoLidas = (chat.naoLidas || 0) + 1;
-    chat.atualizadoEm = Date.now();
-    saveSoon();
     res.json({ ok: true });
   } catch (e) {
-    console.error("Webhook erro:", e.message);
-    res.json({ ok: true });
+    console.error("Erro no webhook WA:", e.message);
+    res.json({ ok: true }); // sempre 200 pra Evolution não ficar reenviando
   }
 });
 
-/* ---- CONFIG (gerente) ---- */
-app.get("/api/wa/config", auth, gerenteOnly, (req, res) => {
-  const c = db.waConfig;
-  res.json({
-    url: c.url, publicUrl: c.publicUrl,
+// ---- CONFIG: salvar dados da conexão (admin) ----
+app.get("/api/wa/config", requireAuth, (req, res) => {
+  if (!req.isAdmin && !can(req, "gerir_whatsapp")) return res.status(403).json({ error: "sem permissão" });
+  const c = db.waConfig || {};
+  res.json({ config: {
+    url: c.url || "",
+    webhookToken: c.webhookToken || "",
     temApiKey: !!c.apiKey,
-    instancias: c.instancias,
-    webhookUrl: webhookUrl(),
-  });
+    conectado: !!c.url,
+    instancias: c.instancias || [],   // [{ instance, colaboradoraId, colaboradoraNome }]
+  } });
 });
-app.put("/api/wa/config", auth, gerenteOnly, (req, res) => {
-  const { url, apiKey, publicUrl, instancias } = req.body || {};
-  if (url !== undefined) db.waConfig.url = String(url).trim();
-  if (apiKey) db.waConfig.apiKey = String(apiKey).trim();
-  if (publicUrl) db.waConfig.publicUrl = String(publicUrl).trim();
+
+app.put("/api/wa/config", requireAuth, (req, res) => {
+  if (!req.isAdmin && !can(req, "gerir_whatsapp")) return res.status(403).json({ error: "sem permissão" });
+  const { url, apiKey, instancias } = req.body;
+  db.waConfig = db.waConfig || {};
+  if (url !== undefined) db.waConfig.url = String(url).trim().replace(/\/$/, "");
+  if (apiKey !== undefined && apiKey) db.waConfig.apiKey = String(apiKey).trim();
   if (Array.isArray(instancias)) {
+    // limpa e normaliza a lista de instâncias
     db.waConfig.instancias = instancias
-      .filter((i) => i && i.instance)
-      .map((i) => ({ instance: instanciaLimpa(i.instance), vendedorId: i.vendedorId || null }));
+      .filter((i) => i && i.instance && String(i.instance).trim())
+      .map((i) => ({
+        instance: String(i.instance).trim(),
+        colaboradoraId: i.colaboradoraId || "",
+        colaboradoraNome: i.colaboradoraNome || "",
+      }));
   }
-  saveSoon();
-  res.json({ ok: true, webhookUrl: webhookUrl() });
+  // gera um token de webhook se ainda não tiver
+  if (!db.waConfig.webhookToken) db.waConfig.webhookToken = crypto.randomBytes(12).toString("hex");
+  // guarda a URL pública do próprio sistema (para montar o webhook automaticamente)
+  const proto = req.headers["x-forwarded-proto"] || "https";
+  const host = req.headers["x-forwarded-host"] || req.headers.host;
+  if (host) db.waConfig.publicUrl = `${proto}://${host}`;
+  saveDB(db);
+  res.json({ ok: true, webhookToken: db.waConfig.webhookToken });
 });
 
-/* ---- minha instância (vendedor conecta o próprio) ---- */
-app.get("/api/wa/minha", auth, async (req, res) => {
-  const insts = instanciasDoUser(req.user);
-  const instance = insts[0] || null;
-  let estado = "sem_instancia";
-  if (instance) {
-    try {
-      const r = await evo("GET", `/instance/connectionState/${instance}`);
-      estado = (r && r.instance && r.instance.state) || "close";
-    } catch (_) { estado = "desconhecido"; }
-  }
-  res.json({ instance, estado });
-});
+// helper: quais instâncias o usuário logado pode ver
+// - admin (gerente) ou quem gerencia whatsapp: vê todas
+// - colaboradora comum: só as instâncias vinculadas a ela
+function instanciasVisiveis(req) {
+  const todas = db.waConfig?.instancias || [];
+  if (req.isAdmin || can(req, "gerir_whatsapp")) return null; // null = todas
+  return todas.filter((i) => String(i.colaboradoraId) === String(req.user.id)).map((i) => i.instance);
+}
 
-/* ---- listar conversas (escopo por instância) ---- */
-app.get("/api/wa/chats", auth, (req, res) => {
-  const permitidas = new Set(instanciasDoUser(req.user));
-  let chats = Object.values(db.waChats).filter((c) => permitidas.has(c.instance));
-  if (req.user.role === "gerente" && req.query.instance && req.query.instance !== "todas") {
-    chats = chats.filter((c) => c.instance === req.query.instance);
-  }
-  chats.sort((a, b) => (b.atualizadoEm || 0) - (a.atualizadoEm || 0));
-  res.json(
-    chats.map((c) => ({
-      id: c.id, instance: c.instance, numero: c.numero, nome: c.nome,
-      naoLidas: c.naoLidas || 0, atualizadoEm: c.atualizadoEm,
-      ultima: c.mensagens.length ? c.mensagens[c.mensagens.length - 1].content : "",
-      vendedorId: vendedorDaInstancia(c.instance),
+// ---- listar conversas (com filtro opcional por instância) ----
+app.get("/api/wa/chats", requireAuth, (req, res) => {
+  const filtroInstance = req.query.instance || "";   // filtra por atendente
+  const permitidas = instanciasVisiveis(req);          // null = todas
+  const instMap = {};
+  (db.waConfig?.instancias || []).forEach((i) => { instMap[i.instance] = i.colaboradoraNome || i.instance; });
+  let chats = Object.values(db.waChats || {})
+    .map((c) => ({
+      id: c.id || `${c.instance || "?"}::${c.numero}`,
+      numero: c.numero,
+      nome: c.nome,
+      instance: c.instance,
+      ehGrupo: !!c.ehGrupo,
+      atendente: instMap[c.instance] || c.instance || "",   // nome da colaboradora
+      atualizadoEm: c.atualizadoEm,
+      naoLidas: c.naoLidas || 0,
+      ultima: c.mensagens?.[c.mensagens.length - 1]?.texto || "",
     }))
-  );
-});
-
-/* ---- abrir conversa (marca como lida) ---- */
-app.get("/api/wa/chats/:id", auth, (req, res) => {
-  const chat = db.waChats[req.params.id];
-  if (!chat) return res.status(404).json({ error: "Conversa não encontrada" });
-  const permitidas = new Set(instanciasDoUser(req.user));
-  if (!permitidas.has(chat.instance))
-    return res.status(403).json({ error: "Sem acesso a essa conversa" });
-  chat.naoLidas = 0;
-  saveSoon();
-  res.json(chat);
-});
-
-/* ---- enviar mensagem ---- */
-app.post("/api/wa/chats/:id/send", auth, async (req, res) => {
-  const chat = db.waChats[req.params.id];
-  if (!chat) return res.status(404).json({ error: "Conversa não encontrada" });
-  const permitidas = new Set(instanciasDoUser(req.user));
-  if (!permitidas.has(chat.instance))
-    return res.status(403).json({ error: "Sem acesso a essa conversa" });
-  const texto = (req.body && req.body.texto) || "";
-  if (!texto.trim()) return res.status(400).json({ error: "Mensagem vazia" });
-  try {
-    await evo("POST", `/message/sendText/${chat.instance}`, {
-      number: chat.numero,
-      text: texto,
+    .sort((a, b) => (b.atualizadoEm || 0) - (a.atualizadoEm || 0));
+  // PRIVACIDADE: colaboradora só vê conversas das instâncias dela
+  if (permitidas !== null) chats = chats.filter((c) => permitidas.includes(c.instance));
+  if (filtroInstance) chats = chats.filter((c) => c.instance === filtroInstance);
+  // monta a lista de instâncias para o filtro
+  let instParaFiltro;
+  if (permitidas === null) {
+    // gerente: mostra só instâncias cadastradas na config + as que REALMENTE têm conversa
+    const cadastradas = db.waConfig?.instancias || [];
+    const instComConversa = new Set(Object.values(db.waChats || {}).map((c) => c.instance).filter(Boolean));
+    const jaListadas = new Set();
+    instParaFiltro = [];
+    // primeiro as cadastradas (com nome bonito)
+    cadastradas.forEach((i) => {
+      if (!jaListadas.has(i.instance)) { jaListadas.add(i.instance); instParaFiltro.push(i); }
     });
-    chat.mensagens.push({ role: "me", content: texto, ts: Date.now() });
-    chat.atualizadoEm = Date.now();
-    saveSoon();
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
+    // depois as que têm conversa mas não estão cadastradas
+    instComConversa.forEach((inst) => {
+      if (!jaListadas.has(inst)) { jaListadas.add(inst); instParaFiltro.push({ instance: inst, colaboradoraNome: inst }); }
+    });
+  } else {
+    instParaFiltro = (db.waConfig?.instancias || []).filter((i) => permitidas.includes(i.instance));
   }
+  res.json({ chats, instancias: instParaFiltro });
 });
 
-/* ---- iniciar nova conversa (manda 1ª mensagem pra um número) ---- */
-app.post("/api/wa/iniciar", auth, async (req, res) => {
-  const { instance, numero, texto } = req.body || {};
-  const permitidas = new Set(instanciasDoUser(req.user));
-  const inst = instance || instanciasDoUser(req.user)[0];
-  if (!inst || !permitidas.has(inst))
-    return res.status(403).json({ error: "Sem WhatsApp vinculado" });
-  const num = String(numero || "").replace(/\D/g, "");
-  if (num.length < 8) return res.status(400).json({ error: "Número inválido" });
-  try {
-    await evo("POST", `/message/sendText/${inst}`, { number: num, text: texto || "Olá!" });
-    const id = `${inst}::${num}`;
-    let chat = db.waChats[id];
-    if (!chat) {
-      chat = { id, instance: inst, numero: num, nome: num, mensagens: [], naoLidas: 0, atualizadoEm: Date.now() };
-      db.waChats[id] = chat;
-    }
-    chat.mensagens.push({ role: "me", content: texto || "Olá!", ts: Date.now() });
-    chat.atualizadoEm = Date.now();
-    saveSoon();
-    res.json({ ok: true, id });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
+// ---- ver mensagens de uma conversa (pela chave id = instancia::numero) ----
+app.get("/api/wa/chats/:id", requireAuth, (req, res) => {
+  const id = decodeURIComponent(req.params.id);
+  let chat = db.waChats?.[id];
+  // fallback: se não achou pela chave exata, tenta pelo id interno ou pelo número
+  if (!chat) {
+    chat = Object.values(db.waChats || {}).find((c) => c.id === id || c.numero === id);
   }
+  if (!chat) return res.status(404).json({ error: "conversa não encontrada" });
+  // PRIVACIDADE: bloqueia abrir conversa de instância que não é da pessoa
+  const permitidas = instanciasVisiveis(req);
+  if (permitidas !== null && !permitidas.includes(chat.instance)) {
+    return res.status(403).json({ error: "sem acesso a esta conversa" });
+  }
+  // zera não-lidas ao abrir
+  chat.naoLidas = 0;
+  saveDB(db);
+  res.json({ chat });
 });
 
-/* ---- criar instância + QR (gerente, ou vendedor pra própria) ---- */
-app.post("/api/wa/connect", auth, async (req, res) => {
-  let { instance, publicUrl } = req.body || {};
-  instance = instanciaLimpa(instance);
-  if (!instance) return res.status(400).json({ error: "Informe o nome da instância" });
-  // permissão: gerente conecta qualquer uma; vendedor só a dele
-  if (req.user.role !== "gerente") {
-    const minhas = instanciasDoUser(req.user);
-    if (!minhas.includes(instance))
-      return res.status(403).json({ error: "Você só pode conectar o seu WhatsApp" });
+// ---- limpar instâncias "fantasmas" do filtro (que não têm conversa nem estão conectadas) ----
+app.post("/api/wa/limpar-fantasmas", requireAuth, (req, res) => {
+  if (!req.isAdmin && !can(req, "gerir_whatsapp")) return res.status(403).json({ error: "sem permissão" });
+  // remove da config as instâncias que não têm nenhuma conversa
+  const comConversa = new Set(Object.values(db.waChats || {}).map((c) => c.instance).filter(Boolean));
+  if (db.waConfig?.instancias) {
+    db.waConfig.instancias = db.waConfig.instancias.filter((i) => comConversa.has(i.instance));
+    saveDB(db);
   }
-  if (publicUrl && !db.waConfig.publicUrl) {
-    db.waConfig.publicUrl = String(publicUrl).trim();
-    saveSoon();
-  }
-  try {
-    // cria a instância (se já existir, a Evolution dá erro — então tentamos só conectar)
-    try {
-      await evo("POST", `/instance/create`, {
-        instanceName: instance,
-        integration: "WHATSAPP-BAILEYS",
-        qrcode: true,
-      });
-    } catch (e) {
-      // provavelmente já existe — segue pro connect
-    }
-    await configurarWebhook(instance);
-    const r = await evo("GET", `/instance/connect/${instance}`);
-    const base64 = r.base64 || (r.qrcode && r.qrcode.base64) || null;
-    res.json({ qr: base64, pairingCode: r.pairingCode || null });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-app.get("/api/wa/status/:instance", auth, async (req, res) => {
-  try {
-    const r = await evo("GET", `/instance/connectionState/${req.params.instance}`);
-    res.json({ estado: (r && r.instance && r.instance.state) || "close" });
-  } catch (e) {
-    res.json({ estado: "desconhecido" });
-  }
-});
-
-app.post("/api/wa/logout/:instance", auth, gerenteOnly, async (req, res) => {
-  try { await evo("DELETE", `/instance/logout/${req.params.instance}`); res.json({ ok: true }); }
-  catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.delete("/api/wa/instance/:instance", auth, gerenteOnly, async (req, res) => {
-  try {
-    try { await evo("DELETE", `/instance/logout/${req.params.instance}`); } catch (_) {}
-    await evo("DELETE", `/instance/delete/${req.params.instance}`);
-  } catch (e) { /* segue mesmo se já não existir */ }
-  // remove do mapeamento e conversas
-  db.waConfig.instancias = db.waConfig.instancias.filter((i) => i.instance !== req.params.instance);
-  Object.keys(db.waChats).forEach((k) => {
-    if (db.waChats[k].instance === req.params.instance) delete db.waChats[k];
-  });
-  saveSoon();
   res.json({ ok: true });
 });
 
-/* ============================================================
-   ANÁLISE POR IA (Claude / Anthropic) — sugestão da equipe e individual
-   ============================================================ */
-const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || "claude-haiku-4-5-20251001";
-
-async function chamarIA(prompt) {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key)
-    throw new Error("IA não configurada: adicione a variável ANTHROPIC_API_KEY no Railway.");
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": key,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: ANTHROPIC_MODEL,
-      max_tokens: 1200,
-      messages: [{ role: "user", content: prompt }],
-    }),
+// ---- minha instância (para a colaboradora conectar o próprio WhatsApp) ----
+app.get("/api/wa/minha-instancia", requireAuth, (req, res) => {
+  const c = db.waConfig || {};
+  const minhas = (c.instancias || []).filter((i) => String(i.colaboradoraId) === String(req.user.id));
+  res.json({
+    configurado: !!(c.url && c.apiKey),    // a gerente já configurou a Evolution?
+    instancias: minhas,                      // normalmente 1, mas pode ter mais
   });
-  let data = null;
-  try { data = await res.json(); } catch (_) {}
-  if (!res.ok) {
-    const m = (data && data.error && data.error.message) || "Erro na IA " + res.status;
-    if (res.status === 404 || /model/i.test(m))
-      throw new Error("Modelo da IA não encontrado. Ajuste a variável ANTHROPIC_MODEL no Railway (ex: claude-haiku-4-5-20251001 ou claude-sonnet-4-6). Detalhe: " + m);
-    if (res.status === 401)
-      throw new Error("Chave da IA inválida. Confira o valor da ANTHROPIC_API_KEY no Railway.");
-    throw new Error(m);
+});
+
+// ---- criar instância + obter QR code (conecta um WhatsApp pelo sistema) ----
+app.post("/api/wa/instance/connect", requireAuth, async (req, res) => {
+  const { instance } = req.body;
+  const c = db.waConfig || {};
+  if (!c.url || !c.apiKey) return res.status(400).json({ error: "A conexão ainda não foi configurada pela gerente." });
+  if (!instance || !String(instance).trim()) return res.status(400).json({ error: "informe o nome da instância" });
+  const nome = String(instance).trim();
+  // PERMISSÃO: gerente conecta qualquer uma; colaboradora só a dela
+  const ehGerente = req.isAdmin || can(req, "gerir_whatsapp");
+  if (!ehGerente) {
+    const minhas = (c.instancias || []).filter((i) => String(i.colaboradoraId) === String(req.user.id)).map((i) => i.instance);
+    if (!minhas.includes(nome)) {
+      return res.status(403).json({ error: "você só pode conectar o seu próprio WhatsApp" });
+    }
   }
-  const blocos = Array.isArray(data && data.content) ? data.content : [];
-  const out = blocos.filter((b) => b.type === "text").map((b) => b.text).join("");
-  if (!out.trim()) throw new Error("A IA não retornou resposta. Tente de novo.");
-  return out;
-}
-function parseIA(txt) {
-  let t = (txt || "").trim().replace(/^```json/i, "").replace(/^```/, "").replace(/```$/, "").trim();
+  // monta a URL do webhook (pra Evolution já avisar o sistema sozinha)
+  const base = c.publicUrl || "";
+  const webhookUrl = (base && c.webhookToken) ? `${base}/api/wa/webhook/${c.webhookToken}` : "";
+
   try {
-    const o = JSON.parse(t);
-    const arr = (a) => (Array.isArray(a) ? a.filter(Boolean).map(String) : []);
-    return {
-      resumo: o.resumo || o.avaliacao || "",
-      pontosFortes: arr(o.pontos_fortes || o.pontosFortes),
-      pontosMelhorar: arr(o.pontos_a_melhorar || o.pontosMelhorar),
-      sugestoes: arr(o.sugestoes),
+    // 1) tenta criar a instância (se já existir, a Evolution retorna erro, e a gente segue pro connect)
+    const criarPayload = {
+      instanceName: nome,
+      integration: "WHATSAPP-BAILEYS",
+      qrcode: true,
+      groupsIgnore: true,
     };
-  } catch (_) {
-    return { resumo: txt, pontosFortes: [], pontosMelhorar: [], sugestoes: [] };
-  }
-}
-function statsVendedor(vendedorId) {
-  const cs = db.cards.filter((c) => !c.arquivado && c.responsavelId === vendedorId);
-  const fechados = cs.filter((c) => c.etapa === "fechou");
-  const total = fechados.reduce((s, c) => s + (Number(c.valorFinal) || 0), 0);
-  return {
-    leads: cs.length,
-    fechados: fechados.length,
-    perdidos: cs.filter((c) => c.etapa === "perdeu").length,
-    emAberto: cs.filter((c) => ["lead", "contato", "negociando"].includes(c.etapa)).length,
-    total,
-    ticket: fechados.length ? total / fechados.length : 0,
-    conversao: cs.length ? Math.round((fechados.length / cs.length) * 100) : 0,
-  };
-}
-function conversasVendedor(vendedorId, maxChats = 6, maxMsgs = 12) {
-  const insts = (db.waConfig.instancias || []).filter((i) => i.vendedorId === vendedorId).map((i) => i.instance);
-  return Object.values(db.waChats)
-    .filter((c) => insts.includes(c.instance))
-    .sort((a, b) => (b.atualizadoEm || 0) - (a.atualizadoEm || 0))
-    .slice(0, maxChats)
-    .map((c) => {
-      const msgs = c.mensagens.slice(-maxMsgs)
-        .map((m) => (m.role === "me" ? "Vendedor" : "Cliente") + ": " + String(m.content).slice(0, 200))
-        .join("\n");
-      return `Conversa com ${c.nome}:\n${msgs}`;
+    if (webhookUrl) {
+      criarPayload.webhook = { url: webhookUrl, byEvents: false, events: ["MESSAGES_UPSERT"] };
+    }
+    let createData = null;
+    const rc = await fetch(`${c.url}/instance/create`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "apikey": c.apiKey },
+      body: JSON.stringify(criarPayload),
     });
-}
+    createData = await rc.json().catch(() => ({}));
+    // se veio o QR já na criação, devolve direto
+    const qrFromCreate = createData?.qrcode?.base64 || null;
+    if (qrFromCreate) {
+      // garante o webhook setado (algumas versões ignoram no create)
+      if (webhookUrl) await setWebhook(c, nome, webhookUrl);
+      return res.json({ qr: qrFromCreate, status: "connecting" });
+    }
 
-app.post("/api/ia/equipe", auth, gerenteOnly, async (req, res) => {
-  try {
-    const vendedores = db.users.filter((u) => u.role === "vendedor" && u.ativo);
-    const linhas = vendedores.map((v) => {
-      const s = statsVendedor(v.id);
-      return `- ${v.nome}: ${s.fechados} vendas, R$ ${s.total.toFixed(2)} vendido, ticket R$ ${s.ticket.toFixed(2)}, ${s.conversao}% conversão (${s.fechados}/${s.leads} leads), ${s.perdidos} perdidos, meta mensal R$ ${(Number(v.meta) || 0).toFixed(2)}`;
-    }).join("\n");
-    const amostras = [];
-    vendedores.slice(0, 6).forEach((v) => {
-      const cv = conversasVendedor(v.id, 1, 8);
-      if (cv[0]) amostras.push(`[${v.nome}] ${cv[0]}`);
+    // 2) senão, chama o connect pra pegar o QR
+    if (webhookUrl) await setWebhook(c, nome, webhookUrl);
+    const rq = await fetch(`${c.url}/instance/connect/${nome}`, {
+      method: "GET",
+      headers: { "apikey": c.apiKey },
     });
-    const prompt = `Você é um gestor comercial sênior analisando a equipe de vendas da Escola Instructiva (cursos técnicos de eletrônica). Analise a EQUIPE como um todo com base nos dados.
+    const qrData = await rq.json().catch(() => ({}));
+    const qr = qrData?.base64 || qrData?.qrcode?.base64 || null;
+    if (qr) return res.json({ qr, status: "connecting" });
 
-DESEMPENHO DOS VENDEDORES:
-${linhas || "Nenhum vendedor cadastrado."}
-
-AMOSTRA DE ATENDIMENTOS NO WHATSAPP:
-${amostras.join("\n\n") || "Sem conversas registradas ainda."}
-
-Responda SOMENTE em JSON puro, sem markdown, neste formato:
-{"resumo":"2 a 4 frases sobre o estado geral da equipe","pontos_fortes":["..."],"pontos_a_melhorar":["..."],"sugestoes":["3 a 5 sugestões práticas e específicas pra melhorar os resultados do time"]}
-Escreva em português brasileiro, tom direto e construtivo.`;
-    res.json(parseIA(await chamarIA(prompt)));
+    // já conectado?
+    if (qrData?.instance?.state === "open" || createData?.instance?.state === "open") {
+      return res.json({ qr: null, status: "open" });
+    }
+    return res.json({ qr: null, status: "connecting", aviso: "QR não retornado ainda, tente novamente em alguns segundos." });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    console.error("Erro ao conectar instância:", e.message);
+    res.status(502).json({ error: "não foi possível falar com a Evolution" });
   }
 });
 
-app.post("/api/ia/vendedor/:id", auth, async (req, res) => {
-  const v = db.users.find((u) => u.id === req.params.id);
-  if (!v) return res.status(404).json({ error: "Vendedor não encontrado" });
-  if (req.user.role !== "gerente" && req.user.id !== v.id)
-    return res.status(403).json({ error: "Sem acesso" });
+// helper: configura o webhook de uma instância na Evolution
+async function setWebhook(c, nome, webhookUrl) {
   try {
-    const s = statsVendedor(v.id);
-    const conv = conversasVendedor(v.id, 6, 12);
-    const prompt = `Você é um gestor comercial sênior avaliando UM vendedor da Escola Instructiva (cursos técnicos de eletrônica). Avalie tanto os RESULTADOS quanto a QUALIDADE DO ATENDIMENTO (tom, rapidez, educação, clareza, follow-up).
-
-VENDEDOR: ${v.nome}
-NÚMEROS: ${s.fechados} vendas fechadas, R$ ${s.total.toFixed(2)} vendido, ticket médio R$ ${s.ticket.toFixed(2)}, ${s.conversao}% de conversão (${s.fechados} de ${s.leads} leads), ${s.perdidos} perdidos, ${s.emAberto} em aberto. Meta mensal: R$ ${(Number(v.meta) || 0).toFixed(2)}.
-
-ATENDIMENTOS NO WHATSAPP:
-${conv.join("\n\n") || "Poucas conversas registradas pra avaliar o atendimento."}
-
-Responda SOMENTE em JSON puro, sem markdown, neste formato:
-{"resumo":"2 a 4 frases avaliando esse vendedor","pontos_fortes":["..."],"pontos_a_melhorar":["..."],"sugestoes":["3 a 5 sugestões práticas e específicas pra esse vendedor melhorar"]}
-Escreva em português brasileiro, tom direto e construtivo, sem ser ofensivo.`;
-    const out = parseIA(await chamarIA(prompt));
-    out.vendedor = v.nome;
-    res.json(out);
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-/* ============================================================
-   FRONTEND (build do Vite)
-   ============================================================ */
-const dist = path.join(__dirname, "..", "dist");
-app.use(express.static(dist));
-app.get("*", (req, res) => {
-  res.sendFile(path.join(dist, "index.html"));
-});
-
-/* ============================================================
-   RESET DE EMERGÊNCIA (se a variável RESET_ADMIN estiver ligada)
-   Restaura o acesso gerente / admin123 SEM apagar vendedores/leads.
-   ============================================================ */
-function resetAdminSeNecessario() {
-  if (!process.env.RESET_ADMIN) return;
-  let g = db.users.find((u) => u.login === "gerente");
-  if (!g) {
-    g = {
-      id: proximoId("u"),
-      nome: "Gerente Comercial",
-      login: "gerente",
-      role: "gerente",
-      meta: 0,
-      ativo: true,
-      token: null,
-      criadoEm: Date.now(),
-    };
-    db.users.push(g);
-  }
-  g.senha = "admin123";
-  g.role = "gerente";
-  g.ativo = true;
-  g.precisaOnboarding = false; // não pede pra trocar de novo
-  g.token = null; // força login novo
-  saveDB();
-  console.log("⚠️  RESET_ADMIN ativo: acesso restaurado -> usuário 'gerente' / senha 'admin123'");
+    await fetch(`${c.url}/webhook/set/${nome}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "apikey": c.apiKey },
+      body: JSON.stringify({ webhook: { enabled: true, url: webhookUrl, webhookByEvents: false, events: ["MESSAGES_UPSERT"] } }),
+    });
+  } catch (e) { /* não bloqueia o fluxo */ }
 }
 
-/* ============================================================
-   START
-   ============================================================ */
-const PORT = process.env.PORT || 3000;
-aguardarVolume().then(() => {
-  loadDB();
-  resetAdminSeNecessario();
-  app.listen(PORT, () => console.log("✓ CRM Comercial rodando na porta", PORT));
+// ---- checar status de conexão de uma instância ----
+app.get("/api/wa/instance/status/:nome", requireAuth, async (req, res) => {
+  const c = db.waConfig || {};
+  if (!c.url || !c.apiKey) return res.status(400).json({ error: "não configurado" });
+  try {
+    const r = await fetch(`${c.url}/instance/connectionState/${req.params.nome}`, {
+      method: "GET", headers: { "apikey": c.apiKey },
+    });
+    const data = await r.json().catch(() => ({}));
+    const state = data?.instance?.state || data?.state || "unknown";
+    res.json({ state });   // "open" = conectado, "connecting", "close"
+  } catch (e) {
+    res.json({ state: "unknown" });
+  }
 });
+
+// ---- baixar mídia de uma mensagem (áudio/imagem/vídeo/doc) em base64 ----
+app.post("/api/wa/media", requireAuth, async (req, res) => {
+  const { id, mediaMsgId } = req.body;
+  const c = db.waConfig || {};
+  if (!c.url || !c.apiKey) return res.status(400).json({ error: "não configurado" });
+  const chat = id ? db.waChats?.[id] : null;
+  if (!chat) return res.status(404).json({ error: "conversa não encontrada" });
+  const permitidas = instanciasVisiveis(req);
+  if (permitidas !== null && !permitidas.includes(chat.instance)) {
+    return res.status(403).json({ error: "sem acesso" });
+  }
+  // acha a mensagem com aquele mediaMsgId
+  const msg = chat.mensagens.find((m) => m.mediaMsgId === mediaMsgId);
+  if (!msg) return res.status(404).json({ error: "mídia não encontrada" });
+  // se já baixamos antes, devolve do cache
+  if (msg.mediaBase64) return res.json({ base64: msg.mediaBase64, mimetype: msg.mimetype, tipoMidia: msg.tipoMidia });
+  try {
+    // pede a mídia decodificada pra Evolution
+    const r = await fetch(`${c.url}/chat/getBase64FromMediaMessage/${chat.instance}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "apikey": c.apiKey },
+      body: JSON.stringify({ message: { key: { id: mediaMsgId } }, convertToMp4: false }),
+    });
+    const data = await r.json().catch(() => ({}));
+    const base64 = data?.base64 || data?.media || "";
+    if (!base64) return res.status(502).json({ error: "não foi possível baixar a mídia" });
+    const mimetype = data?.mimetype || msg.mimetype || "application/octet-stream";
+    // guarda no cache (só áudio/imagem pequenos; evita inchar o banco com vídeo grande)
+    if (msg.tipoMidia === "audio" || msg.tipoMidia === "image") {
+      msg.mediaBase64 = base64;
+      msg.mimetype = mimetype;
+      saveDB(db);
+    }
+    res.json({ base64, mimetype, tipoMidia: msg.tipoMidia });
+  } catch (e) {
+    console.error("Erro ao baixar mídia:", e.message);
+    res.status(502).json({ error: "erro ao baixar a mídia" });
+  }
+});
+
+// ---- iniciar uma nova conversa (manda 1ª mensagem para um número novo) ----
+app.post("/api/wa/nova-conversa", requireAuth, async (req, res) => {
+  const { instance, numero, texto } = req.body;
+  const c = db.waConfig || {};
+  if (!c.url || !c.apiKey) return res.status(400).json({ error: "WhatsApp não configurado" });
+  if (!numero || !texto?.trim()) return res.status(400).json({ error: "número e mensagem são obrigatórios" });
+  // descobre a instância: a escolhida, ou a única da colaboradora, ou a 1ª
+  let inst = instance;
+  const permitidas = instanciasVisiveis(req);
+  if (permitidas !== null) {
+    // colaboradora: força usar uma instância dela
+    if (!inst || !permitidas.includes(inst)) inst = permitidas[0];
+  }
+  if (!inst) inst = c.instancias?.[0]?.instance;
+  if (!inst) return res.status(400).json({ error: "nenhuma instância disponível" });
+  // limpa o número (só dígitos)
+  const num = String(numero).replace(/\D/g, "");
+  if (num.length < 10) return res.status(400).json({ error: "número inválido — use DDD + número (ex: 5544999998888)" });
+  try {
+    const r = await fetch(`${c.url}/message/sendText/${inst}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "apikey": c.apiKey },
+      body: JSON.stringify({ number: num, text: texto.trim() }),
+    });
+    const data = await r.json();
+    if (!r.ok) return res.status(502).json({ error: data?.message || "não foi possível enviar (número tem WhatsApp?)" });
+    // cria/atualiza a conversa no sistema
+    const chaveId = `${inst}::${num}`;
+    if (!db.waChats[chaveId]) {
+      db.waChats[chaveId] = { id: chaveId, numero: num, nome: num, instance: inst, ehGrupo: false, mensagens: [], atualizadoEm: Date.now(), naoLidas: 0 };
+    }
+    db.waChats[chaveId].mensagens.push({ id: Date.now() + "-out", fromMe: true, texto: texto.trim(), ts: Date.now() });
+    db.waChats[chaveId].atualizadoEm = Date.now();
+    saveDB(db);
+    res.json({ ok: true, id: chaveId });
+  } catch (e) {
+    console.error("Erro ao iniciar conversa:", e.message);
+    res.status(502).json({ error: "não foi possível iniciar a conversa" });
+  }
+});
+
+// ---- desconectar uma instância (logout — desliga o WhatsApp, dá pra reconectar) ----
+app.post("/api/wa/instance/logout/:nome", requireAuth, async (req, res) => {
+  if (!req.isAdmin && !can(req, "gerir_whatsapp")) return res.status(403).json({ error: "sem permissão" });
+  const c = db.waConfig || {};
+  if (!c.url || !c.apiKey) return res.status(400).json({ error: "não configurado" });
+  try {
+    const r = await fetch(`${c.url}/instance/logout/${req.params.nome}`, {
+      method: "DELETE", headers: { "apikey": c.apiKey },
+    });
+    await r.json().catch(() => ({}));
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("Erro ao desconectar:", e.message);
+    res.status(502).json({ error: "não foi possível desconectar" });
+  }
+});
+
+// ---- excluir uma instância de vez (delete) ----
+app.delete("/api/wa/instance/:nome", requireAuth, async (req, res) => {
+  if (!req.isAdmin && !can(req, "gerir_whatsapp")) return res.status(403).json({ error: "sem permissão" });
+  const c = db.waConfig || {};
+  if (!c.url || !c.apiKey) return res.status(400).json({ error: "não configurado" });
+  const nome = req.params.nome;
+  try {
+    // tenta logout antes (algumas versões exigem desconectar antes de excluir)
+    try {
+      await fetch(`${c.url}/instance/logout/${nome}`, { method: "DELETE", headers: { "apikey": c.apiKey } });
+    } catch {}
+    const r = await fetch(`${c.url}/instance/delete/${nome}`, {
+      method: "DELETE", headers: { "apikey": c.apiKey },
+    });
+    await r.json().catch(() => ({}));
+    // remove a instância da config do sistema também
+    if (db.waConfig?.instancias) {
+      db.waConfig.instancias = db.waConfig.instancias.filter((i) => i.instance !== nome);
+      saveDB(db);
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("Erro ao excluir instância:", e.message);
+    res.status(502).json({ error: "não foi possível excluir" });
+  }
+});
+
+// ---- listar TODAS as instâncias que existem na Evolution (não só as da config) ----
+app.get("/api/wa/instancias-evolution", requireAuth, async (req, res) => {
+  if (!req.isAdmin && !can(req, "gerir_whatsapp")) return res.status(403).json({ error: "sem permissão" });
+  const c = db.waConfig || {};
+  if (!c.url || !c.apiKey) return res.json({ instancias: [] });
+  try {
+    const r = await fetch(`${c.url}/instance/fetchInstances`, {
+      method: "GET", headers: { "apikey": c.apiKey },
+    });
+    const data = await r.json().catch(() => []);
+    // a Evolution pode devolver formatos diferentes; normaliza
+    const lista = (Array.isArray(data) ? data : (data?.instances || [])).map((it) => {
+      const inst = it.instance || it;
+      const nome = inst.instanceName || inst.name || it.name || "";
+      const estado = inst.state || inst.connectionStatus || it.connectionStatus || "unknown";
+      return { instance: nome, state: estado };
+    }).filter((i) => i.instance);
+    res.json({ instancias: lista });
+  } catch (e) {
+    console.error("Erro ao listar instâncias da Evolution:", e.message);
+    res.json({ instancias: [] });
+  }
+});
+
+// ---- apagar TODAS as conversas do sistema (não mexe na Evolution) ----
+app.post("/api/wa/limpar-conversas", requireAuth, (req, res) => {
+  if (!req.isAdmin && !can(req, "gerir_whatsapp")) return res.status(403).json({ error: "sem permissão" });
+  db.waChats = {};
+  saveDB(db);
+  res.json({ ok: true });
+});
+
+// ---- enviar mensagem (pela Evolution) ----
+app.post("/api/wa/send", requireAuth, async (req, res) => {
+  const { id, numero, texto } = req.body;
+  const c = db.waConfig || {};
+  if (!c.url || !c.apiKey) return res.status(400).json({ error: "WhatsApp não configurado" });
+  if (!texto?.trim()) return res.status(400).json({ error: "texto obrigatório" });
+  // localiza a conversa pela chave id (instancia::numero)
+  const chatExistente = id ? db.waChats?.[id] : null;
+  const numeroDestino = chatExistente?.numero || numero;
+  const instance = chatExistente?.instance || (c.instancias?.[0]?.instance) || "";
+  if (!numeroDestino) return res.status(400).json({ error: "número não encontrado" });
+  if (!instance) return res.status(400).json({ error: "nenhuma instância configurada" });
+  // PRIVACIDADE: colaboradora só pode enviar por instância dela
+  const permitidas = instanciasVisiveis(req);
+  if (permitidas !== null && !permitidas.includes(instance)) {
+    return res.status(403).json({ error: "sem acesso a esta conversa" });
+  }
+  // para grupos, o "número" precisa do sufixo @g.us
+  const ehGrupo = chatExistente?.ehGrupo;
+  const destinoFinal = ehGrupo ? `${numeroDestino}@g.us` : numeroDestino;
+  try {
+    const r = await fetch(`${c.url}/message/sendText/${instance}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "apikey": c.apiKey },
+      body: JSON.stringify({ number: destinoFinal, text: texto.trim() }),
+    });
+    const data = await r.json();
+    if (!r.ok) return res.status(502).json({ error: data?.message || "falha ao enviar" });
+    // registra na conversa
+    if (chatExistente) {
+      chatExistente.mensagens.push({ id: Date.now() + "-out", fromMe: true, texto: texto.trim(), ts: Date.now() });
+      chatExistente.atualizadoEm = Date.now();
+      saveDB(db);
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("Erro ao enviar WA:", e.message);
+    res.status(502).json({ error: "não foi possível enviar agora" });
+  }
+});
+
+// ---- enviar mídia (imagem / documento / vídeo) em base64 ----
+app.post("/api/wa/send-media", requireAuth, async (req, res) => {
+  const { id, base64, mediatype, mimetype, filename, caption } = req.body;
+  const c = db.waConfig || {};
+  if (!c.url || !c.apiKey) return res.status(400).json({ error: "WhatsApp não configurado" });
+  const chatExistente = id ? db.waChats?.[id] : null;
+  if (!chatExistente) return res.status(400).json({ error: "conversa não encontrada" });
+  const instance = chatExistente.instance;
+  const permitidas = instanciasVisiveis(req);
+  if (permitidas !== null && !permitidas.includes(instance)) {
+    return res.status(403).json({ error: "sem acesso a esta conversa" });
+  }
+  const destino = chatExistente.ehGrupo ? `${chatExistente.numero}@g.us` : chatExistente.numero;
+  // base64 pode vir como "data:image/png;base64,XXXX" — tira o prefixo
+  const b64 = String(base64 || "").includes(",") ? String(base64).split(",")[1] : base64;
+  try {
+    const r = await fetch(`${c.url}/message/sendMedia/${instance}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "apikey": c.apiKey },
+      body: JSON.stringify({
+        number: destino,
+        mediatype: mediatype || "document",   // image | video | document
+        mimetype: mimetype || "application/octet-stream",
+        media: b64,
+        fileName: filename || "arquivo",
+        caption: caption || "",
+      }),
+    });
+    const data = await r.json();
+    if (!r.ok) return res.status(502).json({ error: data?.message || "falha ao enviar arquivo" });
+    const rotulo = mediatype === "image" ? "📷 Imagem" : mediatype === "video" ? "🎥 Vídeo" : "📄 " + (filename || "Documento");
+    chatExistente.mensagens.push({ id: Date.now() + "-media", fromMe: true, texto: caption ? `${rotulo} — ${caption}` : rotulo, ts: Date.now() });
+    chatExistente.atualizadoEm = Date.now();
+    saveDB(db);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("Erro ao enviar mídia:", e.message);
+    res.status(502).json({ error: "não foi possível enviar o arquivo" });
+  }
+});
+
+// ---- enviar áudio (gravação) em base64 ----
+app.post("/api/wa/send-audio", requireAuth, async (req, res) => {
+  const { id, base64 } = req.body;
+  const c = db.waConfig || {};
+  if (!c.url || !c.apiKey) return res.status(400).json({ error: "WhatsApp não configurado" });
+  const chatExistente = id ? db.waChats?.[id] : null;
+  if (!chatExistente) return res.status(400).json({ error: "conversa não encontrada" });
+  const instance = chatExistente.instance;
+  const permitidas = instanciasVisiveis(req);
+  if (permitidas !== null && !permitidas.includes(instance)) {
+    return res.status(403).json({ error: "sem acesso a esta conversa" });
+  }
+  const destino = chatExistente.ehGrupo ? `${chatExistente.numero}@g.us` : chatExistente.numero;
+  const b64 = String(base64 || "").includes(",") ? String(base64).split(",")[1] : base64;
+  try {
+    const r = await fetch(`${c.url}/message/sendWhatsAppAudio/${instance}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "apikey": c.apiKey },
+      body: JSON.stringify({ number: destino, audio: b64 }),
+    });
+    const data = await r.json();
+    if (!r.ok) return res.status(502).json({ error: data?.message || "falha ao enviar áudio" });
+    chatExistente.mensagens.push({ id: Date.now() + "-audio", fromMe: true, texto: "🎤 Áudio", ts: Date.now() });
+    chatExistente.atualizadoEm = Date.now();
+    saveDB(db);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("Erro ao enviar áudio:", e.message);
+    res.status(502).json({ error: "não foi possível enviar o áudio" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Servir o frontend buildado
+// ---------------------------------------------------------------------------
+const distPath = join(ROOT, "dist");
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath));
+  app.get("*", (req, res) => {
+    if (req.path.startsWith("/api")) return res.status(404).json({ error: "rota não encontrada" });
+    res.sendFile(join(distPath, "index.html"));
+  });
+}
+
+// inicia tudo (espera volume → carrega banco → cria admin → sobe servidor)
+iniciar();
