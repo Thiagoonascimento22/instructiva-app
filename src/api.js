@@ -1,70 +1,69 @@
-// Camada de comunicação com o backend.
-// Guarda o token em memória + localStorage para manter login entre recarregamentos.
+const TOKEN_KEY = "instructiva_crm_token";
 
-let token = localStorage.getItem("instructiva_token") || null;
-
-function setToken(t) {
-  token = t;
-  if (t) localStorage.setItem("instructiva_token", t);
-  else localStorage.removeItem("instructiva_token");
+export function getToken() {
+  return localStorage.getItem(TOKEN_KEY) || "";
+}
+export function setToken(t) {
+  if (t) localStorage.setItem(TOKEN_KEY, t);
+  else localStorage.removeItem(TOKEN_KEY);
 }
 
-async function req(method, path, body) {
+async function req(method, url, body) {
   const headers = { "Content-Type": "application/json" };
-  if (token) headers.Authorization = "Bearer " + token;
-  const r = await fetch("/api" + path, {
+  const t = getToken();
+  if (t) headers.Authorization = "Bearer " + t;
+  const res = await fetch(url, {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,
   });
-  let data = {};
-  try { data = await r.json(); } catch {}
-  if (!r.ok) throw new Error(data.error || "erro na requisição");
+  let data = null;
+  try {
+    data = await res.json();
+  } catch (_) {}
+  if (!res.ok) {
+    const msg = (data && data.error) || "Erro " + res.status;
+    const err = new Error(msg);
+    err.status = res.status;
+    throw err;
+  }
   return data;
 }
 
 export const api = {
-  get token() { return token; },
-  setToken,
-  // auth
-  login: (login, senha) => req("POST", "/login", { login, senha }),
-  logout: () => req("POST", "/logout"),
-  me: () => req("GET", "/me"),
-  updateMe: (payload) => req("PUT", "/me", payload),
-  // users
-  listUsers: () => req("GET", "/users"),
-  listUserNames: () => req("GET", "/users/names"),
-  createUser: (payload) => req("POST", "/users", payload),
-  updateUser: (id, payload) => req("PUT", "/users/" + id, payload),
-  deleteUser: (id) => req("DELETE", "/users/" + id),
-  // records
-  listRecords: () => req("GET", "/records"),
-  createRecord: (payload) => req("POST", "/records", payload),
-  updateRecord: (id, payload) => req("PUT", "/records/" + id, payload),
-  deleteRecord: (id) => req("DELETE", "/records/" + id),
-  // tasks
-  listTasks: () => req("GET", "/tasks"),
-  createTask: (payload) => req("POST", "/tasks", payload),
-  updateTask: (id, payload) => req("PUT", "/tasks/" + id, payload),
-  deleteTask: (id) => req("DELETE", "/tasks/" + id),
-  // ia
-  analise: (colaboradoraId) => req("POST", "/analise", colaboradoraId ? { colaboradoraId } : {}),
-  // whatsapp
-  waGetConfig: () => req("GET", "/wa/config"),
-  waSetConfig: (payload) => req("PUT", "/wa/config", payload),
-  waListChats: (instance) => req("GET", "/wa/chats" + (instance ? "?instance=" + encodeURIComponent(instance) : "")),
-  waGetChat: (id) => req("GET", "/wa/chats/" + encodeURIComponent(id)),
-  waSend: (id, texto) => req("POST", "/wa/send", { id, texto }),
-  waSendMedia: (payload) => req("POST", "/wa/send-media", payload),
-  waSendAudio: (id, base64) => req("POST", "/wa/send-audio", { id, base64 }),
-  waConnectInstance: (instance) => req("POST", "/wa/instance/connect", { instance }),
-  waInstanceStatus: (nome) => req("GET", "/wa/instance/status/" + encodeURIComponent(nome)),
-  waMinhaInstancia: () => req("GET", "/wa/minha-instancia"),
-  waLogoutInstance: (nome) => req("POST", "/wa/instance/logout/" + encodeURIComponent(nome)),
-  waDeleteInstance: (nome) => req("DELETE", "/wa/instance/" + encodeURIComponent(nome)),
-  waLimparFantasmas: () => req("POST", "/wa/limpar-fantasmas"),
-  waBaixarMidia: (id, mediaMsgId) => req("POST", "/wa/media", { id, mediaMsgId }),
-  waNovaConversa: (instance, numero, texto) => req("POST", "/wa/nova-conversa", { instance, numero, texto }),
-  waInstanciasEvolution: () => req("GET", "/wa/instancias-evolution"),
-  waLimparConversas: () => req("POST", "/wa/limpar-conversas"),
+  login: (login, senha) => req("POST", "/api/login", { login, senha }),
+  me: () => req("GET", "/api/me"),
+  updateMe: (dados) => req("PUT", "/api/me", dados),
+
+  listUsers: () => req("GET", "/api/users"),
+  createUser: (dados) => req("POST", "/api/users", dados),
+  updateUser: (id, dados) => req("PUT", "/api/users/" + id, dados),
+  deleteUser: (id) => req("DELETE", "/api/users/" + id),
+
+  listCards: (responsavel) =>
+    req("GET", "/api/cards" + (responsavel ? "?responsavel=" + responsavel : "")),
+  createCard: (dados) => req("POST", "/api/cards", dados),
+  updateCard: (id, dados) => req("PUT", "/api/cards/" + id, dados),
+  deleteCard: (id) => req("DELETE", "/api/cards/" + id),
+  importCards: (dados) => req("POST", "/api/cards/import", dados),
+  listVendedores: () => req("GET", "/api/vendedores"),
+
+  // WhatsApp
+  waConfig: () => req("GET", "/api/wa/config"),
+  waSetConfig: (dados) => req("PUT", "/api/wa/config", dados),
+  waMinha: () => req("GET", "/api/wa/minha"),
+  waChats: (instance) =>
+    req("GET", "/api/wa/chats" + (instance ? "?instance=" + instance : "")),
+  waChat: (id) => req("GET", "/api/wa/chats/" + id),
+  waSend: (id, texto) => req("POST", "/api/wa/chats/" + id + "/send", { texto }),
+  waIniciar: (dados) => req("POST", "/api/wa/iniciar", dados),
+  waConnect: (instance) =>
+    req("POST", "/api/wa/connect", { instance, publicUrl: window.location.origin }),
+  waStatus: (instance) => req("GET", "/api/wa/status/" + instance),
+  waLogout: (instance) => req("POST", "/api/wa/logout/" + instance),
+  waDeleteInstance: (instance) => req("DELETE", "/api/wa/instance/" + instance),
+
+  // IA
+  iaEquipe: () => req("POST", "/api/ia/equipe"),
+  iaVendedor: (id) => req("POST", "/api/ia/vendedor/" + id),
 };
