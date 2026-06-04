@@ -19,6 +19,8 @@ const STATUS = {
   andamento: { label: "Em andamento", color: "#6366F1", bg: "rgba(99,102,241,0.14)", icon: Clock },
   pendente: { label: "Pendente", color: "#E5484D", bg: "rgba(229,72,77,0.12)", icon: AlertCircle },
 };
+// categorias fixas de atendimento (padroniza relatórios)
+const CATEGORIAS = ["Acesso", "Livro", "Financeiro", "Plataforma", "Certificado", "Comercial", "Reembolso"];
 // paleta de gráficos derivada da marca (laranja + cinzas + apoios sóbrios)
 const PALETTE = ["#6366F1", "#6E7073", "#818CF8", "#9A9CA0", "#4F46E5", "#B5B7BA", "#12A150", "#5B8DB8"];
 
@@ -370,7 +372,7 @@ function Dashboard({ records, users, me, isAdmin }) {
           </ResponsiveContainer>
         </CardBox>
 
-        <CardBox title="Principais assuntos" sub="o que mais aparece" wide={!isAdmin}>
+        <CardBox title="Principais categorias" sub="o que mais aparece" wide={!isAdmin}>
           <ResponsiveContainer width="100%" height={230}>
             <BarChart data={stats.byAssunto} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 4 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#EEEEF0" horizontal={false} />
@@ -615,7 +617,7 @@ function Lista({ records, users, can, refresh, goNew }) {
   }), [records, q, fStatus, fColab]);
 
   function exportCSV() {
-    const headers = ["Data", "Colaboradora", "Aluno", "E-mail", "Telefone", "Assunto", "Solução", "Status", "Observações"];
+    const headers = ["Data", "Colaboradora", "Aluno", "E-mail", "Telefone", "Categoria", "Solução", "Status", "Observações"];
     const rows = filtered.map((r) => [r.data, nameOf(users, r.colaboradoraId), r.aluno, r.email, r.telefone, r.assunto, r.solucao, STATUS[r.status]?.label, r.obs]);
     const csv = [headers, ...rows].map((row) => row.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
@@ -645,7 +647,7 @@ function Lista({ records, users, can, refresh, goNew }) {
       ) : (
         <div style={SX.tableWrap}>
           <table style={SX.table}>
-            <thead><tr>{["Data", "Colaboradora", "Aluno", "Contato", "Assunto", "Solução", "Status", ""].map((h) => <th key={h} style={SX.th}>{h}</th>)}</tr></thead>
+            <thead><tr>{["Data", "Colaboradora", "Aluno", "Contato", "Categoria", "Solução", "Status", ""].map((h) => <th key={h} style={SX.th}>{h}</th>)}</tr></thead>
             <tbody>
               {filtered.map((r) => {
                 const st = STATUS[r.status]; const Icon = st.icon;
@@ -708,9 +710,14 @@ function NovoRegistro({ me, isAdmin, users, refresh, onDone, prefill }) {
           <F label="Nome do Aluno" req><input value={form.aluno} onChange={set("aluno")} placeholder="Nome completo" style={SX.input} /></F>
           <F label="E-mail"><input type="email" value={form.email} onChange={set("email")} placeholder="email@exemplo.com" style={SX.input} /></F>
           <F label="Telefone"><input value={form.telefone} onChange={set("telefone")} placeholder="(00) 00000-0000" style={SX.input} /></F>
-          <F label="Assunto" req full><input value={form.assunto} onChange={set("assunto")} placeholder="Ex: Acesso ao portal, dúvida sobre matrícula…" style={SX.input} /></F>
+          <F label="Categoria do atendimento" req full>
+            <select value={form.assunto} onChange={set("assunto")} style={SX.input}>
+              <option value="">— selecione a categoria —</option>
+              {CATEGORIAS.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </F>
           <F label="Solução Aplicada" full><textarea value={form.solucao} onChange={set("solucao")} placeholder="Descreva o que foi feito…" style={{ ...SX.input, minHeight: 82, resize: "vertical", paddingTop: 11 }} /></F>
-          <F label="Observações" full><textarea value={form.obs} onChange={set("obs")} placeholder="Anotações adicionais (opcional)" style={{ ...SX.input, minHeight: 60, resize: "vertical", paddingTop: 11 }} /></F>
+          <F label="Observações sobre o atendimento" full><textarea value={form.obs} onChange={set("obs")} placeholder="Escreva os detalhes do caso (ex: aluno não conseguia acessar a aula 3, redefini a senha…)" style={{ ...SX.input, minHeight: 70, resize: "vertical", paddingTop: 11 }} /></F>
         </div>
         <div style={SX.formActions}>
           <button onClick={onDone} className="btn-ghost" style={SX.btnGhost}>Cancelar</button>
