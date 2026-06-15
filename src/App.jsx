@@ -10,6 +10,7 @@ import {
   Crown, ChevronRight, Activity, Zap, Target, Brain, Star, AlertTriangle, BarChart3,
   Sun, Moon, ListTodo, CalendarClock, Flag, Circle, ArrowLeft, UserCircle,
   MessageCircle, Send, Link2, RefreshCw, Phone, PlusSquare, Power, Smile, Paperclip, Mic, Square,
+  LifeBuoy, Inbox, Headphones, Hourglass,
 } from "lucide-react";
 import { LOGO_FULL, LOGO_CLARO, LOGO_ICONE } from "./logos";
 import { api } from "./api";
@@ -46,12 +47,14 @@ export default function App() {
   const [me, setMe] = useState(null);          // usuário logado
   const [users, setUsers] = useState([]);      // lista de nomes (para tabelas) ou completa (admin)
   const [records, setRecords] = useState([]);
+  const [solicitacoes, setSolicitacoes] = useState([]);
   const [view, setView] = useState("dashboard");
   const [waPrefill, setWaPrefill] = useState(null);   // pré-preenche Novo Registro a partir do WhatsApp
   const [theme, setTheme] = useState(() => localStorage.getItem("instructiva_theme") || "light");
 
   const isAdmin = me?.role === "admin";
   const can = (p) => isAdmin || me?.perms?.[p];
+  const solicPend = solicitacoes.filter((s) => s.status === "recebida").length;
 
   useEffect(() => { localStorage.setItem("instructiva_theme", theme); }, [theme]);
   const toggleTheme = () => setTheme((t) => (t === "light" ? "dark" : "light"));
@@ -76,8 +79,18 @@ export default function App() {
       const recsResp = await api.listRecords();
       setRecords(recsResp.records);
     } catch {}
+    refreshSolic();
+  }
+  async function refreshSolic() {
+    try { const s = await api.solicitacoes(); setSolicitacoes(s.solicitacoes || []); } catch {}
   }
   useEffect(() => { if (me) refreshData(); }, [me]);
+  // mantém o contador de solicitações fresco (badge + dashboard)
+  useEffect(() => {
+    if (!me) return;
+    const t = setInterval(refreshSolic, 12000);
+    return () => clearInterval(t);
+  }, [me]);
 
   const visibleRecords = records; // o backend já filtra por permissão
 
@@ -94,7 +107,7 @@ export default function App() {
     try { await api.logout(); } catch {}
     api.setToken(null);
     setMe(null);
-    setUsers([]); setRecords([]);
+    setUsers([]); setRecords([]); setSolicitacoes([]);
   }
   async function setMyName(nome) {
     try { const { user } = await api.updateMe({ nome }); setMe(user); } catch {}
@@ -109,6 +122,7 @@ export default function App() {
   const nav = [];
   nav.push(["dashboard", "Dashboard", LayoutDashboard]);
   nav.push(["lista", "Atendimentos", ClipboardList]);
+  nav.push(["solicitacoes", "Solicitações", LifeBuoy]);
   if (can("registrar")) nav.push(["novo", "Novo Registro", PlusCircle]);
   nav.push(["tarefas", "Tarefas", ListTodo]);
   nav.push(["whatsapp", "WhatsApp", MessageCircle]);
@@ -133,6 +147,9 @@ export default function App() {
               style={{ ...SX.navBtn, ...(view === id ? SX.navBtnActive : {}) }}>
               <Icon size={18} strokeWidth={2} />
               <span style={{ flex: 1, textAlign: "left" }}>{label}</span>
+              {id === "solicitacoes" && solicPend > 0 && (
+                <span style={{ background: "#E5484D", color: "#fff", fontSize: 11, fontWeight: 700, minWidth: 18, height: 18, borderRadius: 9, display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0 5px" }}>{solicPend}</span>
+              )}
               {glow && <span className="ai-dot" />}
               {view === id && <ChevronRight size={15} />}
             </button>
@@ -156,8 +173,9 @@ export default function App() {
 
       <main style={view === "whatsapp" ? SX.mainWide : SX.main}>
         <div className="fade-in" key={view}>
-          {view === "dashboard" && <Dashboard records={visibleRecords} users={users} me={me} isAdmin={isAdmin} />}
+          {view === "dashboard" && <Dashboard records={visibleRecords} users={users} me={me} isAdmin={isAdmin} solicitacoes={solicitacoes} />}
           {view === "lista" && <Lista records={visibleRecords} users={users} can={can} refresh={refreshData} goNew={() => setView("novo")} />}
+          {view === "solicitacoes" && <Solicitacoes me={me} isAdmin={isAdmin} solicitacoes={solicitacoes} refresh={refreshSolic} />}
           {view === "novo" && can("registrar") && <NovoRegistro me={me} isAdmin={isAdmin} users={users} refresh={refreshData} prefill={waPrefill} onDone={() => { setWaPrefill(null); setView("lista"); }} />}
           {view === "tarefas" && <Tarefas me={me} isAdmin={isAdmin} can={can} users={users} />}
           {view === "whatsapp" && <WhatsApp me={me} isAdmin={isAdmin} can={can} goNovo={(pre) => { setWaPrefill(pre); setView("novo"); }} />}
@@ -236,7 +254,7 @@ function Login({ onLogin }) {
 }
 
 // ============================================================= DASHBOARD
-function Dashboard({ records, users, me, isAdmin }) {
+function Dashboard({ records, users, me, isAdmin, solicitacoes = [] }) {
   const hoje = new Date().toISOString().slice(0, 10);
   const [periodo, setPeriodo] = useState("hoje");   // hoje | semana | mes | tudo | custom
   const [dataIni, setDataIni] = useState(hoje);
@@ -276,7 +294,7 @@ function Dashboard({ records, users, me, isAdmin }) {
     : periodo === "mes" ? "Últimos 30 dias" : periodo === "tudo" ? "Todo o período"
     : `${fmtDate(dataIni)} até ${fmtDate(dataFim)}`;
 
-  if (records.length === 0) {
+  if (records.length === 0 && solicitacoes.length === 0) {
     return (<div><Header title={`${saud}, ${primeiroNome} 👋`} subtitle={isAdmin ? "Painel geral do setor de suporte" : "Seus atendimentos"} /><Empty /></div>);
   }
   return (
@@ -312,6 +330,20 @@ function Dashboard({ records, users, me, isAdmin }) {
         <Kpi i={Clock} c="#818CF8" v={stats.byStatus.andamento} l="Em andamento" d={2} />
         <Kpi i={isAdmin ? Users : Target} c="#6E7073" v={isAdmin ? stats.byColab.length : stats.byStatus.pendente} l={isAdmin ? "Colaboradoras ativas" : "Pendentes"} d={3} />
       </div>
+
+      {solicitacoes.length > 0 && (
+        <>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "26px 0 12px", fontSize: 15, fontWeight: 700, color: "var(--text)" }}>
+            <LifeBuoy size={18} /> Solicitações do comercial
+          </div>
+          <div style={SX.kpiGrid}>
+            <Kpi i={Inbox} c="#E5484D" v={solicitacoes.filter((s) => s.status === "recebida").length} l="Aguardando atendimento" d={0} />
+            <Kpi i={Hourglass} c="#6366F1" v={solicitacoes.filter((s) => s.status === "em_atendimento").length} l="Em atendimento" d={1} />
+            <Kpi i={CheckCircle2} c="#12A150" v={solicitacoes.filter((s) => s.status === "concluida").length} l="Concluídas" d={2} />
+            <Kpi i={LifeBuoy} c="#6E7073" v={solicitacoes.length} l="Total recebidas" d={3} />
+          </div>
+        </>
+      )}
 
       <div style={SX.taxaCard} className="rise panel">
         <div style={SX.taxaShine} />
@@ -395,6 +427,109 @@ function Kpi({ i: Icon, c, v, l, d }) {
     <div style={{ ...SX.kpiCard, animationDelay: `${d * 0.07}s` }} className="kpi card-hover panel">
       <div style={{ ...SX.kpiIcon, background: c + "1c", color: c }}><Icon size={22} strokeWidth={2.2} /></div>
       <div><div style={SX.kpiValue} className="kpi-value">{v}</div><div style={SX.kpiLabel}>{l}</div></div>
+    </div>
+  );
+}
+
+// ============================================================= SOLICITAÇÕES
+function rotuloUrg(u) {
+  return u === "alta" ? { txt: "Alta", c: "#E5484D" } : u === "baixa" ? { txt: "Baixa", c: "#6E7073" } : { txt: "Normal", c: "#6366F1" };
+}
+function Solicitacoes({ me, isAdmin, solicitacoes, refresh }) {
+  const [busy, setBusy] = useState(null);
+  const [respId, setRespId] = useState(null);
+  const [resp, setResp] = useState("");
+  const [filtro, setFiltro] = useState("ativas");
+
+  useEffect(() => {
+    const t = setInterval(refresh, 6000);
+    return () => clearInterval(t);
+  }, []);
+
+  async function aceitar(id) {
+    setBusy(id);
+    try { await api.solicAceitar(id); await refresh(); } catch (e) { alert(e.message); }
+    setBusy(null);
+  }
+  async function concluir(id) {
+    setBusy(id);
+    try { await api.solicConcluir(id, resp); setRespId(null); setResp(""); await refresh(); } catch (e) { alert(e.message); }
+    setBusy(null);
+  }
+  async function reabrir(id) {
+    setBusy(id);
+    try { await api.solicReabrir(id); await refresh(); } catch (e) { alert(e.message); }
+    setBusy(null);
+  }
+
+  const ativas = solicitacoes.filter((s) => s.status !== "concluida");
+  const concluidas = solicitacoes.filter((s) => s.status === "concluida");
+  const lista = filtro === "ativas" ? ativas : concluidas;
+
+  const card = (s) => {
+    const urg = rotuloUrg(s.urgencia);
+    return (
+      <div key={s.id} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 14, padding: "16px 18px", marginBottom: 12, boxShadow: "0 1px 3px rgba(60,55,45,0.04)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: urg.c, background: urg.c + "1c", padding: "3px 10px", borderRadius: 20 }}>{urg.txt}</span>
+          {s.status === "recebida" && <span style={{ fontSize: 11, fontWeight: 700, color: "#E5484D", background: "#E5484D1c", padding: "3px 10px", borderRadius: 20 }}>Aguardando</span>}
+          {s.status === "em_atendimento" && <span style={{ fontSize: 11, fontWeight: 700, color: "#6366F1", background: "#6366F11c", padding: "3px 10px", borderRadius: 20 }}>Em atendimento{s.colaboradoraNome ? " · " + s.colaboradoraNome : ""}</span>}
+          {s.status === "concluida" && <span style={{ fontSize: 11, fontWeight: 700, color: "#12A150", background: "#12A1501c", padding: "3px 10px", borderRadius: 20 }}>Concluída{s.colaboradoraNome ? " · " + s.colaboradoraNome : ""}</span>}
+          <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--muted)" }}>{new Date(s.criadoEm).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+        </div>
+        <div style={{ fontSize: 15, color: "var(--text)", lineHeight: 1.5, marginBottom: 8 }}>{s.descricao}</div>
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap", fontSize: 12.5, color: "var(--text-soft)", marginBottom: s.status === "concluida" && s.resposta ? 10 : 0 }}>
+          <span><UserCircle size={13} style={{ verticalAlign: -2 }} /> {s.vendedorNome}</span>
+          {s.cliente && <span>Cliente: <b>{s.cliente}</b></span>}
+          {s.numero && <span>{s.numero}</span>}
+        </div>
+        {s.status === "concluida" && s.resposta && (
+          <div style={{ background: "rgba(18,161,80,0.08)", border: "1px solid rgba(18,161,80,0.25)", borderRadius: 10, padding: "10px 12px", fontSize: 13.5, color: "var(--text)" }}>
+            <b style={{ color: "#12A150" }}>Resposta:</b> {s.resposta}
+          </div>
+        )}
+        {respId === s.id ? (
+          <div style={{ marginTop: 12 }}>
+            <textarea value={resp} onChange={(e) => setResp(e.target.value)} placeholder="Escreva a resposta / solução para o vendedor..." rows={3}
+              style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 10, fontSize: 14, fontFamily: "inherit", color: "var(--text)", background: "var(--input-bg)", outline: "none", resize: "vertical" }} />
+            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              <button onClick={() => concluir(s.id)} disabled={busy === s.id || !resp.trim()} style={{ ...SX.btnPrimary, height: 38, opacity: busy === s.id || !resp.trim() ? 0.5 : 1 }}><CheckCircle2 size={15} /> Concluir</button>
+              <button onClick={() => { setRespId(null); setResp(""); }} style={{ height: 38, padding: "0 16px", borderRadius: 10, border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)", fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+            {s.status === "recebida" && (
+              <button onClick={() => aceitar(s.id)} disabled={busy === s.id} style={{ ...SX.btnPrimary, height: 38 }}><Headphones size={15} /> Aceitar</button>
+            )}
+            {s.status === "em_atendimento" && (
+              <button onClick={() => { setRespId(s.id); setResp(s.resposta || ""); }} style={{ ...SX.btnPrimary, height: 38 }}><CheckCircle2 size={15} /> Concluir</button>
+            )}
+            {s.status === "concluida" && (
+              <button onClick={() => reabrir(s.id)} disabled={busy === s.id} style={{ height: 38, padding: "0 16px", borderRadius: 10, border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)", fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Reabrir</button>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div>
+      <div style={{ marginBottom: 18 }}>
+        <h1 style={{ fontSize: 24, fontWeight: 800, color: "var(--text)", margin: 0 }}>Solicitações do comercial</h1>
+        <p style={{ color: "var(--muted)", fontSize: 14, margin: "4px 0 0" }}>Pedidos de suporte enviados pelos vendedores. Aceite, resolva e o vendedor é avisado.</p>
+      </div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+        <button onClick={() => setFiltro("ativas")} style={{ ...SX.filterChip, ...(filtro === "ativas" ? { borderColor: "#6366F1", color: "#6366F1", background: "rgba(99,102,241,0.08)" } : {}) }}>Ativas ({ativas.length})</button>
+        <button onClick={() => setFiltro("concluidas")} style={{ ...SX.filterChip, ...(filtro === "concluidas" ? { borderColor: "#12A150", color: "#12A150", background: "rgba(18,161,80,0.08)" } : {}) }}>Concluídas ({concluidas.length})</button>
+      </div>
+      {lista.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--muted)" }}>
+          <Inbox size={40} strokeWidth={1.5} style={{ opacity: 0.5, marginBottom: 12 }} />
+          <div style={{ fontSize: 15 }}>{filtro === "ativas" ? "Nenhuma solicitação no momento." : "Nenhuma solicitação concluída ainda."}</div>
+        </div>
+      ) : lista.map(card)}
     </div>
   );
 }

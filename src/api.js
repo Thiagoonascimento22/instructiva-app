@@ -49,6 +49,11 @@ export const api = {
   deleteTask: (id) => req("DELETE", "/tasks/" + id),
   // ia
   analise: (colaboradoraId) => req("POST", "/analise", colaboradoraId ? { colaboradoraId } : {}),
+  // solicitações (vindas do comercial)
+  solicitacoes: () => req("GET", "/solicitacoes"),
+  solicAceitar: (id) => req("POST", "/solicitacoes/" + id + "/aceitar"),
+  solicConcluir: (id, resposta) => req("POST", "/solicitacoes/" + id + "/concluir", { resposta }),
+  solicReabrir: (id) => req("POST", "/solicitacoes/" + id + "/reabrir"),
   // whatsapp
   waGetConfig: () => req("GET", "/wa/config"),
   waSetConfig: (payload) => req("PUT", "/wa/config", payload),

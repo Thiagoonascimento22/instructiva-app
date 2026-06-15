@@ -55,6 +55,7 @@ function loadDB() {
       if (!d.sessions) d.sessions = {};
       if (!d.waChats) d.waChats = {};       // conversas do WhatsApp
       if (!d.waConfig) d.waConfig = {};      // config da conexão (url, key, instâncias)
+      if (!Array.isArray(d.solicitacoes)) d.solicitacoes = [];  // solicitações vindas do comercial (Monitoria)
       // MIGRAÇÃO: conversas antigas usavam a chave = número. Agora é "instancia::numero".
       // Converte as que ainda estão no formato velho (sem o campo id ou chave sem "::").
       const novasChaves = {};
@@ -79,14 +80,14 @@ function loadDB() {
       return d;
     }
   } catch (e) { console.error("Erro ao ler banco:", e.message); }
-  return { users: [], records: [], tasks: [], sessions: {}, waChats: {}, waConfig: {} };
+  return { users: [], records: [], tasks: [], sessions: {}, waChats: {}, waConfig: {}, solicitacoes: [] };
 }
 function saveDB(database) {
   try { fs.writeFileSync(DB_PATH, JSON.stringify(database, null, 2)); }
   catch (e) { console.error("Erro ao salvar banco:", e.message); }
 }
 
-let db = { users: [], records: [], tasks: [], sessions: {}, waChats: {}, waConfig: {} };
+let db = { users: [], records: [], tasks: [], sessions: {}, waChats: {}, waConfig: {}, solicitacoes: [] };
 
 // Inicialização assíncrona: espera o volume, carrega o banco, cria admin,
 // e SÓ ENTÃO sobe o servidor.
@@ -145,6 +146,17 @@ function requireAuth(req, res, next) {
   next();
 }
 function can(req, perm) { return req.isAdmin || req.perms?.[perm]; }
+
+// ---------------------------------------------------------------------------
+// PONTE COM O COMERCIAL (Monitoria) — recebe solicitações via chave compartilhada
+// ---------------------------------------------------------------------------
+const BRIDGE_KEY = process.env.BRIDGE_KEY || "";
+function bridgeAuth(req, res, next) {
+  if (!BRIDGE_KEY || String(req.headers["x-bridge-key"] || "") !== BRIDGE_KEY)
+    return res.status(401).json({ error: "ponte não autorizada" });
+  next();
+}
+const URG_OK = ["baixa", "normal", "alta"];
 
 // ---------------------------------------------------------------------------
 // AUTH
@@ -290,6 +302,83 @@ app.put("/api/records/:id", requireAuth, (req, res) => {
   });
   saveDB(db);
   res.json({ record: rec });
+});
+
+// ---------------------------------------------------------------------------
+// SOLICITAÇÕES (vindas do comercial / Monitoria)
+// ---------------------------------------------------------------------------
+// recebe uma nova solicitação do app do comercial (ponte)
+app.post("/api/solic/inbound", bridgeAuth, (req, res) => {
+  const b = req.body || {};
+  if (!b.descricao?.trim()) return res.status(400).json({ error: "descrição obrigatória" });
+  const s = {
+    id: Date.now() + "-" + crypto.randomBytes(3).toString("hex"),
+    monitoriaId: String(b.monitoriaId || ""),
+    vendedorNome: (b.vendedorNome || "").trim() || "Comercial",
+    cliente: (b.cliente || "").trim(),
+    numero: (b.numero || "").trim(),
+    descricao: b.descricao.trim(),
+    urgencia: URG_OK.includes(b.urgencia) ? b.urgencia : "normal",
+    status: "recebida",   // recebida | em_atendimento | concluida
+    colaboradoraId: null, colaboradoraNome: "",
+    resposta: "",
+    criadoEm: new Date().toISOString(), aceitoEm: null, concluidoEm: null,
+  };
+  db.solicitacoes.unshift(s);
+  saveDB(db);
+  res.json({ ok: true, id: s.id, status: s.status });
+});
+
+// o comercial consulta o status das solicitações dele (poll) — ponte
+app.get("/api/solic/status", bridgeAuth, (req, res) => {
+  const ids = String(req.query.ids || "").split(",").map((x) => x.trim()).filter(Boolean);
+  const set = new Set(ids);
+  const out = db.solicitacoes
+    .filter((s) => set.has(s.monitoriaId))
+    .map((s) => ({ monitoriaId: s.monitoriaId, status: s.status, resposta: s.resposta, colaboradoraNome: s.colaboradoraNome, concluidoEm: s.concluidoEm }));
+  res.json({ solicitacoes: out });
+});
+
+// ---- UI interna do Suporte ----
+app.get("/api/solicitacoes", requireAuth, (req, res) => {
+  const rows = [...db.solicitacoes].sort((a, b) => {
+    const ord = { recebida: 0, em_atendimento: 1, concluida: 2 };
+    if (ord[a.status] !== ord[b.status]) return ord[a.status] - ord[b.status];
+    return (b.criadoEm || "").localeCompare(a.criadoEm || "");
+  });
+  res.json({ solicitacoes: rows });
+});
+
+app.post("/api/solicitacoes/:id/aceitar", requireAuth, (req, res) => {
+  const s = db.solicitacoes.find((x) => x.id === req.params.id);
+  if (!s) return res.status(404).json({ error: "não encontrada" });
+  s.status = "em_atendimento";
+  s.colaboradoraId = req.user.id;
+  s.colaboradoraNome = req.user.nome;
+  s.aceitoEm = new Date().toISOString();
+  saveDB(db);
+  res.json({ solicitacao: s });
+});
+
+app.post("/api/solicitacoes/:id/concluir", requireAuth, (req, res) => {
+  const s = db.solicitacoes.find((x) => x.id === req.params.id);
+  if (!s) return res.status(404).json({ error: "não encontrada" });
+  s.resposta = (req.body?.resposta || "").trim();
+  s.status = "concluida";
+  if (!s.colaboradoraId) { s.colaboradoraId = req.user.id; s.colaboradoraNome = req.user.nome; }
+  s.concluidoEm = new Date().toISOString();
+  saveDB(db);
+  res.json({ solicitacao: s });
+});
+
+app.post("/api/solicitacoes/:id/reabrir", requireAuth, (req, res) => {
+  const s = db.solicitacoes.find((x) => x.id === req.params.id);
+  if (!s) return res.status(404).json({ error: "não encontrada" });
+  s.status = s.colaboradoraId ? "em_atendimento" : "recebida";
+  s.resposta = "";
+  s.concluidoEm = null;
+  saveDB(db);
+  res.json({ solicitacao: s });
 });
 
 // ---------------------------------------------------------------------------
