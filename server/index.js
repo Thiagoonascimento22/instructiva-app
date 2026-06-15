@@ -472,6 +472,8 @@ app.post("/api/analise", requireAuth, async (req, res) => {
 DADOS DA COLABORADORA:
 ${resumoInd}
 
+SOLICITAÇÕES DO COMERCIAL atendidas por ela: ${solicDaColaboradora(db.solicitacoes, colaboradoraId)}
+
 Retorne SOMENTE um JSON válido (sem markdown, sem crases) com esta estrutura exata:
 {
   "individual": true,
@@ -491,6 +493,9 @@ Seja específico usando os números reais. Tom profissional, construtivo e acion
 
 DADOS DA EQUIPE (período completo registrado):
 ${resumo}
+
+SOLICITAÇÕES DO COMERCIAL (pedidos de suporte que os vendedores encaminharam — considere no parecer quem está absorvendo e resolvendo essa demanda):
+${buildSolicPayload(db.solicitacoes, users)}
 
 Retorne SOMENTE um JSON válido (sem markdown, sem crases) com esta estrutura exata:
 {
@@ -521,6 +526,32 @@ Seja específico usando os números reais. Tom profissional, construtivo e acion
     res.status(502).json({ error: "não foi possível gerar a análise agora" });
   }
 });
+
+function buildSolicPayload(solicitacoes, users) {
+  const nomeDe = (id) => (users.find((u) => u.id === id) || {}).nome || "—";
+  const total = (solicitacoes || []).length;
+  const st = { recebida: 0, em_atendimento: 0, concluida: 0 };
+  const porColab = {};
+  (solicitacoes || []).forEach((s) => {
+    st[s.status] = (st[s.status] || 0) + 1;
+    if (s.colaboradoraId) {
+      const k = s.colaboradoraId;
+      porColab[k] = porColab[k] || { nome: s.colaboradoraNome || nomeDe(k), aceitas: 0, concluidas: 0 };
+      porColab[k].aceitas += 1;
+      if (s.status === "concluida") porColab[k].concluidas += 1;
+    }
+  });
+  let txt = `Total recebidas do comercial: ${total} | Aguardando: ${st.recebida || 0} | Em atendimento: ${st.em_atendimento || 0} | Concluídas: ${st.concluida || 0}\n`;
+  const linhas = Object.values(porColab).map((c) => `- ${c.nome}: ${c.aceitas} atendidas, ${c.concluidas} concluídas`);
+  txt += "Por colaboradora:\n" + (linhas.length ? linhas.join("\n") : "- (nenhuma atendida ainda)");
+  return txt;
+}
+
+function solicDaColaboradora(solicitacoes, id) {
+  const dela = (solicitacoes || []).filter((s) => s.colaboradoraId === id);
+  const concl = dela.filter((s) => s.status === "concluida").length;
+  return `${dela.length} atendidas (${concl} concluídas)`;
+}
 
 function buildAIPayload(records, users) {
   // gestores (gerente/diretor) não entram na análise de produtividade
