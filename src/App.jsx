@@ -454,6 +454,7 @@ const PERIODOS_SUP = [["tudo", "Tudo"], ["hoje", "Hoje"], ["semana", "Essa seman
 
 function Solicitacoes({ me, isAdmin, solicitacoes, refresh }) {
   const [busy, setBusy] = useState(null);
+  const [aberta, setAberta] = useState(null);
   const [respId, setRespId] = useState(null);
   const [resp, setResp] = useState("");
   const [filtro, setFiltro] = useState("ativas");
@@ -486,72 +487,116 @@ function Solicitacoes({ me, isAdmin, solicitacoes, refresh }) {
   const ativas = noPeriodo.filter((s) => s.status !== "concluida");
   const concluidas = noPeriodo.filter((s) => s.status === "concluida");
   const lista = filtro === "ativas" ? ativas : concluidas;
+  const abertaLive = aberta ? (solicitacoes.find((x) => x.id === aberta.id) || aberta) : null;
 
-  const card = (s) => {
+  const badges = (s) => {
     const tipoInfo = s.tipo === "liberacao_curso"
       ? { txt: s.tipoLabel || "Liberação de curso", c: "#7C3AED" }
       : { txt: s.tipoLabel || "Outras solicitações", c: "#0891B2" };
     const urgInfo = { baixa: { t: "Baixa", c: "#12A150" }, media: { t: "Média", c: "#C2780A" }, alta: { t: "Alta", c: "#E5484D" } }[s.urgencia] || null;
+    const stB = s.status === "recebida" ? { t: "Aguardando", c: "#E5484D" }
+      : s.status === "em_atendimento" ? { t: "Em atendimento", c: "#6366F1" }
+      : { t: "Concluída", c: "#12A150" };
+    return { tipoInfo, urgInfo, stB };
+  };
+
+  const row = (s) => {
+    const { tipoInfo, urgInfo, stB } = badges(s);
+    const nAnexos = Array.isArray(s.anexos) ? s.anexos.length : 0;
     return (
-      <div key={s.id} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 14, padding: "16px 18px", marginBottom: 12, boxShadow: "0 1px 3px rgba(60,55,45,0.04)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: tipoInfo.c, background: tipoInfo.c + "1c", padding: "3px 10px", borderRadius: 20 }}>{tipoInfo.txt}</span>
-          {urgInfo && <span style={{ fontSize: 11, fontWeight: 700, color: urgInfo.c, background: urgInfo.c + "1f", padding: "3px 10px", borderRadius: 20 }}>Urgência: {urgInfo.t}</span>}
-          {s.status === "recebida" && <span style={{ fontSize: 11, fontWeight: 700, color: "#E5484D", background: "#E5484D1c", padding: "3px 10px", borderRadius: 20 }}>Aguardando</span>}
-          {s.status === "em_atendimento" && <span style={{ fontSize: 11, fontWeight: 700, color: "#6366F1", background: "#6366F11c", padding: "3px 10px", borderRadius: 20 }}>Em atendimento{s.colaboradoraNome ? " · " + s.colaboradoraNome : ""}</span>}
-          {s.status === "concluida" && <span style={{ fontSize: 11, fontWeight: 700, color: "#12A150", background: "#12A1501c", padding: "3px 10px", borderRadius: 20 }}>Concluída{s.colaboradoraNome ? " · " + s.colaboradoraNome : ""}</span>}
-          <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--muted)" }}>{new Date(s.criadoEm).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+      <button key={s.id} className="sol-row-sup" onClick={() => { setAberta(s); setRespId(null); setResp(""); }}
+        style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, padding: "13px 16px", marginBottom: 10, cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ fontSize: 14.5, fontWeight: 600, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.descricao}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4, fontSize: 12.5, color: "var(--muted)", flexWrap: "wrap" }}>
+            <span style={{ color: tipoInfo.c, fontWeight: 600 }}>{tipoInfo.txt}</span>
+            <span style={{ opacity: .5 }}>·</span>
+            <span>{s.vendedorNome}</span>
+            <span style={{ opacity: .5 }}>·</span>
+            <span>{new Date(s.criadoEm).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+            {nAnexos > 0 && <><span style={{ opacity: .5 }}>·</span><span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}><Paperclip size={12} /> {nAnexos}</span></>}
+          </div>
         </div>
-        <div style={{ fontSize: 15, color: "var(--text)", lineHeight: 1.5, marginBottom: 8 }}>{s.descricao}</div>
-        {Array.isArray(s.campos) && s.campos.length > 0 && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))", gap: "6px 18px", margin: "0 0 12px", padding: "12px 14px", background: "var(--input-bg)", borderRadius: 10 }}>
-            {s.campos.map((c, i) => (
-              <div key={i} style={{ fontSize: 13, color: "var(--text)", lineHeight: 1.4 }}>
-                <span style={{ color: "var(--muted)" }}>{c.label}: </span><b>{c.valor}</b>
-              </div>
-            ))}
-          </div>
-        )}
-        {Array.isArray(s.anexos) && s.anexos.length > 0 && (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
-            {s.anexos.map((a) => (
-              <button key={a.id} onClick={() => api.abrirAnexo(s.id, a.id).catch((e) => alert(e.message))} title={"Abrir " + a.nome}
-                style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 600, color: "var(--text)", background: "var(--input-bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "6px 11px", cursor: "pointer", fontFamily: "inherit", maxWidth: 220 }}>
-                <Paperclip size={13} /> <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.nome}</span>
-              </button>
-            ))}
-          </div>
-        )}
-        <div style={{ display: "flex", gap: 16, flexWrap: "wrap", fontSize: 12.5, color: "var(--text-soft)", marginBottom: s.status === "concluida" && s.resposta ? 10 : 0 }}>
-          <span><UserCircle size={13} style={{ verticalAlign: -2 }} /> Enviado por {s.vendedorNome}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          {urgInfo && <span style={{ fontSize: 11, fontWeight: 700, color: urgInfo.c, background: urgInfo.c + "1f", padding: "3px 10px", borderRadius: 20 }}>{urgInfo.t}</span>}
+          <span style={{ fontSize: 11, fontWeight: 700, color: stB.c, background: stB.c + "1c", padding: "3px 10px", borderRadius: 20 }}>{stB.t}</span>
         </div>
-        {s.status === "concluida" && s.resposta && (
-          <div style={{ background: "rgba(18,161,80,0.08)", border: "1px solid rgba(18,161,80,0.25)", borderRadius: 10, padding: "10px 12px", fontSize: 13.5, color: "var(--text)" }}>
-            <b style={{ color: "#12A150" }}>Resposta:</b> {s.resposta}
-          </div>
-        )}
-        {respId === s.id ? (
-          <div style={{ marginTop: 12 }}>
-            <textarea value={resp} onChange={(e) => setResp(e.target.value)} placeholder="Escreva a resposta / solução para o vendedor..." rows={3}
-              style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 10, fontSize: 14, fontFamily: "inherit", color: "var(--text)", background: "var(--input-bg)", outline: "none", resize: "vertical" }} />
-            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-              <button onClick={() => concluir(s.id)} disabled={busy === s.id || !resp.trim()} style={{ ...SX.btnPrimary, height: 38, opacity: busy === s.id || !resp.trim() ? 0.5 : 1 }}><CheckCircle2 size={15} /> Concluir</button>
-              <button onClick={() => { setRespId(null); setResp(""); }} style={{ height: 38, padding: "0 16px", borderRadius: 10, border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)", fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
+      </button>
+    );
+  };
+
+  const detalhe = (s) => {
+    const { tipoInfo, urgInfo, stB } = badges(s);
+    const fechar = () => { setAberta(null); setRespId(null); setResp(""); };
+    return (
+      <div style={SX.qrOverlay} onClick={(e) => { if (e.target === e.currentTarget) fechar(); }}>
+        <div style={{ position: "relative", background: "var(--card)", borderRadius: 18, width: "100%", maxWidth: 580, maxHeight: "calc(100vh - 40px)", display: "flex", flexDirection: "column", boxShadow: "0 30px 80px rgba(0,0,0,0.35)", border: "1px solid var(--line)" }}>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, padding: "18px 20px 0" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: tipoInfo.c, background: tipoInfo.c + "1c", padding: "3px 10px", borderRadius: 20 }}>{tipoInfo.txt}</span>
+              {urgInfo && <span style={{ fontSize: 11, fontWeight: 700, color: urgInfo.c, background: urgInfo.c + "1f", padding: "3px 10px", borderRadius: 20 }}>Urgência: {urgInfo.t}</span>}
+              <span style={{ fontSize: 11, fontWeight: 700, color: stB.c, background: stB.c + "1c", padding: "3px 10px", borderRadius: 20 }}>{stB.t}{s.colaboradoraNome && s.status !== "recebida" ? " · " + s.colaboradoraNome : ""}</span>
             </div>
+            <button className="sol-det-x-sup" onClick={fechar} style={{ background: "transparent", border: "none", color: "var(--muted)", cursor: "pointer", padding: 4, borderRadius: 8, display: "flex", lineHeight: 0 }}><X size={18} /></button>
           </div>
-        ) : (
-          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-            {s.status === "recebida" && (
-              <button onClick={() => aceitar(s.id)} disabled={busy === s.id} style={{ ...SX.btnPrimary, height: 38 }}><Headphones size={15} /> Aceitar</button>
+          <div style={{ padding: "14px 20px 4px", overflowY: "auto", flex: 1, minHeight: 0 }}>
+            <div style={{ fontSize: 18, fontWeight: 700, color: "var(--text)", lineHeight: 1.3 }}>{s.descricao}</div>
+            <div style={{ fontSize: 12.5, color: "var(--muted)", margin: "5px 0 16px", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}><UserCircle size={13} /> Enviado por {s.vendedorNome} · {new Date(s.criadoEm).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</div>
+            {Array.isArray(s.campos) && s.campos.length > 0 && (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 16px" }}>
+                {s.campos.map((c, i) => (
+                  <div key={i} style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+                    <span style={{ fontSize: 11.5, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".03em" }}>{c.label}</span>
+                    <b style={{ fontSize: 14, color: "var(--text)", wordBreak: "break-word" }}>{c.valor}</b>
+                  </div>
+                ))}
+              </div>
             )}
-            {s.status === "em_atendimento" && (
-              <button onClick={() => { setRespId(s.id); setResp(s.resposta || ""); }} style={{ ...SX.btnPrimary, height: 38 }}><CheckCircle2 size={15} /> Concluir</button>
+            {Array.isArray(s.anexos) && s.anexos.length > 0 && (
+              <div style={{ marginTop: 18 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".03em", marginBottom: 8 }}>Anexos</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {s.anexos.map((a) => (
+                    <button key={a.id} onClick={() => api.abrirAnexo(s.id, a.id).catch((e) => alert(e.message))} title={"Abrir " + a.nome}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 600, color: "var(--text)", background: "var(--input-bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "7px 12px", cursor: "pointer", fontFamily: "inherit", maxWidth: 240 }}>
+                      <Paperclip size={13} /> <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.nome}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {s.status === "concluida" && s.resposta && (
+              <div style={{ marginTop: 18, background: "rgba(18,161,80,0.08)", border: "1px solid rgba(18,161,80,0.25)", borderRadius: 12, padding: "12px 14px", fontSize: 14, color: "var(--text)" }}>
+                <b style={{ color: "#12A150", display: "block", marginBottom: 4 }}>Resposta enviada</b> {s.resposta}
+              </div>
+            )}
+            {respId === s.id && (
+              <div style={{ marginTop: 18 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".03em", marginBottom: 8 }}>Resposta / solução</div>
+                <textarea value={resp} onChange={(e) => setResp(e.target.value)} placeholder="Escreva a resposta / solução para o vendedor..." rows={4} autoFocus
+                  style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 10, fontSize: 14, fontFamily: "inherit", color: "var(--text)", background: "var(--input-bg)", outline: "none", resize: "vertical" }} />
+              </div>
+            )}
+          </div>
+          <div style={{ display: "flex", gap: 8, padding: "14px 20px 18px", borderTop: "1px solid var(--line)", flexWrap: "wrap", alignItems: "center" }}>
+            {s.status === "recebida" && (
+              <button onClick={() => aceitar(s.id)} disabled={busy === s.id} style={{ ...SX.btnPrimary, height: 42 }}><Headphones size={15} /> Aceitar atendimento</button>
+            )}
+            {s.status === "em_atendimento" && respId !== s.id && (
+              <button onClick={() => { setRespId(s.id); setResp(s.resposta || ""); }} style={{ ...SX.btnPrimary, height: 42 }}><CheckCircle2 size={15} /> Concluir</button>
+            )}
+            {s.status === "em_atendimento" && respId === s.id && (
+              <>
+                <button onClick={() => concluir(s.id)} disabled={busy === s.id || !resp.trim()} style={{ ...SX.btnPrimary, height: 42, opacity: busy === s.id || !resp.trim() ? 0.5 : 1 }}><CheckCircle2 size={15} /> Enviar e concluir</button>
+                <button onClick={() => { setRespId(null); setResp(""); }} style={{ height: 42, padding: "0 16px", borderRadius: 12, border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)", fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
+              </>
             )}
             {s.status === "concluida" && (
-              <button onClick={() => reabrir(s.id)} disabled={busy === s.id} style={{ height: 38, padding: "0 16px", borderRadius: 10, border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)", fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Reabrir</button>
+              <button onClick={() => reabrir(s.id)} disabled={busy === s.id} style={{ height: 42, padding: "0 18px", borderRadius: 12, border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)", fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Reabrir</button>
             )}
+            <button onClick={fechar} style={{ marginLeft: "auto", height: 42, padding: "0 18px", borderRadius: 12, border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)", fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Fechar</button>
           </div>
-        )}
+        </div>
       </div>
     );
   };
@@ -583,7 +628,8 @@ function Solicitacoes({ me, isAdmin, solicitacoes, refresh }) {
           <Inbox size={40} strokeWidth={1.5} style={{ opacity: 0.5, marginBottom: 12 }} />
           <div style={{ fontSize: 15 }}>{filtro === "ativas" ? "Nenhuma solicitação no momento." : "Nenhuma solicitação concluída ainda."}</div>
         </div>
-      ) : lista.map(card)}
+      ) : lista.map(row)}
+      {abertaLive && detalhe(abertaLive)}
     </div>
   );
 }
@@ -2660,4 +2706,9 @@ input:focus, textarea:focus, select:focus { border-color: #6366F1 !important; bo
 .shake { animation: shake .4s ease; }
 @keyframes shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
 @media (max-width: 900px) { aside { display: none; } .chartCard { grid-column: span 2 !important; } main { padding: 20px !important; } }
+
+/* linha compacta de solicitação */
+.sol-row-sup { transition: border-color .15s, box-shadow .15s, transform .15s; }
+.sol-row-sup:hover { border-color: var(--indigo) !important; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(99,102,241,.14); }
+.sol-det-x-sup:hover { background: var(--bg) !important; color: var(--text) !important; }
 `;
