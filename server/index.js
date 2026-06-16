@@ -370,22 +370,29 @@ function acharAnexo(s, anexoId) {
 }
 
 function servirAnexo(res, s, anexoId) {
-  if (!s) return res.status(404).json({ error: "Chamado não encontrado" });
-  const a = acharAnexo(s, anexoId);
-  if (!a) return res.status(404).json({ error: "Anexo não encontrado nos dados (id " + anexoId + ")" });
-  const nome = String(a.nome || "arquivo").replace(/"/g, "");
-  // fallback: se o anexo tiver os bytes embutidos, serve direto (sempre funciona)
-  if (a.dados) {
-    res.setHeader("Content-Type", a.mime || "application/octet-stream");
+  try {
+    if (!s) return res.status(404).json({ error: "Chamado não encontrado" });
+    const a = acharAnexo(s, anexoId);
+    if (!a) return res.status(404).json({ error: "Anexo não encontrado nos dados (id " + anexoId + ")" });
+    const nome = String(a.nome || "arquivo").replace(/[^\x20-\x7e]/g, "_").replace(/"/g, "");
+    const mime = String(a.mime || "application/octet-stream");
+    // fallback: bytes embutidos (sempre funciona)
+    if (a.dados) {
+      res.setHeader("Content-Type", mime);
+      res.setHeader("Content-Disposition", 'inline; filename="' + nome + '"');
+      return res.end(Buffer.from(String(a.dados), "base64"));
+    }
+    if (!a.arquivo) return res.status(404).json({ error: "Anexo sem arquivo salvo" });
+    const fp = join(COMPROV_DIR, String(a.arquivo));
+    if (!fs.existsSync(fp)) return res.status(410).json({ error: "O arquivo não está mais no servidor. A pasta de anexos provavelmente não está no volume persistente do Railway (some a cada deploy). Reenvie o arquivo ou ajuste o volume." });
+    res.setHeader("Content-Type", mime);
     res.setHeader("Content-Disposition", 'inline; filename="' + nome + '"');
-    return res.end(Buffer.from(String(a.dados), "base64"));
+    const stream = fs.createReadStream(fp);
+    stream.on("error", (e) => { if (!res.headersSent) res.status(500).json({ error: "Erro lendo o arquivo: " + (e && e.message ? e.message : String(e)) }); else { try { res.end(); } catch (_) {} } });
+    stream.pipe(res);
+  } catch (e) {
+    if (!res.headersSent) res.status(500).json({ error: "Erro ao abrir anexo: " + (e && e.message ? e.message : String(e)) });
   }
-  if (!a.arquivo) return res.status(404).json({ error: "Anexo sem arquivo salvo" });
-  const fp = join(COMPROV_DIR, a.arquivo);
-  if (!fs.existsSync(fp)) return res.status(410).json({ error: "O arquivo não está mais no servidor. A pasta de anexos provavelmente não está no volume persistente do Railway (some a cada deploy). Reenvie o arquivo ou ajuste o volume." });
-  res.setHeader("Content-Type", a.mime || "application/octet-stream");
-  res.setHeader("Content-Disposition", 'inline; filename="' + nome + '"');
-  fs.createReadStream(fp).pipe(res);
 }
 
 app.post("/api/solic/inbound", bridgeAuth, (req, res) => {
