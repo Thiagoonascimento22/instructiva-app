@@ -467,21 +467,30 @@ function Solicitacoes({ me, isAdmin, solicitacoes, refresh }) {
   const lista = filtro === "ativas" ? ativas : concluidas;
 
   const card = (s) => {
-    const urg = rotuloUrg(s.urgencia);
+    const tipoInfo = s.tipo === "liberacao_curso"
+      ? { txt: s.tipoLabel || "Liberação de curso", c: "#7C3AED" }
+      : { txt: s.tipoLabel || "Outras solicitações", c: "#0891B2" };
     return (
       <div key={s.id} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 14, padding: "16px 18px", marginBottom: 12, boxShadow: "0 1px 3px rgba(60,55,45,0.04)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: urg.c, background: urg.c + "1c", padding: "3px 10px", borderRadius: 20 }}>{urg.txt}</span>
+          <span style={{ fontSize: 11, fontWeight: 700, color: tipoInfo.c, background: tipoInfo.c + "1c", padding: "3px 10px", borderRadius: 20 }}>{tipoInfo.txt}</span>
           {s.status === "recebida" && <span style={{ fontSize: 11, fontWeight: 700, color: "#E5484D", background: "#E5484D1c", padding: "3px 10px", borderRadius: 20 }}>Aguardando</span>}
           {s.status === "em_atendimento" && <span style={{ fontSize: 11, fontWeight: 700, color: "#6366F1", background: "#6366F11c", padding: "3px 10px", borderRadius: 20 }}>Em atendimento{s.colaboradoraNome ? " · " + s.colaboradoraNome : ""}</span>}
           {s.status === "concluida" && <span style={{ fontSize: 11, fontWeight: 700, color: "#12A150", background: "#12A1501c", padding: "3px 10px", borderRadius: 20 }}>Concluída{s.colaboradoraNome ? " · " + s.colaboradoraNome : ""}</span>}
           <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--muted)" }}>{new Date(s.criadoEm).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
         </div>
         <div style={{ fontSize: 15, color: "var(--text)", lineHeight: 1.5, marginBottom: 8 }}>{s.descricao}</div>
+        {Array.isArray(s.campos) && s.campos.length > 0 && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))", gap: "6px 18px", margin: "0 0 12px", padding: "12px 14px", background: "var(--input-bg)", borderRadius: 10 }}>
+            {s.campos.map((c, i) => (
+              <div key={i} style={{ fontSize: 13, color: "var(--text)", lineHeight: 1.4 }}>
+                <span style={{ color: "var(--muted)" }}>{c.label}: </span><b>{c.valor}</b>
+              </div>
+            ))}
+          </div>
+        )}
         <div style={{ display: "flex", gap: 16, flexWrap: "wrap", fontSize: 12.5, color: "var(--text-soft)", marginBottom: s.status === "concluida" && s.resposta ? 10 : 0 }}>
-          <span><UserCircle size={13} style={{ verticalAlign: -2 }} /> {s.vendedorNome}</span>
-          {s.cliente && <span>Cliente: <b>{s.cliente}</b></span>}
-          {s.numero && <span>{s.numero}</span>}
+          <span><UserCircle size={13} style={{ verticalAlign: -2 }} /> Enviado por {s.vendedorNome}</span>
         </div>
         {s.status === "concluida" && s.resposta && (
           <div style={{ background: "rgba(18,161,80,0.08)", border: "1px solid rgba(18,161,80,0.25)", borderRadius: 10, padding: "10px 12px", fontSize: 13.5, color: "var(--text)" }}>

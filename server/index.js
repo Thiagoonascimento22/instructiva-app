@@ -308,6 +308,14 @@ app.put("/api/records/:id", requireAuth, (req, res) => {
 // SOLICITAÇÕES (vindas do comercial / Monitoria)
 // ---------------------------------------------------------------------------
 // recebe uma nova solicitação do app do comercial (ponte)
+function sanitizeCampos(arr) {
+  if (!Array.isArray(arr)) return [];
+  return arr
+    .slice(0, 40)
+    .map((c) => ({ label: String((c && c.label) || "").slice(0, 60), valor: String((c && c.valor) || "").slice(0, 500) }))
+    .filter((c) => c.label && c.valor);
+}
+
 app.post("/api/solic/inbound", bridgeAuth, (req, res) => {
   const b = req.body || {};
   if (!b.descricao?.trim()) return res.status(400).json({ error: "descrição obrigatória" });
@@ -319,6 +327,9 @@ app.post("/api/solic/inbound", bridgeAuth, (req, res) => {
     numero: (b.numero || "").trim(),
     descricao: b.descricao.trim(),
     urgencia: URG_OK.includes(b.urgencia) ? b.urgencia : "normal",
+    tipo: String(b.tipo || "outras").trim().slice(0, 40),
+    tipoLabel: String(b.tipoLabel || "").trim().slice(0, 60),
+    campos: sanitizeCampos(b.campos),
     status: "recebida",   // recebida | em_atendimento | concluida
     colaboradoraId: null, colaboradoraNome: "",
     resposta: "",
