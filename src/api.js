@@ -61,6 +61,7 @@ export const api = {
   },
   solicAceitar: (id) => req("POST", "/solicitacoes/" + id + "/aceitar"),
   solicConcluir: (id, resposta) => req("POST", "/solicitacoes/" + id + "/concluir", { resposta }),
+  solicMensagem: (id, texto) => req("POST", "/solicitacoes/" + id + "/mensagem", { texto }),
   solicReabrir: (id) => req("POST", "/solicitacoes/" + id + "/reabrir"),
   // whatsapp
   waGetConfig: () => req("GET", "/wa/config"),

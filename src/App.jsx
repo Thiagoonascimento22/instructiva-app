@@ -457,6 +457,9 @@ function Solicitacoes({ me, isAdmin, solicitacoes, refresh }) {
   const [aberta, setAberta] = useState(null);
   const [respId, setRespId] = useState(null);
   const [resp, setResp] = useState("");
+  const [chatMsg, setChatMsg] = useState("");
+  const [chatEnviando, setChatEnviando] = useState(false);
+  const chatRef = useRef(null);
   const [filtro, setFiltro] = useState("ativas");
   const [periodo, setPeriodo] = useState("tudo");
   const [cde, setCde] = useState("");
@@ -488,6 +491,18 @@ function Solicitacoes({ me, isAdmin, solicitacoes, refresh }) {
   const concluidas = noPeriodo.filter((s) => s.status === "concluida");
   const lista = filtro === "ativas" ? ativas : concluidas;
   const abertaLive = aberta ? (solicitacoes.find((x) => x.id === aberta.id) || aberta) : null;
+  const nMsgsSup = abertaLive && Array.isArray(abertaLive.mensagens) ? abertaLive.mensagens.length : 0;
+  useEffect(() => {
+    if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
+  }, [nMsgsSup, aberta && aberta.id]);
+  async function enviarChat(s) {
+    const t = chatMsg.trim();
+    if (!t || chatEnviando) return;
+    setChatEnviando(true);
+    try { await api.solicMensagem(s.id, t); setChatMsg(""); await refresh(); }
+    catch (e) { alert(e.message); }
+    setChatEnviando(false);
+  }
 
   const badges = (s) => {
     const tipoInfo = s.tipo === "liberacao_curso"
@@ -504,7 +519,7 @@ function Solicitacoes({ me, isAdmin, solicitacoes, refresh }) {
     const { tipoInfo, urgInfo, stB } = badges(s);
     const nAnexos = Array.isArray(s.anexos) ? s.anexos.length : 0;
     return (
-      <button key={s.id} className="sol-row-sup" onClick={() => { setAberta(s); setRespId(null); setResp(""); }}
+      <button key={s.id} className="sol-row-sup" onClick={() => { setAberta(s); setRespId(null); setResp(""); setChatMsg(""); }}
         style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, padding: "13px 16px", marginBottom: 10, cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}>
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ fontSize: 14.5, fontWeight: 600, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.descricao}</div>
@@ -527,7 +542,7 @@ function Solicitacoes({ me, isAdmin, solicitacoes, refresh }) {
 
   const detalhe = (s) => {
     const { tipoInfo, urgInfo, stB } = badges(s);
-    const fechar = () => { setAberta(null); setRespId(null); setResp(""); };
+    const fechar = () => { setAberta(null); setRespId(null); setResp(""); setChatMsg(""); };
     return (
       <div style={SX.qrOverlay} onClick={(e) => { if (e.target === e.currentTarget) fechar(); }}>
         <div style={{ position: "relative", background: "var(--card)", borderRadius: 18, width: "100%", maxWidth: 580, maxHeight: "calc(100vh - 40px)", display: "flex", flexDirection: "column", boxShadow: "0 30px 80px rgba(0,0,0,0.35)", border: "1px solid var(--line)" }}>
@@ -577,6 +592,28 @@ function Solicitacoes({ me, isAdmin, solicitacoes, refresh }) {
                   style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 10, fontSize: 14, fontFamily: "inherit", color: "var(--text)", background: "var(--input-bg)", outline: "none", resize: "vertical" }} />
               </div>
             )}
+            <div style={{ marginTop: 22 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".03em", marginBottom: 8 }}>Conversa com o vendedor</div>
+              <div ref={chatRef} style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 240, overflowY: "auto", padding: "6px 2px" }}>
+                {(s.mensagens || []).length === 0 ? (
+                  <div style={{ fontSize: 13, color: "var(--muted)", background: "var(--input-bg)", border: "1px solid var(--border)", padding: 14, borderRadius: 12, textAlign: "center", lineHeight: 1.5 }}>Nenhuma mensagem ainda. Tem alguma dúvida sobre esse chamado? Fale com o vendedor aqui.</div>
+                ) : (s.mensagens || []).map((m) => {
+                  const mine = m.autor === "suporte";
+                  return (
+                    <div key={m.id} style={{ display: "flex", flexDirection: "column", maxWidth: "82%", alignSelf: mine ? "flex-end" : "flex-start", alignItems: mine ? "flex-end" : "flex-start" }}>
+                      <div style={{ fontSize: 14, lineHeight: 1.45, padding: "9px 13px", borderRadius: 15, wordBreak: "break-word", whiteSpace: "pre-wrap", ...(mine ? { background: "linear-gradient(120deg,#6366F1,#7C5CF0)", color: "#fff", borderBottomRightRadius: 5 } : { background: "var(--input-bg)", border: "1px solid var(--border)", color: "var(--text)", borderBottomLeftRadius: 5 }) }}>{m.texto}</div>
+                      <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 3, padding: "0 5px" }}>{mine ? "Você" : (m.autorNome || "Vendedor")} · {new Date(m.ts).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                <input value={chatMsg} onChange={(e) => setChatMsg(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); enviarChat(s); } }} placeholder="Escreva uma mensagem..."
+                  style={{ flex: 1, height: 42, padding: "0 14px", border: "1px solid var(--border)", borderRadius: 12, fontSize: 14, fontFamily: "inherit", color: "var(--text)", background: "var(--card)", outline: "none" }} />
+                <button onClick={() => enviarChat(s)} disabled={chatEnviando || !chatMsg.trim()} title="Enviar"
+                  style={{ width: 42, height: 42, flexShrink: 0, border: "none", borderRadius: 12, background: "linear-gradient(120deg,#6366F1,#7C5CF0)", color: "#fff", cursor: chatEnviando || !chatMsg.trim() ? "default" : "pointer", display: "grid", placeItems: "center", opacity: chatEnviando || !chatMsg.trim() ? 0.45 : 1 }}><Send size={16} /></button>
+              </div>
+            </div>
           </div>
           <div style={{ display: "flex", gap: 8, padding: "14px 20px 18px", borderTop: "1px solid var(--line)", flexWrap: "wrap", alignItems: "center" }}>
             {s.status === "recebida" && (

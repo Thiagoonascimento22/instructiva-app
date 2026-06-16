@@ -361,6 +361,7 @@ app.post("/api/solic/inbound", bridgeAuth, (req, res) => {
     tipoLabel: String(b.tipoLabel || "").trim().slice(0, 60),
     campos: sanitizeCampos(b.campos),
     anexos: salvarAnexos(id, b.anexos),
+    mensagens: [],
     status: "recebida",   // recebida | em_atendimento | concluida
     colaboradoraId: null, colaboradoraNome: "",
     resposta: "",
@@ -396,8 +397,21 @@ app.get("/api/solic/status", bridgeAuth, (req, res) => {
   const set = new Set(ids);
   const out = db.solicitacoes
     .filter((s) => set.has(s.monitoriaId))
-    .map((s) => ({ monitoriaId: s.monitoriaId, status: s.status, resposta: s.resposta, colaboradoraNome: s.colaboradoraNome, concluidoEm: s.concluidoEm }));
+    .map((s) => ({ monitoriaId: s.monitoriaId, status: s.status, resposta: s.resposta, colaboradoraNome: s.colaboradoraNome, concluidoEm: s.concluidoEm, mensagens: s.mensagens || [] }));
   res.json({ solicitacoes: out });
+});
+
+// o comercial encaminha uma mensagem do vendedor para o chat do chamado (ponte)
+app.post("/api/solic/inbound/:monitoriaId/mensagem", bridgeAuth, (req, res) => {
+  const s = db.solicitacoes.find((x) => x.monitoriaId === req.params.monitoriaId);
+  if (!s) return res.status(404).json({ error: "não encontrada" });
+  const texto = String((req.body && req.body.texto) || "").trim().slice(0, 2000);
+  const autorNome = String((req.body && req.body.autorNome) || "Vendedor").trim().slice(0, 80) || "Vendedor";
+  if (!texto) return res.status(400).json({ error: "texto vazio" });
+  if (!Array.isArray(s.mensagens)) s.mensagens = [];
+  s.mensagens.push({ id: "m" + Date.now() + crypto.randomBytes(3).toString("hex"), autor: "vendedor", autorNome, texto, ts: Date.now() });
+  saveDB(db);
+  res.json({ mensagens: s.mensagens });
 });
 
 // ---- UI interna do Suporte ----
@@ -438,6 +452,18 @@ app.post("/api/solicitacoes/:id/reabrir", requireAuth, (req, res) => {
   s.status = s.colaboradoraId ? "em_atendimento" : "recebida";
   s.resposta = "";
   s.concluidoEm = null;
+  saveDB(db);
+  res.json({ solicitacao: s });
+});
+
+// suporte envia mensagem no chat do chamado (vai pro vendedor via sync da ponte)
+app.post("/api/solicitacoes/:id/mensagem", requireAuth, (req, res) => {
+  const s = db.solicitacoes.find((x) => x.id === req.params.id);
+  if (!s) return res.status(404).json({ error: "não encontrada" });
+  const texto = String((req.body && req.body.texto) || "").trim().slice(0, 2000);
+  if (!texto) return res.status(400).json({ error: "texto vazio" });
+  if (!Array.isArray(s.mensagens)) s.mensagens = [];
+  s.mensagens.push({ id: "m" + Date.now() + crypto.randomBytes(3).toString("hex"), autor: "suporte", autorNome: req.user.nome || "Suporte", texto, ts: Date.now() });
   saveDB(db);
   res.json({ solicitacao: s });
 });
