@@ -54,7 +54,7 @@ export default function App() {
 
   const isAdmin = me?.role === "admin";
   const can = (p) => isAdmin || me?.perms?.[p];
-  const solicPend = solicitacoes.filter((s) => s.status === "recebida").length;
+  const solicPend = solicitacoes.filter((s) => s.status === "recebida" || (Array.isArray(s.mensagens) ? s.mensagens : []).some((m) => m.autor === "vendedor" && (m.ts || 0) > (s.suporteViu || 0))).length;
 
   useEffect(() => { localStorage.setItem("instructiva_theme", theme); }, [theme]);
   const toggleTheme = () => setTheme((t) => (t === "light" ? "dark" : "light"));
@@ -459,6 +459,9 @@ function Solicitacoes({ me, isAdmin, solicitacoes, refresh }) {
   const [resp, setResp] = useState("");
   const [chatMsg, setChatMsg] = useState("");
   const [chatEnviando, setChatEnviando] = useState(false);
+  const [chatAnexo, setChatAnexo] = useState(null);
+  const [buscaSup, setBuscaSup] = useState("");
+  const [excluindoSup, setExcluindoSup] = useState(false);
   const chatRef = useRef(null);
   const [filtro, setFiltro] = useState("ativas");
   const [periodo, setPeriodo] = useState("tudo");
@@ -489,19 +492,50 @@ function Solicitacoes({ me, isAdmin, solicitacoes, refresh }) {
   const noPeriodo = solicitacoes.filter((s) => dentroPeriodoSup(s.criadoEm, periodo, cde, cate));
   const ativas = noPeriodo.filter((s) => s.status !== "concluida");
   const concluidas = noPeriodo.filter((s) => s.status === "concluida");
-  const lista = filtro === "ativas" ? ativas : concluidas;
+  const combinaBuscaSup = (s, q) => {
+    if (!q || !q.trim()) return true;
+    const termo = q.trim().toLowerCase();
+    const digitos = termo.replace(/\D/g, "");
+    const campos = (s.campos || []).map((c) => String(c.valor || "")).join(" ");
+    const alvo = [s.cliente, s.numero, s.descricao, s.vendedorNome, campos].join(" ").toLowerCase();
+    if (alvo.includes(termo)) return true;
+    if (digitos.length >= 3 && alvo.replace(/\D/g, "").includes(digitos)) return true;
+    return false;
+  };
+  const lista = (filtro === "ativas" ? ativas : concluidas).filter((s) => combinaBuscaSup(s, buscaSup));
   const abertaLive = aberta ? (solicitacoes.find((x) => x.id === aberta.id) || aberta) : null;
   const nMsgsSup = abertaLive && Array.isArray(abertaLive.mensagens) ? abertaLive.mensagens.length : 0;
   useEffect(() => {
     if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
   }, [nMsgsSup, aberta && aberta.id]);
+  // marca como visto ao abrir e quando chega mensagem nova com o chamado aberto
+  useEffect(() => {
+    if (!aberta) { setChatAnexo(null); return; }
+    api.solicVisto(aberta.id).then(() => refresh()).catch(() => {});
+    // eslint-disable-next-line
+  }, [aberta && aberta.id, nMsgsSup]);
+  function onPickChatFile(fileList) {
+    const file = (fileList || [])[0];
+    if (!file) return;
+    if (file.size > 8 * 1024 * 1024) { alert(`"${file.name}" passa de 8MB e não pode ser anexado.`); return; }
+    const reader = new FileReader();
+    reader.onload = () => setChatAnexo({ nome: file.name, mime: file.type || "application/octet-stream", dados: String(reader.result).split(",")[1] || "" });
+    reader.readAsDataURL(file);
+  }
   async function enviarChat(s) {
     const t = chatMsg.trim();
-    if (!t || chatEnviando) return;
+    if ((!t && !chatAnexo) || chatEnviando) return;
     setChatEnviando(true);
-    try { await api.solicMensagem(s.id, t); setChatMsg(""); await refresh(); }
+    try { await api.solicMensagem(s.id, t, chatAnexo); setChatMsg(""); setChatAnexo(null); await refresh(); }
     catch (e) { alert(e.message); }
     setChatEnviando(false);
+  }
+  async function excluirSolic(s) {
+    if (!window.confirm("Excluir esta solicitação? Ela some daqui e também do painel do vendedor.")) return;
+    setExcluindoSup(true);
+    try { await api.solicExcluir(s.id); setAberta(null); await refresh(); }
+    catch (e) { alert(e.message); }
+    setExcluindoSup(false);
   }
 
   const badges = (s) => {
@@ -518,11 +552,12 @@ function Solicitacoes({ me, isAdmin, solicitacoes, refresh }) {
   const row = (s) => {
     const { tipoInfo, urgInfo, stB } = badges(s);
     const nAnexos = Array.isArray(s.anexos) ? s.anexos.length : 0;
+    const naoLidas = (s.mensagens || []).filter((m) => m.autor === "vendedor" && (m.ts || 0) > (s.suporteViu || 0)).length;
     return (
       <button key={s.id} className="sol-row-sup" onClick={() => { setAberta(s); setRespId(null); setResp(""); setChatMsg(""); }}
         style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, padding: "13px 16px", marginBottom: 10, cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}>
         <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{ fontSize: 14.5, fontWeight: 600, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.descricao}</div>
+          <div style={{ fontSize: 14.5, fontWeight: naoLidas > 0 ? 800 : 600, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.descricao}</div>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4, fontSize: 12.5, color: "var(--muted)", flexWrap: "wrap" }}>
             <span style={{ color: tipoInfo.c, fontWeight: 600 }}>{tipoInfo.txt}</span>
             <span style={{ opacity: .5 }}>·</span>
@@ -533,6 +568,7 @@ function Solicitacoes({ me, isAdmin, solicitacoes, refresh }) {
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          {naoLidas > 0 && <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 700, color: "#fff", background: "#E5484D", height: 20, padding: "0 8px", borderRadius: 10 }}><MessageCircle size={12} /> {naoLidas}</span>}
           {urgInfo && <span style={{ fontSize: 11, fontWeight: 700, color: urgInfo.c, background: urgInfo.c + "1f", padding: "3px 10px", borderRadius: 20 }}>{urgInfo.t}</span>}
           <span style={{ fontSize: 11, fontWeight: 700, color: stB.c, background: stB.c + "1c", padding: "3px 10px", borderRadius: 20 }}>{stB.t}</span>
         </div>
@@ -600,18 +636,29 @@ function Solicitacoes({ me, isAdmin, solicitacoes, refresh }) {
                 ) : (s.mensagens || []).map((m) => {
                   const mine = m.autor === "suporte";
                   return (
-                    <div key={m.id} style={{ display: "flex", flexDirection: "column", maxWidth: "82%", alignSelf: mine ? "flex-end" : "flex-start", alignItems: mine ? "flex-end" : "flex-start" }}>
-                      <div style={{ fontSize: 14, lineHeight: 1.45, padding: "9px 13px", borderRadius: 15, wordBreak: "break-word", whiteSpace: "pre-wrap", ...(mine ? { background: "linear-gradient(120deg,#6366F1,#7C5CF0)", color: "#fff", borderBottomRightRadius: 5 } : { background: "var(--input-bg)", border: "1px solid var(--border)", color: "var(--text)", borderBottomLeftRadius: 5 }) }}>{m.texto}</div>
-                      <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 3, padding: "0 5px" }}>{mine ? "Você" : (m.autorNome || "Vendedor")} · {new Date(m.ts).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</div>
+                    <div key={m.id} style={{ display: "flex", flexDirection: "column", maxWidth: "82%", alignSelf: mine ? "flex-end" : "flex-start", alignItems: mine ? "flex-end" : "flex-start", gap: 4 }}>
+                      {m.texto ? <div style={{ fontSize: 14, lineHeight: 1.45, padding: "9px 13px", borderRadius: 15, wordBreak: "break-word", whiteSpace: "pre-wrap", ...(mine ? { background: "linear-gradient(120deg,#6366F1,#7C5CF0)", color: "#fff", borderBottomRightRadius: 5 } : { background: "var(--input-bg)", border: "1px solid var(--border)", color: "var(--text)", borderBottomLeftRadius: 5 }) }}>{m.texto}</div> : null}
+                      {m.anexo ? <button onClick={() => api.abrirAnexo(s.id, m.anexo.id).catch((e) => alert(e.message))} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, padding: "8px 12px", borderRadius: 12, cursor: "pointer", fontFamily: "inherit", maxWidth: "100%", border: mine ? "none" : "1px solid var(--border)", background: mine ? "linear-gradient(120deg,#6366F1,#7C5CF0)" : "var(--card)", color: mine ? "#fff" : "var(--text)" }}><Paperclip size={13} /> <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.anexo.nome}</span></button> : null}
+                      <div style={{ fontSize: 10.5, color: "var(--muted)", padding: "0 5px" }}>{mine ? "Você" : (m.autorNome || "Vendedor")} · {new Date(m.ts).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</div>
                     </div>
                   );
                 })}
               </div>
+              {chatAnexo && (
+                <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--input-bg)", border: "1px solid var(--border)", borderRadius: 10, padding: "6px 10px", fontSize: 13, color: "var(--text)", marginTop: 12, maxWidth: "100%" }}>
+                  <Paperclip size={13} /> <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{chatAnexo.nome}</span>
+                  <button onClick={() => setChatAnexo(null)} title="Remover" style={{ border: "none", background: "transparent", color: "var(--muted)", cursor: "pointer", fontSize: 17, lineHeight: 1, padding: "0 2px" }}>×</button>
+                </div>
+              )}
               <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                <label title="Anexar arquivo" style={{ width: 42, height: 42, flexShrink: 0, border: "1px solid var(--border)", borderRadius: 12, background: "var(--card)", color: "var(--muted)", cursor: "pointer", display: "grid", placeItems: "center" }}>
+                  <Paperclip size={17} />
+                  <input type="file" style={{ display: "none" }} onChange={(e) => { onPickChatFile(e.target.files); e.target.value = ""; }} />
+                </label>
                 <input value={chatMsg} onChange={(e) => setChatMsg(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); enviarChat(s); } }} placeholder="Escreva uma mensagem..."
                   style={{ flex: 1, height: 42, padding: "0 14px", border: "1px solid var(--border)", borderRadius: 12, fontSize: 14, fontFamily: "inherit", color: "var(--text)", background: "var(--card)", outline: "none" }} />
-                <button onClick={() => enviarChat(s)} disabled={chatEnviando || !chatMsg.trim()} title="Enviar"
-                  style={{ width: 42, height: 42, flexShrink: 0, border: "none", borderRadius: 12, background: "linear-gradient(120deg,#6366F1,#7C5CF0)", color: "#fff", cursor: chatEnviando || !chatMsg.trim() ? "default" : "pointer", display: "grid", placeItems: "center", opacity: chatEnviando || !chatMsg.trim() ? 0.45 : 1 }}><Send size={16} /></button>
+                <button onClick={() => enviarChat(s)} disabled={chatEnviando || (!chatMsg.trim() && !chatAnexo)} title="Enviar"
+                  style={{ width: 42, height: 42, flexShrink: 0, border: "none", borderRadius: 12, background: "linear-gradient(120deg,#6366F1,#7C5CF0)", color: "#fff", cursor: chatEnviando || (!chatMsg.trim() && !chatAnexo) ? "default" : "pointer", display: "grid", placeItems: "center", opacity: chatEnviando || (!chatMsg.trim() && !chatAnexo) ? 0.45 : 1 }}><Send size={16} /></button>
               </div>
             </div>
           </div>
@@ -631,7 +678,8 @@ function Solicitacoes({ me, isAdmin, solicitacoes, refresh }) {
             {s.status === "concluida" && (
               <button onClick={() => reabrir(s.id)} disabled={busy === s.id} style={{ height: 42, padding: "0 18px", borderRadius: 12, border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)", fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Reabrir</button>
             )}
-            <button onClick={fechar} style={{ marginLeft: "auto", height: 42, padding: "0 18px", borderRadius: 12, border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)", fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Fechar</button>
+            <button onClick={() => excluirSolic(s)} disabled={excluindoSup} style={{ marginLeft: "auto", height: 42, padding: "0 16px", borderRadius: 12, border: "1px solid #E5484D44", background: "transparent", color: "#E5484D", fontWeight: 700, cursor: excluindoSup ? "default" : "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6, opacity: excluindoSup ? 0.5 : 1 }}><Trash2 size={15} /> Excluir</button>
+            <button onClick={fechar} style={{ height: 42, padding: "0 18px", borderRadius: 12, border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)", fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Fechar</button>
           </div>
         </div>
       </div>
@@ -660,10 +708,16 @@ function Solicitacoes({ me, isAdmin, solicitacoes, refresh }) {
         <button onClick={() => setFiltro("ativas")} style={{ ...SX.filterChip, ...(filtro === "ativas" ? { borderColor: "#6366F1", color: "#6366F1", background: "rgba(99,102,241,0.08)" } : {}) }}>Ativas ({ativas.length})</button>
         <button onClick={() => setFiltro("concluidas")} style={{ ...SX.filterChip, ...(filtro === "concluidas" ? { borderColor: "#12A150", color: "#12A150", background: "rgba(18,161,80,0.08)" } : {}) }}>Concluídas ({concluidas.length})</button>
       </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 9, background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, padding: "0 14px", height: 44, marginBottom: 14, color: "var(--muted)" }}>
+        <Search size={16} style={{ flexShrink: 0 }} />
+        <input value={buscaSup} onChange={(e) => setBuscaSup(e.target.value)} placeholder="Buscar por nome, e-mail ou CPF do aluno..."
+          style={{ flex: 1, minWidth: 0, border: "none", background: "transparent", outline: "none", fontSize: 14, fontFamily: "inherit", color: "var(--text)", height: "100%" }} />
+        {buscaSup ? <button onClick={() => setBuscaSup("")} title="Limpar" style={{ border: "none", background: "transparent", color: "var(--muted)", cursor: "pointer", display: "flex", padding: 4 }}><X size={14} /></button> : null}
+      </div>
       {lista.length === 0 ? (
         <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--muted)" }}>
           <Inbox size={40} strokeWidth={1.5} style={{ opacity: 0.5, marginBottom: 12 }} />
-          <div style={{ fontSize: 15 }}>{filtro === "ativas" ? "Nenhuma solicitação no momento." : "Nenhuma solicitação concluída ainda."}</div>
+          <div style={{ fontSize: 15 }}>{buscaSup ? "Nada encontrado pra essa busca." : filtro === "ativas" ? "Nenhuma solicitação no momento." : "Nenhuma solicitação concluída ainda."}</div>
         </div>
       ) : lista.map(row)}
       {abertaLive && detalhe(abertaLive)}

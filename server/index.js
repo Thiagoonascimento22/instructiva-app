@@ -343,6 +343,39 @@ function apagarAnexos(s) {
   (s && Array.isArray(s.anexos) ? s.anexos : []).forEach((a) => {
     try { fs.unlinkSync(join(COMPROV_DIR, a.arquivo)); } catch (_) {}
   });
+  (s && Array.isArray(s.mensagens) ? s.mensagens : []).forEach((m) => {
+    if (m && m.anexo && m.anexo.arquivo) { try { fs.unlinkSync(join(COMPROV_DIR, m.anexo.arquivo)); } catch (_) {} }
+  });
+}
+
+// salva 1 arquivo enviado no chat e devolve a referência {id,nome,mime,arquivo}
+function salvarAnexoChat(solId, a) {
+  const dados = String((a && a.dados) || "");
+  if (!dados || dados.length > 16 * 1024 * 1024) return null;
+  try { fs.mkdirSync(COMPROV_DIR, { recursive: true }); } catch {}
+  const anexoId = "c" + Date.now() + crypto.randomBytes(3).toString("hex");
+  const arquivo = solId + "__" + anexoId;
+  try {
+    fs.writeFileSync(join(COMPROV_DIR, arquivo), Buffer.from(dados, "base64"));
+    return { id: anexoId, nome: String((a && a.nome) || "arquivo").slice(0, 200), mime: String((a && a.mime) || "application/octet-stream").slice(0, 100), arquivo };
+  } catch (_) { return null; }
+}
+
+// acha um anexo (da solicitação ou de qualquer mensagem do chat) pelo id
+function acharAnexo(s, anexoId) {
+  if (!s) return null;
+  let a = (s.anexos || []).find((x) => x.id === anexoId);
+  if (!a) for (const m of (s.mensagens || [])) if (m && m.anexo && m.anexo.id === anexoId) { a = m.anexo; break; }
+  return a || null;
+}
+
+function enviarArquivo(res, a) {
+  if (!a) return res.status(404).end();
+  const fp = join(COMPROV_DIR, a.arquivo);
+  if (!fs.existsSync(fp)) return res.status(404).end();
+  res.setHeader("Content-Type", a.mime || "application/octet-stream");
+  res.setHeader("Content-Disposition", 'inline; filename="' + String(a.nome || "arquivo").replace(/"/g, "") + '"');
+  fs.createReadStream(fp).pipe(res);
 }
 
 app.post("/api/solic/inbound", bridgeAuth, (req, res) => {
@@ -362,6 +395,7 @@ app.post("/api/solic/inbound", bridgeAuth, (req, res) => {
     campos: sanitizeCampos(b.campos),
     anexos: salvarAnexos(id, b.anexos),
     mensagens: [],
+    suporteViu: 0,
     status: "recebida",   // recebida | em_atendimento | concluida
     colaboradoraId: null, colaboradoraNome: "",
     resposta: "",
@@ -382,13 +416,13 @@ app.delete("/api/solic/inbound/:monitoriaId", bridgeAuth, (req, res) => {
 // serve um comprovante (só logado no Suporte)
 app.get("/api/solic/anexo/:solId/:anexoId", requireAuth, (req, res) => {
   const s = db.solicitacoes.find((x) => x.id === req.params.solId);
-  const a = s && (s.anexos || []).find((x) => x.id === req.params.anexoId);
-  if (!a) return res.status(404).end();
-  const fp = join(COMPROV_DIR, a.arquivo);
-  if (!fs.existsSync(fp)) return res.status(404).end();
-  res.setHeader("Content-Type", a.mime || "application/octet-stream");
-  res.setHeader("Content-Disposition", 'inline; filename="' + String(a.nome || "arquivo").replace(/"/g, "") + '"');
-  fs.createReadStream(fp).pipe(res);
+  enviarArquivo(res, acharAnexo(s, req.params.anexoId));
+});
+
+// serving de anexo pela ponte (o comercial faz proxy disso pro vendedor ver)
+app.get("/api/solic/inbound/:monitoriaId/anexo/:anexoId", bridgeAuth, (req, res) => {
+  const s = db.solicitacoes.find((x) => x.monitoriaId === req.params.monitoriaId);
+  enviarArquivo(res, acharAnexo(s, req.params.anexoId));
 });
 
 // o comercial consulta o status das solicitações dele (poll) — ponte
@@ -407,9 +441,10 @@ app.post("/api/solic/inbound/:monitoriaId/mensagem", bridgeAuth, (req, res) => {
   if (!s) return res.status(404).json({ error: "não encontrada" });
   const texto = String((req.body && req.body.texto) || "").trim().slice(0, 2000);
   const autorNome = String((req.body && req.body.autorNome) || "Vendedor").trim().slice(0, 80) || "Vendedor";
-  if (!texto) return res.status(400).json({ error: "texto vazio" });
+  const anexo = (req.body && req.body.anexo) ? salvarAnexoChat(s.id, req.body.anexo) : null;
+  if (!texto && !anexo) return res.status(400).json({ error: "mensagem vazia" });
   if (!Array.isArray(s.mensagens)) s.mensagens = [];
-  s.mensagens.push({ id: "m" + Date.now() + crypto.randomBytes(3).toString("hex"), autor: "vendedor", autorNome, texto, ts: Date.now() });
+  s.mensagens.push({ id: "m" + Date.now() + crypto.randomBytes(3).toString("hex"), autor: "vendedor", autorNome, texto, ts: Date.now(), ...(anexo ? { anexo } : {}) });
   saveDB(db);
   res.json({ mensagens: s.mensagens });
 });
@@ -461,11 +496,31 @@ app.post("/api/solicitacoes/:id/mensagem", requireAuth, (req, res) => {
   const s = db.solicitacoes.find((x) => x.id === req.params.id);
   if (!s) return res.status(404).json({ error: "não encontrada" });
   const texto = String((req.body && req.body.texto) || "").trim().slice(0, 2000);
-  if (!texto) return res.status(400).json({ error: "texto vazio" });
+  const anexo = (req.body && req.body.anexo) ? salvarAnexoChat(s.id, req.body.anexo) : null;
+  if (!texto && !anexo) return res.status(400).json({ error: "mensagem vazia" });
   if (!Array.isArray(s.mensagens)) s.mensagens = [];
-  s.mensagens.push({ id: "m" + Date.now() + crypto.randomBytes(3).toString("hex"), autor: "suporte", autorNome: req.user.nome || "Suporte", texto, ts: Date.now() });
+  s.mensagens.push({ id: "m" + Date.now() + crypto.randomBytes(3).toString("hex"), autor: "suporte", autorNome: req.user.nome || "Suporte", texto, ts: Date.now(), ...(anexo ? { anexo } : {}) });
   saveDB(db);
   res.json({ solicitacao: s });
+});
+
+// suporte marca o chat como visto (zera o selo de não-lidas do lado dele)
+app.post("/api/solicitacoes/:id/visto", requireAuth, (req, res) => {
+  const s = db.solicitacoes.find((x) => x.id === req.params.id);
+  if (!s) return res.status(404).json({ error: "não encontrada" });
+  s.suporteViu = Date.now();
+  saveDB(db);
+  res.json({ solicitacao: s });
+});
+
+// suporte exclui a solicitação (remove arquivos; o comercial percebe no sync e remove também)
+app.delete("/api/solicitacoes/:id", requireAuth, (req, res) => {
+  const i = db.solicitacoes.findIndex((x) => x.id === req.params.id);
+  if (i === -1) return res.status(404).json({ error: "não encontrada" });
+  apagarAnexos(db.solicitacoes[i]);
+  db.solicitacoes.splice(i, 1);
+  saveDB(db);
+  res.json({ ok: true });
 });
 
 // ---------------------------------------------------------------------------

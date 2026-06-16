@@ -61,7 +61,9 @@ export const api = {
   },
   solicAceitar: (id) => req("POST", "/solicitacoes/" + id + "/aceitar"),
   solicConcluir: (id, resposta) => req("POST", "/solicitacoes/" + id + "/concluir", { resposta }),
-  solicMensagem: (id, texto) => req("POST", "/solicitacoes/" + id + "/mensagem", { texto }),
+  solicMensagem: (id, texto, anexo) => req("POST", "/solicitacoes/" + id + "/mensagem", { texto, anexo }),
+  solicVisto: (id) => req("POST", "/solicitacoes/" + id + "/visto"),
+  solicExcluir: (id) => req("DELETE", "/solicitacoes/" + id),
   solicReabrir: (id) => req("POST", "/solicitacoes/" + id + "/reabrir"),
   // whatsapp
   waGetConfig: () => req("GET", "/wa/config"),
