@@ -54,7 +54,7 @@ export default function App() {
 
   const isAdmin = me?.role === "admin";
   const can = (p) => isAdmin || me?.perms?.[p];
-  const solicPend = solicitacoes.filter((s) => s.status === "recebida" || (Array.isArray(s.mensagens) ? s.mensagens : []).some((m) => m.autor === "vendedor" && (m.ts || 0) > (s.suporteViu || 0))).length;
+  const solicPend = solicitacoes.filter((s) => s.status === "recebida").length;
 
   useEffect(() => { localStorage.setItem("instructiva_theme", theme); }, [theme]);
   const toggleTheme = () => setTheme((t) => (t === "light" ? "dark" : "light"));
