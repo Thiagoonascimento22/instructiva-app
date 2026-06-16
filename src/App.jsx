@@ -491,10 +491,12 @@ function Solicitacoes({ me, isAdmin, solicitacoes, refresh }) {
     const tipoInfo = s.tipo === "liberacao_curso"
       ? { txt: s.tipoLabel || "Liberação de curso", c: "#7C3AED" }
       : { txt: s.tipoLabel || "Outras solicitações", c: "#0891B2" };
+    const urgInfo = { baixa: { t: "Baixa", c: "#12A150" }, media: { t: "Média", c: "#C2780A" }, alta: { t: "Alta", c: "#E5484D" } }[s.urgencia] || null;
     return (
       <div key={s.id} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 14, padding: "16px 18px", marginBottom: 12, boxShadow: "0 1px 3px rgba(60,55,45,0.04)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
           <span style={{ fontSize: 11, fontWeight: 700, color: tipoInfo.c, background: tipoInfo.c + "1c", padding: "3px 10px", borderRadius: 20 }}>{tipoInfo.txt}</span>
+          {urgInfo && <span style={{ fontSize: 11, fontWeight: 700, color: urgInfo.c, background: urgInfo.c + "1f", padding: "3px 10px", borderRadius: 20 }}>Urgência: {urgInfo.t}</span>}
           {s.status === "recebida" && <span style={{ fontSize: 11, fontWeight: 700, color: "#E5484D", background: "#E5484D1c", padding: "3px 10px", borderRadius: 20 }}>Aguardando</span>}
           {s.status === "em_atendimento" && <span style={{ fontSize: 11, fontWeight: 700, color: "#6366F1", background: "#6366F11c", padding: "3px 10px", borderRadius: 20 }}>Em atendimento{s.colaboradoraNome ? " · " + s.colaboradoraNome : ""}</span>}
           {s.status === "concluida" && <span style={{ fontSize: 11, fontWeight: 700, color: "#12A150", background: "#12A1501c", padding: "3px 10px", borderRadius: 20 }}>Concluída{s.colaboradoraNome ? " · " + s.colaboradoraNome : ""}</span>}

@@ -157,7 +157,7 @@ function bridgeAuth(req, res, next) {
     return res.status(401).json({ error: "ponte não autorizada" });
   next();
 }
-const URG_OK = ["baixa", "normal", "alta"];
+const URG_OK = ["baixa", "media", "alta"];
 
 // ---------------------------------------------------------------------------
 // AUTH
@@ -356,7 +356,7 @@ app.post("/api/solic/inbound", bridgeAuth, (req, res) => {
     cliente: (b.cliente || "").trim(),
     numero: (b.numero || "").trim(),
     descricao: b.descricao.trim(),
-    urgencia: URG_OK.includes(b.urgencia) ? b.urgencia : "normal",
+    urgencia: URG_OK.includes(b.urgencia) ? b.urgencia : "media",
     tipo: String(b.tipo || "outras").trim().slice(0, 40),
     tipoLabel: String(b.tipoLabel || "").trim().slice(0, 60),
     campos: sanitizeCampos(b.campos),
