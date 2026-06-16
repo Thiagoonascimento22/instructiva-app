@@ -10,7 +10,7 @@ const ROOT = join(__dirname, "..");
 
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: "25mb" }));
+app.use(express.json({ limit: "40mb" }));
 
 // ---------------------------------------------------------------------------
 // Armazenamento em arquivo JSON (JavaScript puro — sem compilação nativa).
@@ -22,6 +22,7 @@ let DB_PATH = process.env.DB_PATH || join(ROOT, "instructiva.json");
 if (DB_PATH.endsWith(".db")) DB_PATH = DB_PATH.replace(/\.db$/, ".json");
 
 const DB_DIR = dirname(DB_PATH);
+const COMPROV_DIR = join(DB_DIR, "comprovantes");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Espera o volume montar. No Railway o volume pode montar alguns segundos
@@ -316,11 +317,40 @@ function sanitizeCampos(arr) {
     .filter((c) => c.label && c.valor);
 }
 
+function salvarAnexos(solId, arr) {
+  if (!Array.isArray(arr) || !arr.length) return [];
+  try { fs.mkdirSync(COMPROV_DIR, { recursive: true }); } catch {}
+  const out = [];
+  arr.slice(0, 5).forEach((a, i) => {
+    const dados = String((a && a.dados) || "");
+    if (!dados) return;
+    const anexoId = i + "-" + crypto.randomBytes(3).toString("hex");
+    const arquivo = solId + "__" + anexoId;
+    try {
+      fs.writeFileSync(join(COMPROV_DIR, arquivo), Buffer.from(dados, "base64"));
+      out.push({
+        id: anexoId,
+        nome: String((a && a.nome) || "arquivo").slice(0, 200),
+        mime: String((a && a.mime) || "application/octet-stream").slice(0, 100),
+        arquivo,
+      });
+    } catch (_) {}
+  });
+  return out;
+}
+
+function apagarAnexos(s) {
+  (s && Array.isArray(s.anexos) ? s.anexos : []).forEach((a) => {
+    try { fs.unlinkSync(join(COMPROV_DIR, a.arquivo)); } catch (_) {}
+  });
+}
+
 app.post("/api/solic/inbound", bridgeAuth, (req, res) => {
   const b = req.body || {};
   if (!b.descricao?.trim()) return res.status(400).json({ error: "descrição obrigatória" });
+  const id = Date.now() + "-" + crypto.randomBytes(3).toString("hex");
   const s = {
-    id: Date.now() + "-" + crypto.randomBytes(3).toString("hex"),
+    id,
     monitoriaId: String(b.monitoriaId || ""),
     vendedorNome: (b.vendedorNome || "").trim() || "Comercial",
     cliente: (b.cliente || "").trim(),
@@ -330,6 +360,7 @@ app.post("/api/solic/inbound", bridgeAuth, (req, res) => {
     tipo: String(b.tipo || "outras").trim().slice(0, 40),
     tipoLabel: String(b.tipoLabel || "").trim().slice(0, 60),
     campos: sanitizeCampos(b.campos),
+    anexos: salvarAnexos(id, b.anexos),
     status: "recebida",   // recebida | em_atendimento | concluida
     colaboradoraId: null, colaboradoraNome: "",
     resposta: "",
@@ -338,6 +369,25 @@ app.post("/api/solic/inbound", bridgeAuth, (req, res) => {
   db.solicitacoes.unshift(s);
   saveDB(db);
   res.json({ ok: true, id: s.id, status: s.status });
+});
+
+// o comercial exclui uma solicitação -> remove aqui também (ponte)
+app.delete("/api/solic/inbound/:monitoriaId", bridgeAuth, (req, res) => {
+  const i = db.solicitacoes.findIndex((s) => s.monitoriaId === req.params.monitoriaId);
+  if (i >= 0) { apagarAnexos(db.solicitacoes[i]); db.solicitacoes.splice(i, 1); saveDB(db); }
+  res.json({ ok: true });
+});
+
+// serve um comprovante (só logado no Suporte)
+app.get("/api/solic/anexo/:solId/:anexoId", requireAuth, (req, res) => {
+  const s = db.solicitacoes.find((x) => x.id === req.params.solId);
+  const a = s && (s.anexos || []).find((x) => x.id === req.params.anexoId);
+  if (!a) return res.status(404).end();
+  const fp = join(COMPROV_DIR, a.arquivo);
+  if (!fs.existsSync(fp)) return res.status(404).end();
+  res.setHeader("Content-Type", a.mime || "application/octet-stream");
+  res.setHeader("Content-Disposition", 'inline; filename="' + String(a.nome || "arquivo").replace(/"/g, "") + '"');
+  fs.createReadStream(fp).pipe(res);
 });
 
 // o comercial consulta o status das solicitações dele (poll) — ponte

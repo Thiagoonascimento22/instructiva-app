@@ -51,6 +51,14 @@ export const api = {
   analise: (colaboradoraId) => req("POST", "/analise", colaboradoraId ? { colaboradoraId } : {}),
   // solicitações (vindas do comercial)
   solicitacoes: () => req("GET", "/solicitacoes"),
+  abrirAnexo: async (solId, anexoId) => {
+    const r = await fetch("/api/solic/anexo/" + solId + "/" + anexoId, { headers: token ? { Authorization: "Bearer " + token } : {} });
+    if (!r.ok) throw new Error("não foi possível abrir o anexo");
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank");
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  },
   solicAceitar: (id) => req("POST", "/solicitacoes/" + id + "/aceitar"),
   solicConcluir: (id, resposta) => req("POST", "/solicitacoes/" + id + "/concluir", { resposta }),
   solicReabrir: (id) => req("POST", "/solicitacoes/" + id + "/reabrir"),

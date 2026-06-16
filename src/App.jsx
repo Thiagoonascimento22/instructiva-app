@@ -489,6 +489,16 @@ function Solicitacoes({ me, isAdmin, solicitacoes, refresh }) {
             ))}
           </div>
         )}
+        {Array.isArray(s.anexos) && s.anexos.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+            {s.anexos.map((a) => (
+              <button key={a.id} onClick={() => api.abrirAnexo(s.id, a.id).catch((e) => alert(e.message))} title={"Abrir " + a.nome}
+                style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 600, color: "var(--text)", background: "var(--input-bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "6px 11px", cursor: "pointer", fontFamily: "inherit", maxWidth: 220 }}>
+                <Paperclip size={13} /> <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.nome}</span>
+              </button>
+            ))}
+          </div>
+        )}
         <div style={{ display: "flex", gap: 16, flexWrap: "wrap", fontSize: 12.5, color: "var(--text-soft)", marginBottom: s.status === "concluida" && s.resposta ? 10 : 0 }}>
           <span><UserCircle size={13} style={{ verticalAlign: -2 }} /> Enviado por {s.vendedorNome}</span>
         </div>
