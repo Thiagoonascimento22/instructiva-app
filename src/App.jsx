@@ -1492,6 +1492,35 @@ function WhatsApp({ me, isAdmin, can, goNovo }) {
 
   function fecharConversa() { setSel(null); setChat(null); }
 
+  // exporta a conversa aberta como um .txt (estilo WhatsApp)
+  function exportarConversa() {
+    if (!chat) return;
+    const inst = instancias.find((i) => i.instance === chat.instance);
+    const atendente = (inst && inst.colaboradoraNome) || chat.instance || "Atendente";
+    const nome = chat.nome || chat.numero;
+    const linhas = [];
+    linhas.push("Conversa com " + nome + " (" + chat.numero + ")");
+    linhas.push("Atendente: " + atendente);
+    linhas.push("Exportado em " + new Date().toLocaleString("pt-BR"));
+    linhas.push("");
+    (chat.mensagens || []).forEach((m) => {
+      const dt = new Date(m.ts).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+      const quem = m.fromMe ? atendente : nome;
+      let conteudo = m.texto || "";
+      if (!conteudo && m.tipoMidia) conteudo = m.tipoMidia === "audio" ? "[áudio]" : m.tipoMidia === "image" ? "[imagem]" : m.tipoMidia === "video" ? "[vídeo]" : "[" + m.tipoMidia + "]";
+      if (!conteudo) conteudo = "—";
+      linhas.push("[" + dt + "] " + quem + ": " + conteudo);
+    });
+    const blob = new Blob([linhas.join("\n")], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const safe = String(nome).replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-").slice(0, 40) || "conversa";
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "conversa-" + safe + "-" + new Date().toISOString().slice(0, 10) + ".txt";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  }
+
   async function enviar() {
     if (!texto.trim() || enviando || !sel) return;
     setEnviando(true);
@@ -1780,6 +1809,10 @@ function WhatsApp({ me, isAdmin, can, goNovo }) {
                     <PlusSquare size={15} /> Registrar atendimento
                   </button>
                 )}
+                <button onClick={exportarConversa} title="Exportar conversa (.txt)" type="button"
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 36, padding: "0 12px", borderRadius: 10, border: "1px solid var(--border)", background: "transparent", color: "var(--text-soft)", fontWeight: 600, fontSize: 13, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>
+                  <Download size={15} /> Exportar
+                </button>
                 <button onClick={fecharConversa} style={SX.waCloseConvo} title="Fechar (ESC)" type="button">
                   <X size={18} />
                 </button>

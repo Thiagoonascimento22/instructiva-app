@@ -52,12 +52,22 @@ export const api = {
   // solicitações (vindas do comercial)
   solicitacoes: () => req("GET", "/solicitacoes"),
   abrirAnexo: async (solId, anexoId) => {
-    const r = await fetch("/api/solic/anexo/" + solId + "/" + anexoId, { headers: token ? { Authorization: "Bearer " + token } : {} });
-    if (!r.ok) throw new Error("não foi possível abrir o anexo");
-    const blob = await r.blob();
-    const url = URL.createObjectURL(blob);
-    window.open(url, "_blank");
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    const win = window.open("", "_blank");
+    try {
+      const r = await fetch("/api/solic/anexo/" + solId + "/" + anexoId, { headers: token ? { Authorization: "Bearer " + token } : {} });
+      if (!r.ok) throw new Error("não foi possível abrir o anexo");
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      if (win) { win.location.href = url; }
+      else {
+        const cd = r.headers.get("content-disposition") || "";
+        const mm = cd.match(/filename="?([^"]+)"?/);
+        const a = document.createElement("a");
+        a.href = url; a.download = mm ? mm[1] : "arquivo";
+        document.body.appendChild(a); a.click(); a.remove();
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (e) { if (win) win.close(); throw e; }
   },
   solicAceitar: (id) => req("POST", "/solicitacoes/" + id + "/aceitar"),
   solicConcluir: (id, resposta) => req("POST", "/solicitacoes/" + id + "/concluir", { resposta }),
