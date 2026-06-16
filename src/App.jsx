@@ -435,11 +435,31 @@ function Kpi({ i: Icon, c, v, l, d }) {
 function rotuloUrg(u) {
   return u === "alta" ? { txt: "Alta", c: "#E5484D" } : u === "baixa" ? { txt: "Baixa", c: "#6E7073" } : { txt: "Normal", c: "#6366F1" };
 }
+function inicioDiaSup(d) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x.getTime(); }
+function dentroPeriodoSup(criadoEm, periodo, cde, cate) {
+  const t = typeof criadoEm === "number" ? criadoEm : new Date(criadoEm).getTime();
+  if (!t) return true;
+  const agora = new Date();
+  if (periodo === "hoje") return t >= inicioDiaSup(agora);
+  if (periodo === "semana") { const d = new Date(agora); const dow = (d.getDay() + 6) % 7; d.setDate(d.getDate() - dow); return t >= inicioDiaSup(d); }
+  if (periodo === "mes") return t >= inicioDiaSup(new Date(agora.getFullYear(), agora.getMonth(), 1));
+  if (periodo === "custom") {
+    const ini = cde ? inicioDiaSup(new Date(cde + "T00:00:00")) : 0;
+    const fim = cate ? inicioDiaSup(new Date(cate + "T00:00:00")) + 86400000 - 1 : Infinity;
+    return t >= ini && t <= fim;
+  }
+  return true;
+}
+const PERIODOS_SUP = [["tudo", "Tudo"], ["hoje", "Hoje"], ["semana", "Essa semana"], ["mes", "Esse mês"], ["custom", "Personalizado"]];
+
 function Solicitacoes({ me, isAdmin, solicitacoes, refresh }) {
   const [busy, setBusy] = useState(null);
   const [respId, setRespId] = useState(null);
   const [resp, setResp] = useState("");
   const [filtro, setFiltro] = useState("ativas");
+  const [periodo, setPeriodo] = useState("tudo");
+  const [cde, setCde] = useState("");
+  const [cate, setCate] = useState("");
 
   useEffect(() => {
     const t = setInterval(refresh, 6000);
@@ -462,8 +482,9 @@ function Solicitacoes({ me, isAdmin, solicitacoes, refresh }) {
     setBusy(null);
   }
 
-  const ativas = solicitacoes.filter((s) => s.status !== "concluida");
-  const concluidas = solicitacoes.filter((s) => s.status === "concluida");
+  const noPeriodo = solicitacoes.filter((s) => dentroPeriodoSup(s.criadoEm, periodo, cde, cate));
+  const ativas = noPeriodo.filter((s) => s.status !== "concluida");
+  const concluidas = noPeriodo.filter((s) => s.status === "concluida");
   const lista = filtro === "ativas" ? ativas : concluidas;
 
   const card = (s) => {
@@ -538,6 +559,18 @@ function Solicitacoes({ me, isAdmin, solicitacoes, refresh }) {
       <div style={{ marginBottom: 18 }}>
         <h1 style={{ fontSize: 24, fontWeight: 800, color: "var(--text)", margin: 0 }}>Solicitações do comercial</h1>
         <p style={{ color: "var(--muted)", fontSize: 14, margin: "4px 0 0" }}>Pedidos de suporte enviados pelos vendedores. Aceite, resolva e o vendedor é avisado.</p>
+      </div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
+        {PERIODOS_SUP.map(([v, l]) => (
+          <button key={v} onClick={() => setPeriodo(v)} style={{ ...SX.filterChip, ...(periodo === v ? { borderColor: "#6366F1", color: "#6366F1", background: "rgba(99,102,241,0.08)" } : {}) }}>{l}</button>
+        ))}
+        {periodo === "custom" && (
+          <>
+            <input type="date" value={cde} onChange={(e) => setCde(e.target.value)} style={{ padding: "7px 10px", border: "1px solid var(--border)", borderRadius: 9, fontSize: 13, fontFamily: "inherit", color: "var(--text)", background: "var(--input-bg)" }} />
+            <span style={{ color: "var(--muted)", fontSize: 13 }}>até</span>
+            <input type="date" value={cate} onChange={(e) => setCate(e.target.value)} style={{ padding: "7px 10px", border: "1px solid var(--border)", borderRadius: 9, fontSize: 13, fontFamily: "inherit", color: "var(--text)", background: "var(--input-bg)" }} />
+          </>
+        )}
       </div>
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
         <button onClick={() => setFiltro("ativas")} style={{ ...SX.filterChip, ...(filtro === "ativas" ? { borderColor: "#6366F1", color: "#6366F1", background: "rgba(99,102,241,0.08)" } : {}) }}>Ativas ({ativas.length})</button>
