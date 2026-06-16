@@ -369,12 +369,22 @@ function acharAnexo(s, anexoId) {
   return a || null;
 }
 
-function enviarArquivo(res, a) {
-  if (!a) return res.status(404).end();
+function servirAnexo(res, s, anexoId) {
+  if (!s) return res.status(404).json({ error: "Chamado não encontrado" });
+  const a = acharAnexo(s, anexoId);
+  if (!a) return res.status(404).json({ error: "Anexo não encontrado nos dados (id " + anexoId + ")" });
+  const nome = String(a.nome || "arquivo").replace(/"/g, "");
+  // fallback: se o anexo tiver os bytes embutidos, serve direto (sempre funciona)
+  if (a.dados) {
+    res.setHeader("Content-Type", a.mime || "application/octet-stream");
+    res.setHeader("Content-Disposition", 'inline; filename="' + nome + '"');
+    return res.end(Buffer.from(String(a.dados), "base64"));
+  }
+  if (!a.arquivo) return res.status(404).json({ error: "Anexo sem arquivo salvo" });
   const fp = join(COMPROV_DIR, a.arquivo);
-  if (!fs.existsSync(fp)) return res.status(404).end();
+  if (!fs.existsSync(fp)) return res.status(410).json({ error: "O arquivo não está mais no servidor. A pasta de anexos provavelmente não está no volume persistente do Railway (some a cada deploy). Reenvie o arquivo ou ajuste o volume." });
   res.setHeader("Content-Type", a.mime || "application/octet-stream");
-  res.setHeader("Content-Disposition", 'inline; filename="' + String(a.nome || "arquivo").replace(/"/g, "") + '"');
+  res.setHeader("Content-Disposition", 'inline; filename="' + nome + '"');
   fs.createReadStream(fp).pipe(res);
 }
 
@@ -416,13 +426,13 @@ app.delete("/api/solic/inbound/:monitoriaId", bridgeAuth, (req, res) => {
 // serve um comprovante (só logado no Suporte)
 app.get("/api/solic/anexo/:solId/:anexoId", requireAuth, (req, res) => {
   const s = db.solicitacoes.find((x) => x.id === req.params.solId);
-  enviarArquivo(res, acharAnexo(s, req.params.anexoId));
+  servirAnexo(res, s, req.params.anexoId);
 });
 
 // serving de anexo pela ponte (o comercial faz proxy disso pro vendedor ver)
 app.get("/api/solic/inbound/:monitoriaId/anexo/:anexoId", bridgeAuth, (req, res) => {
   const s = db.solicitacoes.find((x) => x.monitoriaId === req.params.monitoriaId);
-  enviarArquivo(res, acharAnexo(s, req.params.anexoId));
+  servirAnexo(res, s, req.params.anexoId);
 });
 
 // o comercial consulta o status das solicitações dele (poll) — ponte

@@ -55,7 +55,7 @@ export const api = {
     const win = window.open("", "_blank");
     try {
       const r = await fetch("/api/solic/anexo/" + solId + "/" + anexoId, { headers: token ? { Authorization: "Bearer " + token } : {} });
-      if (!r.ok) throw new Error("não foi possível abrir o anexo");
+      if (!r.ok) { let msg = "não foi possível abrir o anexo"; try { const j = await r.json(); if (j && j.error) msg = j.error; } catch (_) {} throw new Error(msg); }
       const blob = await r.blob();
       const url = URL.createObjectURL(blob);
       if (win) { win.location.href = url; }
