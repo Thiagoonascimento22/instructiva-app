@@ -42,6 +42,11 @@ export const api = {
   createRecord: (payload) => req("POST", "/records", payload),
   updateRecord: (id, payload) => req("PUT", "/records/" + id, payload),
   deleteRecord: (id) => req("DELETE", "/records/" + id),
+  // vendas
+  listVendas: () => req("GET", "/vendas"),
+  createVenda: (payload) => req("POST", "/vendas", payload),
+  updateVenda: (id, payload) => req("PUT", "/vendas/" + id, payload),
+  deleteVenda: (id) => req("DELETE", "/vendas/" + id),
   // tasks
   listTasks: () => req("GET", "/tasks"),
   createTask: (payload) => req("POST", "/tasks", payload),

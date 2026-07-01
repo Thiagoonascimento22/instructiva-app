@@ -57,6 +57,7 @@ function loadDB() {
       if (!d.waChats) d.waChats = {};       // conversas do WhatsApp
       if (!d.waConfig) d.waConfig = {};      // config da conexão (url, key, instâncias)
       if (!Array.isArray(d.solicitacoes)) d.solicitacoes = [];  // solicitações vindas do comercial (Monitoria)
+      if (!Array.isArray(d.vendas)) d.vendas = [];   // vendas registradas (aba Vendas)
       // MIGRAÇÃO: conversas antigas usavam a chave = número. Agora é "instancia::numero".
       // Converte as que ainda estão no formato velho (sem o campo id ou chave sem "::").
       const novasChaves = {};
@@ -81,14 +82,14 @@ function loadDB() {
       return d;
     }
   } catch (e) { console.error("Erro ao ler banco:", e.message); }
-  return { users: [], records: [], tasks: [], sessions: {}, waChats: {}, waConfig: {}, solicitacoes: [] };
+  return { users: [], records: [], tasks: [], sessions: {}, waChats: {}, waConfig: {}, solicitacoes: [], vendas: [] };
 }
 function saveDB(database) {
   try { fs.writeFileSync(DB_PATH, JSON.stringify(database, null, 2)); }
   catch (e) { console.error("Erro ao salvar banco:", e.message); }
 }
 
-let db = { users: [], records: [], tasks: [], sessions: {}, waChats: {}, waConfig: {}, solicitacoes: [] };
+let db = { users: [], records: [], tasks: [], sessions: {}, waChats: {}, waConfig: {}, solicitacoes: [], vendas: [] };
 
 // Inicialização assíncrona: espera o volume, carrega o banco, cria admin,
 // e SÓ ENTÃO sobe o servidor.
@@ -107,7 +108,7 @@ async function iniciar() {
       login: "gerente",
       senha: hash("admin123"),
       role: "admin",
-      perms: { ver_todos: true, registrar: true, excluir: true, exportar: true, ia: true, gerir_usuarios: true },
+      perms: { ver_todos: true, registrar: true, excluir: true, exportar: true, ia: true, gerir_usuarios: true, vendas: true },
       ativo: true,
     });
     saveDB(db);
@@ -306,7 +307,59 @@ app.put("/api/records/:id", requireAuth, (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// SOLICITAÇÕES (vindas do comercial / Monitoria)
+// VENDAS (aba Vendas)
+// ---------------------------------------------------------------------------
+app.get("/api/vendas", requireAuth, (req, res) => {
+  let rows = can(req, "ver_todos") ? db.vendas : db.vendas.filter((v) => v.vendedorId === req.user.id);
+  rows = [...rows].sort((a, b) => (b.data || "").localeCompare(a.data || "") || (b.criadoEm || "").localeCompare(a.criadoEm || ""));
+  res.json({ vendas: rows });
+});
+
+app.post("/api/vendas", requireAuth, (req, res) => {
+  if (!can(req, "vendas")) return res.status(403).json({ error: "sem permissão para registrar vendas" });
+  const b = req.body;
+  if (!b.nome?.trim() || !b.curso?.trim()) return res.status(400).json({ error: "nome e curso são obrigatórios" });
+  const vendedorId = req.isAdmin && b.vendedorId ? b.vendedorId : req.user.id;
+  const venda = {
+    id: Date.now() + "-" + crypto.randomBytes(3).toString("hex"),
+    data: b.data || new Date().toISOString().slice(0, 10),
+    vendedorId,
+    nome: b.nome?.trim() || "", email: b.email?.trim() || "", telefone: b.telefone?.trim() || "",
+    curso: b.curso?.trim() || "", codigoVenda: b.codigoVenda?.trim() || "",
+    valorRecebido: Number(b.valorRecebido) || 0, valorVendido: Number(b.valorVendido) || 0,
+    obs: b.obs?.trim() || "", criadoEm: new Date().toISOString(),
+  };
+  db.vendas.unshift(venda);
+  saveDB(db);
+  res.json({ venda });
+});
+
+app.put("/api/vendas/:id", requireAuth, (req, res) => {
+  const venda = db.vendas.find((v) => v.id === req.params.id);
+  if (!venda) return res.status(404).json({ error: "não encontrada" });
+  const ehDono = venda.vendedorId === req.user.id;
+  if (!ehDono && !can(req, "ver_todos")) {
+    return res.status(403).json({ error: "sem permissão para editar esta venda" });
+  }
+  const editaveis = ["data", "nome", "email", "telefone", "curso", "codigoVenda", "valorRecebido", "valorVendido", "obs"];
+  editaveis.forEach((campo) => {
+    if (req.body[campo] !== undefined) {
+      venda[campo] = campo === "valorRecebido" || campo === "valorVendido" ? Number(req.body[campo]) || 0 : req.body[campo];
+    }
+  });
+  saveDB(db);
+  res.json({ venda });
+});
+
+app.delete("/api/vendas/:id", requireAuth, (req, res) => {
+  const venda = db.vendas.find((v) => v.id === req.params.id);
+  if (!venda) return res.status(404).json({ error: "não encontrada" });
+  const ehDono = venda.vendedorId === req.user.id;
+  if (!ehDono && !can(req, "excluir")) return res.status(403).json({ error: "sem permissão para excluir" });
+  db.vendas = db.vendas.filter((v) => v.id !== req.params.id);
+  saveDB(db);
+  res.json({ ok: true });
+});
 // ---------------------------------------------------------------------------
 // recebe uma nova solicitação do app do comercial (ponte)
 function sanitizeCampos(arr) {

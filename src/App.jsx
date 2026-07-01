@@ -10,7 +10,7 @@ import {
   Crown, ChevronRight, Activity, Zap, Target, Brain, Star, AlertTriangle, BarChart3,
   Sun, Moon, ListTodo, CalendarClock, Flag, Circle, ArrowLeft, UserCircle,
   MessageCircle, Send, Link2, RefreshCw, Phone, PlusSquare, Power, Smile, Paperclip, Mic, Square,
-  LifeBuoy, Inbox, Headphones, Hourglass,
+  LifeBuoy, Inbox, Headphones, Hourglass, DollarSign, Wallet, Receipt,
 } from "lucide-react";
 import { LOGO_FULL, LOGO_CLARO, LOGO_ICONE } from "./logos";
 import { api } from "./api";
@@ -39,7 +39,12 @@ const PERM_LABELS = {
   ia: "Acessar análise por IA",
   gerir_usuarios: "Gerenciar usuários",
   gerir_whatsapp: "Gerenciar conexões WhatsApp",
+  vendas: "Registrar e ver vendas",
 };
+
+function emptyVenda() {
+  return { data: new Date().toISOString().slice(0, 10), nome: "", email: "", telefone: "", curso: "", codigoVenda: "", valorRecebido: "", valorVendido: "", obs: "" };
+}
 
 // =============================================================================
 export default function App() {
@@ -48,8 +53,10 @@ export default function App() {
   const [users, setUsers] = useState([]);      // lista de nomes (para tabelas) ou completa (admin)
   const [records, setRecords] = useState([]);
   const [solicitacoes, setSolicitacoes] = useState([]);
+  const [vendas, setVendas] = useState([]);
   const [view, setView] = useState("dashboard");
   const [waPrefill, setWaPrefill] = useState(null);   // pré-preenche Novo Registro a partir do WhatsApp
+  const [vendaPrefill, setVendaPrefill] = useState(null);   // pré-preenche Nova Venda a partir do WhatsApp
   const [theme, setTheme] = useState(() => localStorage.getItem("instructiva_theme") || "light");
 
   const isAdmin = me?.role === "admin";
@@ -79,6 +86,10 @@ export default function App() {
       const recsResp = await api.listRecords();
       setRecords(recsResp.records);
     } catch {}
+    try {
+      const vendasResp = await api.listVendas();
+      setVendas(vendasResp.vendas);
+    } catch {}
     refreshSolic();
   }
   async function refreshSolic() {
@@ -107,7 +118,7 @@ export default function App() {
     try { await api.logout(); } catch {}
     api.setToken(null);
     setMe(null);
-    setUsers([]); setRecords([]); setSolicitacoes([]);
+    setUsers([]); setRecords([]); setSolicitacoes([]); setVendas([]);
   }
   async function setMyName(nome) {
     try { const { user } = await api.updateMe({ nome }); setMe(user); } catch {}
@@ -126,6 +137,7 @@ export default function App() {
   if (can("registrar")) nav.push(["novo", "Novo Registro", PlusCircle]);
   nav.push(["tarefas", "Tarefas", ListTodo]);
   nav.push(["whatsapp", "WhatsApp", MessageCircle]);
+  if (can("vendas")) nav.push(["vendas", "Vendas", DollarSign]);
   if (can("ia")) nav.push(["ia", "Análise IA", Sparkles, true]);
   if (can("gerir_usuarios")) nav.push(["equipe", "Equipe & Acessos", Shield]);
   if (isAdmin) nav.push(["config", "Configurações", Settings]);
@@ -178,7 +190,8 @@ export default function App() {
           {view === "solicitacoes" && <Solicitacoes me={me} isAdmin={isAdmin} solicitacoes={solicitacoes} refresh={refreshSolic} />}
           {view === "novo" && can("registrar") && <NovoRegistro me={me} isAdmin={isAdmin} users={users} refresh={refreshData} prefill={waPrefill} onDone={() => { setWaPrefill(null); setView("lista"); }} />}
           {view === "tarefas" && <Tarefas me={me} isAdmin={isAdmin} can={can} users={users} />}
-          {view === "whatsapp" && <WhatsApp me={me} isAdmin={isAdmin} can={can} goNovo={(pre) => { setWaPrefill(pre); setView("novo"); }} />}
+          {view === "whatsapp" && <WhatsApp me={me} isAdmin={isAdmin} can={can} goNovo={(pre) => { setWaPrefill(pre); setView("novo"); }} goVenda={(pre) => { setVendaPrefill(pre); setView("vendas"); }} />}
+          {view === "vendas" && can("vendas") && <Vendas me={me} isAdmin={isAdmin} users={users} vendas={vendas} can={can} refresh={refreshData} prefill={vendaPrefill} onPrefillConsumed={() => setVendaPrefill(null)} />}
           {view === "ia" && can("ia") && <AnaliseIA records={records} users={users} />}
           {view === "equipe" && can("gerir_usuarios") && <Equipe refresh={refreshData} />}
           {view === "config" && isAdmin && <Config me={me} onUpdated={setMe} />}
@@ -1072,7 +1085,7 @@ function NovoRegistro({ me, isAdmin, users, refresh, onDone, prefill }) {
 // ============================================================= EQUIPE & ACESSOS
 function Equipe({ refresh }) {
   const [showNew, setShowNew] = useState(false);
-  const blank = { nome: "", login: "", senha: "", perms: { registrar: true, ver_todos: false, excluir: false, exportar: false, ia: false, gerir_usuarios: false } };
+  const blank = { nome: "", login: "", senha: "", perms: { registrar: true, ver_todos: false, excluir: false, exportar: false, ia: false, gerir_usuarios: false, vendas: false } };
   const [nf, setNf] = useState(blank);
   const [users, setUsers] = useState([]);
   const [counts, setCounts] = useState({});
@@ -1392,7 +1405,7 @@ function MidiaMsg({ msg, chatId }) {
   return <span style={SX.waBubbleText}>{msg.texto || "—"}</span>;
 }
 
-function WhatsApp({ me, isAdmin, can, goNovo }) {
+function WhatsApp({ me, isAdmin, can, goNovo, goVenda }) {
   const [chats, setChats] = useState([]);
   const [sel, setSel] = useState(null);          // número selecionado
   const [chat, setChat] = useState(null);        // conversa aberta
@@ -1601,6 +1614,11 @@ function WhatsApp({ me, isAdmin, can, goNovo }) {
     goNovo({ telefone: chat.numero, nome: chat.nome !== chat.numero ? chat.nome : "" });
   }
 
+  function criarVenda() {
+    if (!chat) return;
+    goVenda({ telefone: chat.numero, nome: chat.nome !== chat.numero ? chat.nome : "" });
+  }
+
   // iniciar nova conversa
   function abrirNovaConv() {
     // escolhe instância padrão: a do filtro ativo, ou a 1ª disponível
@@ -1807,6 +1825,11 @@ function WhatsApp({ me, isAdmin, can, goNovo }) {
                 {can("registrar") && (
                   <button onClick={criarAtendimento} className="btn-primary" style={SX.btnPrimarySm}>
                     <PlusSquare size={15} /> Registrar atendimento
+                  </button>
+                )}
+                {can("vendas") && (
+                  <button onClick={criarVenda} className="btn-primary" style={{ ...SX.btnPrimarySm, background: "linear-gradient(120deg,#12A150 0%,#0E8A43 100%)" }}>
+                    <DollarSign size={15} /> Registrar venda
                   </button>
                 )}
                 <button onClick={exportarConversa} title="Exportar conversa (.txt)" type="button"
@@ -2326,6 +2349,195 @@ function WhatsAppConfig({ cfg, onBack }) {
               </div>
             )}
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================= VENDAS
+function Vendas({ me, isAdmin, users, vendas, can, refresh, prefill, onPrefillConsumed }) {
+  const hoje = new Date().toISOString().slice(0, 10);
+  const [periodo, setPeriodo] = useState("mes");
+  const [dataIni, setDataIni] = useState(hoje);
+  const [dataFim, setDataFim] = useState(hoje);
+  const [showForm, setShowForm] = useState(false);
+  const [editId, setEditId] = useState(null);
+  const [form, setForm] = useState(() => ({ ...emptyVenda(), vendedorId: me.id }));
+  const [saving, setSaving] = useState(false);
+  const [q, setQ] = useState("");
+
+  // pré-preenche o formulário quando vem do WhatsApp ("Registrar venda")
+  useEffect(() => {
+    if (prefill) {
+      setForm({ ...emptyVenda(), vendedorId: me.id, telefone: prefill.telefone || "", nome: prefill.nome || "" });
+      setEditId(null);
+      setShowForm(true);
+      onPrefillConsumed && onPrefillConsumed();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill]);
+
+  const vendedores = users.filter((u) => u.ativo);
+
+  const filtradasPeriodo = useMemo(() => {
+    if (periodo === "tudo") return vendas;
+    const hojeD = new Date(); hojeD.setHours(0, 0, 0, 0);
+    let ini, fim;
+    if (periodo === "hoje") { ini = new Date(hojeD); fim = new Date(hojeD); fim.setHours(23, 59, 59, 999); }
+    else if (periodo === "semana") { ini = new Date(hojeD); ini.setDate(ini.getDate() - 6); fim = new Date(hojeD); fim.setHours(23, 59, 59, 999); }
+    else if (periodo === "mes") { ini = new Date(hojeD); ini.setDate(ini.getDate() - 29); fim = new Date(hojeD); fim.setHours(23, 59, 59, 999); }
+    else { ini = new Date(dataIni + "T00:00:00"); fim = new Date(dataFim + "T23:59:59"); }
+    return vendas.filter((v) => { if (!v.data) return false; const d = new Date(v.data + "T12:00:00"); return d >= ini && d <= fim; });
+  }, [vendas, periodo, dataIni, dataFim]);
+
+  const filtered = useMemo(() => filtradasPeriodo.filter((v) => {
+    if (!q) return true;
+    const h = `${v.nome} ${v.email} ${v.telefone} ${v.curso} ${v.codigoVenda}`.toLowerCase();
+    return h.includes(q.toLowerCase());
+  }), [filtradasPeriodo, q]);
+
+  const stats = useMemo(() => {
+    const totalVendas = filtradasPeriodo.length;
+    const totalVendido = filtradasPeriodo.reduce((s, v) => s + (Number(v.valorVendido) || 0), 0);
+    const totalRecebido = filtradasPeriodo.reduce((s, v) => s + (Number(v.valorRecebido) || 0), 0);
+    const ticket = totalVendas ? totalVendido / totalVendas : 0;
+    return { totalVendas, totalVendido, totalRecebido, ticket };
+  }, [filtradasPeriodo]);
+
+  const rotuloPeriodo = periodo === "hoje" ? "Hoje" : periodo === "semana" ? "Últimos 7 dias"
+    : periodo === "mes" ? "Últimos 30 dias" : periodo === "tudo" ? "Todo o período"
+    : `${fmtDate(dataIni)} até ${fmtDate(dataFim)}`;
+
+  function novaVenda() {
+    setForm({ ...emptyVenda(), vendedorId: me.id });
+    setEditId(null);
+    setShowForm(true);
+  }
+  function editarVenda(v) {
+    setForm({ ...v, valorRecebido: String(v.valorRecebido ?? ""), valorVendido: String(v.valorVendido ?? "") });
+    setEditId(v.id);
+    setShowForm(true);
+  }
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  const valid = form.nome?.trim() && form.curso?.trim();
+
+  async function salvar() {
+    if (!valid || saving) return;
+    setSaving(true);
+    try {
+      if (editId) await api.updateVenda(editId, form);
+      else await api.createVenda(form);
+      await refresh();
+      setShowForm(false);
+      setEditId(null);
+    } catch (e) { alert(e.message); }
+    setSaving(false);
+  }
+  async function excluir(id) {
+    if (!confirm("Excluir esta venda?")) return;
+    try { await api.deleteVenda(id); await refresh(); } catch (e) { alert(e.message); }
+  }
+
+  const fmtMoney = (n) => (Number(n) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+  return (
+    <div>
+      <Header title="Vendas" subtitle={isAdmin ? "Painel geral de vendas do time" : "Suas vendas registradas"}>
+        <button onClick={novaVenda} className="btn-primary" style={SX.btnPrimary}><PlusCircle size={16} /> Registrar venda</button>
+      </Header>
+
+      {/* FILTRO DE PERÍODO */}
+      <div style={SX.periodoBar}>
+        <div style={SX.periodoBtns}>
+          {[["hoje", "Hoje"], ["semana", "Semana"], ["mes", "Mês"], ["tudo", "Tudo"]].map(([k, lbl]) => (
+            <button key={k} onClick={() => setPeriodo(k)} style={{ ...SX.periodoBtn, ...(periodo === k ? SX.periodoBtnOn : {}) }}>{lbl}</button>
+          ))}
+        </div>
+        <div style={SX.periodoCustom}>
+          <input type="date" value={dataIni} max={dataFim} onChange={(e) => { setDataIni(e.target.value); setPeriodo("custom"); }} style={SX.periodoData} />
+          <span style={{ color: "var(--muted)", fontSize: 13 }}>até</span>
+          <input type="date" value={dataFim} min={dataIni} max={hoje} onChange={(e) => { setDataFim(e.target.value); setPeriodo("custom"); }} style={SX.periodoData} />
+        </div>
+        <div style={SX.periodoRotulo}>{rotuloPeriodo}</div>
+      </div>
+
+      <div style={SX.kpiGrid}>
+        <Kpi i={Receipt} c="#6366F1" v={stats.totalVendas} l="Quantidade de vendas" d={0} />
+        <Kpi i={Wallet} c="#12A150" v={fmtMoney(stats.totalVendido)} l="Total vendido" d={1} />
+        <Kpi i={DollarSign} c="#818CF8" v={fmtMoney(stats.totalRecebido)} l="Total recebido" d={2} />
+        <Kpi i={TrendingUp} c="#6E7073" v={fmtMoney(stats.ticket)} l="Ticket médio" d={3} />
+      </div>
+
+      {/* FORMULÁRIO (registrar/editar) */}
+      {showForm && (
+        <div style={{ ...SX.formCard, marginTop: 24 }} className="rise panel">
+          <div style={SX.newUserTitle}><DollarSign size={17} color="#12A150" /> {editId ? "Editar venda" : "Registrar nova venda"}</div>
+          <div style={SX.formGrid}>
+            <F label="Data" req><input type="date" value={form.data} onChange={set("data")} style={SX.input} /></F>
+            <F label="Vendedor(a)" req>
+              {isAdmin ? (
+                <select value={form.vendedorId || me.id} onChange={set("vendedorId")} style={SX.input}>
+                  {vendedores.map((u) => <option key={u.id} value={u.id}>{u.nome}{u.role === "admin" ? " (você)" : ""}</option>)}
+                </select>
+              ) : <input value={me.nome} disabled style={{ ...SX.input, background: "#F4F4F6", color: "#8A8C90" }} />}
+            </F>
+            <F label="Nome do aluno" req><input value={form.nome} onChange={set("nome")} placeholder="Nome completo" style={SX.input} /></F>
+            <F label="E-mail"><input type="email" value={form.email} onChange={set("email")} placeholder="email@exemplo.com" style={SX.input} /></F>
+            <F label="Telefone"><input value={form.telefone} onChange={set("telefone")} placeholder="(00) 00000-0000" style={SX.input} /></F>
+            <F label="Curso vendido" req><input value={form.curso} onChange={set("curso")} placeholder="ex: ACELERAR+" style={SX.input} /></F>
+            <F label="Código da venda"><input value={form.codigoVenda} onChange={set("codigoVenda")} placeholder="ex: VD-1029" style={SX.input} /></F>
+            <F label="Valor recebido (R$)"><input type="number" step="0.01" min="0" value={form.valorRecebido} onChange={set("valorRecebido")} placeholder="0,00" style={SX.input} /></F>
+            <F label="Valor vendido (R$)"><input type="number" step="0.01" min="0" value={form.valorVendido} onChange={set("valorVendido")} placeholder="0,00" style={SX.input} /></F>
+            <F label="Observações" full><textarea value={form.obs} onChange={set("obs")} placeholder="Detalhes da venda…" style={{ ...SX.input, minHeight: 70, resize: "vertical", paddingTop: 11 }} /></F>
+          </div>
+          <div style={SX.formActions}>
+            <button onClick={() => { setShowForm(false); setEditId(null); }} className="btn-ghost" style={SX.btnGhost}>Cancelar</button>
+            <button onClick={salvar} disabled={!valid || saving} className="btn-primary" style={{ ...SX.btnPrimary, opacity: valid ? 1 : 0.45, cursor: valid ? "pointer" : "not-allowed" }}>
+              <CheckCircle2 size={16} /> {editId ? "Salvar alterações" : "Salvar venda"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* BUSCA */}
+      <div style={{ ...SX.filterBar, marginTop: 24 }}>
+        <div style={SX.searchWrap}>
+          <Search size={16} color="#A0A2A6" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar aluno, e-mail, curso, código…" style={SX.searchInput} />
+          {q && <X size={15} color="#A0A2A6" style={{ cursor: "pointer" }} onClick={() => setQ("")} />}
+        </div>
+      </div>
+
+      {filtered.length === 0 ? (
+        <div style={SX.noRes}><Receipt size={26} color="#C9CACE" /><p style={{ margin: "10px 0 0", color: "#A0A2A6" }}>Nenhuma venda registrada neste período.</p></div>
+      ) : (
+        <div style={SX.tableWrap}>
+          <table style={SX.table}>
+            <thead><tr>{["Data", "Vendedor(a)", "Aluno", "Contato", "Curso", "Código", "Recebido", "Vendido", ""].map((h) => <th key={h} style={SX.th}>{h}</th>)}</tr></thead>
+            <tbody>
+              {filtered.map((v) => (
+                <tr key={v.id} className="trow">
+                  <td style={SX.td}><span style={SX.dataChip}>{fmtDate(v.data)}</span></td>
+                  <td style={SX.td}><span style={SX.colabTag}><span style={SX.colabDot}>{initials(nameOf(users, v.vendedorId))}</span>{nameOf(users, v.vendedorId)}</span></td>
+                  <td style={SX.td}>{v.nome}</td>
+                  <td style={SX.td}><div style={SX.contact}>{v.email && <span style={SX.cMain}>{v.email}</span>}{v.telefone && <span style={SX.cSub}>{v.telefone}</span>}</div></td>
+                  <td style={SX.td}>{v.curso}</td>
+                  <td style={SX.td}>{v.codigoVenda || "—"}</td>
+                  <td style={SX.td}>{fmtMoney(v.valorRecebido)}</td>
+                  <td style={SX.td}>{fmtMoney(v.valorVendido)}</td>
+                  <td style={SX.td}>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button onClick={() => editarVenda(v)} className="btn-ghost" style={SX.miniBtn} title="Editar"><Settings size={14} /></button>
+                      {(can("excluir") || v.vendedorId === me.id) && (
+                        <button onClick={() => excluir(v.id)} className="btn-del" style={SX.btnDel} title="Excluir"><Trash2 size={15} /></button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
