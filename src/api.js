@@ -47,6 +47,11 @@ export const api = {
   createVenda: (payload) => req("POST", "/vendas", payload),
   updateVenda: (id, payload) => req("PUT", "/vendas/" + id, payload),
   deleteVenda: (id) => req("DELETE", "/vendas/" + id),
+  // agendamentos
+  listAgendamentos: () => req("GET", "/agendamentos"),
+  createAgendamento: (payload) => req("POST", "/agendamentos", payload),
+  updateAgendamento: (id, payload) => req("PUT", "/agendamentos/" + id, payload),
+  deleteAgendamento: (id) => req("DELETE", "/agendamentos/" + id),
   // tasks
   listTasks: () => req("GET", "/tasks"),
   createTask: (payload) => req("POST", "/tasks", payload),

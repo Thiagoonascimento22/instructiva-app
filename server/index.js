@@ -58,6 +58,7 @@ function loadDB() {
       if (!d.waConfig) d.waConfig = {};      // config da conexão (url, key, instâncias)
       if (!Array.isArray(d.solicitacoes)) d.solicitacoes = [];  // solicitações vindas do comercial (Monitoria)
       if (!Array.isArray(d.vendas)) d.vendas = [];   // vendas registradas (aba Vendas)
+      if (!Array.isArray(d.agendamentos)) d.agendamentos = [];   // agendamentos com leads (aba Vendas)
       // MIGRAÇÃO: conversas antigas usavam a chave = número. Agora é "instancia::numero".
       // Converte as que ainda estão no formato velho (sem o campo id ou chave sem "::").
       const novasChaves = {};
@@ -82,14 +83,14 @@ function loadDB() {
       return d;
     }
   } catch (e) { console.error("Erro ao ler banco:", e.message); }
-  return { users: [], records: [], tasks: [], sessions: {}, waChats: {}, waConfig: {}, solicitacoes: [], vendas: [] };
+  return { users: [], records: [], tasks: [], sessions: {}, waChats: {}, waConfig: {}, solicitacoes: [], vendas: [], agendamentos: [] };
 }
 function saveDB(database) {
   try { fs.writeFileSync(DB_PATH, JSON.stringify(database, null, 2)); }
   catch (e) { console.error("Erro ao salvar banco:", e.message); }
 }
 
-let db = { users: [], records: [], tasks: [], sessions: {}, waChats: {}, waConfig: {}, solicitacoes: [], vendas: [] };
+let db = { users: [], records: [], tasks: [], sessions: {}, waChats: {}, waConfig: {}, solicitacoes: [], vendas: [], agendamentos: [] };
 
 // Inicialização assíncrona: espera o volume, carrega o banco, cria admin,
 // e SÓ ENTÃO sobe o servidor.
@@ -357,6 +358,66 @@ app.delete("/api/vendas/:id", requireAuth, (req, res) => {
   const ehDono = venda.vendedorId === req.user.id;
   if (!ehDono && !can(req, "excluir")) return res.status(403).json({ error: "sem permissão para excluir" });
   db.vendas = db.vendas.filter((v) => v.id !== req.params.id);
+  saveDB(db);
+  res.json({ ok: true });
+});
+
+// ---------------------------------------------------------------------------
+// AGENDAMENTOS (dentro da aba Vendas — marcar reunião com o lead)
+// ---------------------------------------------------------------------------
+const STATUS_AGENDA_OK = ["agendado", "confirmado", "realizado", "cancelado", "nao_compareceu"];
+
+app.get("/api/agendamentos", requireAuth, (req, res) => {
+  let rows = can(req, "ver_todos")
+    ? db.agendamentos
+    : db.agendamentos.filter((a) => a.criadoPor === req.user.id || a.especialistaId === req.user.id);
+  rows = [...rows].sort((a, b) => `${a.data} ${a.hora || ""}`.localeCompare(`${b.data} ${b.hora || ""}`));
+  res.json({ agendamentos: rows });
+});
+
+app.post("/api/agendamentos", requireAuth, (req, res) => {
+  if (!can(req, "vendas")) return res.status(403).json({ error: "sem permissão para criar agendamentos" });
+  const b = req.body;
+  if (!b.nome?.trim() || !b.data) return res.status(400).json({ error: "nome e data são obrigatórios" });
+  const ag = {
+    id: Date.now() + "-" + crypto.randomBytes(3).toString("hex"),
+    data: b.data,
+    hora: b.hora || "",
+    nome: b.nome?.trim() || "",
+    telefone: b.telefone?.trim() || "",
+    especialistaId: b.especialistaId || "",
+    status: STATUS_AGENDA_OK.includes(b.status) ? b.status : "agendado",
+    obs: b.obs?.trim() || "",
+    criadoPor: req.user.id,
+    criadoEm: new Date().toISOString(),
+  };
+  db.agendamentos.unshift(ag);
+  saveDB(db);
+  res.json({ agendamento: ag });
+});
+
+app.put("/api/agendamentos/:id", requireAuth, (req, res) => {
+  const ag = db.agendamentos.find((a) => a.id === req.params.id);
+  if (!ag) return res.status(404).json({ error: "não encontrado" });
+  const ehDono = ag.criadoPor === req.user.id || ag.especialistaId === req.user.id;
+  if (!ehDono && !can(req, "ver_todos")) return res.status(403).json({ error: "sem permissão para editar este agendamento" });
+  const editaveis = ["data", "hora", "nome", "telefone", "especialistaId", "status", "obs"];
+  editaveis.forEach((campo) => {
+    if (req.body[campo] !== undefined) {
+      if (campo === "status" && !STATUS_AGENDA_OK.includes(req.body.status)) return;
+      ag[campo] = req.body[campo];
+    }
+  });
+  saveDB(db);
+  res.json({ agendamento: ag });
+});
+
+app.delete("/api/agendamentos/:id", requireAuth, (req, res) => {
+  const ag = db.agendamentos.find((a) => a.id === req.params.id);
+  if (!ag) return res.status(404).json({ error: "não encontrado" });
+  const ehDono = ag.criadoPor === req.user.id;
+  if (!ehDono && !can(req, "excluir")) return res.status(403).json({ error: "sem permissão para excluir" });
+  db.agendamentos = db.agendamentos.filter((a) => a.id !== req.params.id);
   saveDB(db);
   res.json({ ok: true });
 });

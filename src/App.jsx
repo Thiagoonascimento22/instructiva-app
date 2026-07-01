@@ -46,6 +46,18 @@ function emptyVenda() {
   return { data: new Date().toISOString().slice(0, 10), nome: "", email: "", telefone: "", curso: "", codigoVenda: "", valorRecebido: "", valorVendido: "", obs: "" };
 }
 
+const STATUS_AGENDA = {
+  agendado: { label: "Agendado", color: "#6366F1", bg: "rgba(99,102,241,0.12)", icon: Clock },
+  confirmado: { label: "Confirmado", color: "#0EA5A5", bg: "rgba(14,165,165,0.13)", icon: CheckCircle2 },
+  realizado: { label: "Realizado", color: "#12A150", bg: "rgba(18,161,80,0.12)", icon: Award },
+  cancelado: { label: "Cancelado", color: "#E5484D", bg: "rgba(229,72,77,0.12)", icon: X },
+  nao_compareceu: { label: "Não compareceu", color: "#D48806", bg: "rgba(212,136,6,0.13)", icon: AlertTriangle },
+};
+function emptyAgendamento() {
+  const hoje = new Date().toISOString().slice(0, 10);
+  return { data: hoje, hora: "", nome: "", telefone: "", especialistaId: "", status: "agendado", obs: "" };
+}
+
 // =============================================================================
 export default function App() {
   const [loaded, setLoaded] = useState(false);
@@ -54,9 +66,11 @@ export default function App() {
   const [records, setRecords] = useState([]);
   const [solicitacoes, setSolicitacoes] = useState([]);
   const [vendas, setVendas] = useState([]);
+  const [agendamentos, setAgendamentos] = useState([]);
   const [view, setView] = useState("dashboard");
   const [waPrefill, setWaPrefill] = useState(null);   // pré-preenche Novo Registro a partir do WhatsApp
   const [vendaPrefill, setVendaPrefill] = useState(null);   // pré-preenche Nova Venda a partir do WhatsApp
+  const [agendaPrefill, setAgendaPrefill] = useState(null);   // pré-preenche Novo Agendamento a partir do WhatsApp
   const [theme, setTheme] = useState(() => localStorage.getItem("instructiva_theme") || "light");
 
   const isAdmin = me?.role === "admin";
@@ -90,6 +104,10 @@ export default function App() {
       const vendasResp = await api.listVendas();
       setVendas(vendasResp.vendas);
     } catch {}
+    try {
+      const agResp = await api.listAgendamentos();
+      setAgendamentos(agResp.agendamentos);
+    } catch {}
     refreshSolic();
   }
   async function refreshSolic() {
@@ -118,7 +136,7 @@ export default function App() {
     try { await api.logout(); } catch {}
     api.setToken(null);
     setMe(null);
-    setUsers([]); setRecords([]); setSolicitacoes([]); setVendas([]);
+    setUsers([]); setRecords([]); setSolicitacoes([]); setVendas([]); setAgendamentos([]);
   }
   async function setMyName(nome) {
     try { const { user } = await api.updateMe({ nome }); setMe(user); } catch {}
@@ -190,8 +208,8 @@ export default function App() {
           {view === "solicitacoes" && <Solicitacoes me={me} isAdmin={isAdmin} solicitacoes={solicitacoes} refresh={refreshSolic} />}
           {view === "novo" && can("registrar") && <NovoRegistro me={me} isAdmin={isAdmin} users={users} refresh={refreshData} prefill={waPrefill} onDone={() => { setWaPrefill(null); setView("lista"); }} />}
           {view === "tarefas" && <Tarefas me={me} isAdmin={isAdmin} can={can} users={users} />}
-          {view === "whatsapp" && <WhatsApp me={me} isAdmin={isAdmin} can={can} goNovo={(pre) => { setWaPrefill(pre); setView("novo"); }} goVenda={(pre) => { setVendaPrefill(pre); setView("vendas"); }} />}
-          {view === "vendas" && can("vendas") && <Vendas me={me} isAdmin={isAdmin} users={users} vendas={vendas} can={can} refresh={refreshData} prefill={vendaPrefill} onPrefillConsumed={() => setVendaPrefill(null)} />}
+          {view === "whatsapp" && <WhatsApp me={me} isAdmin={isAdmin} can={can} goNovo={(pre) => { setWaPrefill(pre); setView("novo"); }} goVenda={(pre) => { setVendaPrefill(pre); setView("vendas"); }} goAgendamento={(pre) => { setAgendaPrefill(pre); setView("vendas"); }} />}
+          {view === "vendas" && can("vendas") && <Vendas me={me} isAdmin={isAdmin} users={users} vendas={vendas} agendamentos={agendamentos} can={can} refresh={refreshData} prefill={vendaPrefill} onPrefillConsumed={() => setVendaPrefill(null)} agendaPrefill={agendaPrefill} onAgendaPrefillConsumed={() => setAgendaPrefill(null)} />}
           {view === "ia" && can("ia") && <AnaliseIA records={records} users={users} />}
           {view === "equipe" && can("gerir_usuarios") && <Equipe refresh={refreshData} />}
           {view === "config" && isAdmin && <Config me={me} onUpdated={setMe} />}
@@ -1405,7 +1423,7 @@ function MidiaMsg({ msg, chatId }) {
   return <span style={SX.waBubbleText}>{msg.texto || "—"}</span>;
 }
 
-function WhatsApp({ me, isAdmin, can, goNovo, goVenda }) {
+function WhatsApp({ me, isAdmin, can, goNovo, goVenda, goAgendamento }) {
   const [chats, setChats] = useState([]);
   const [sel, setSel] = useState(null);          // número selecionado
   const [chat, setChat] = useState(null);        // conversa aberta
@@ -1619,6 +1637,11 @@ function WhatsApp({ me, isAdmin, can, goNovo, goVenda }) {
     goVenda({ telefone: chat.numero, nome: chat.nome !== chat.numero ? chat.nome : "" });
   }
 
+  function criarAgendamento() {
+    if (!chat) return;
+    goAgendamento({ telefone: chat.numero, nome: chat.nome !== chat.numero ? chat.nome : "" });
+  }
+
   // iniciar nova conversa
   function abrirNovaConv() {
     // escolhe instância padrão: a do filtro ativo, ou a 1ª disponível
@@ -1830,6 +1853,11 @@ function WhatsApp({ me, isAdmin, can, goNovo, goVenda }) {
                 {can("vendas") && (
                   <button onClick={criarVenda} className="btn-primary" style={{ ...SX.btnPrimarySm, background: "linear-gradient(120deg,#12A150 0%,#0E8A43 100%)" }}>
                     <DollarSign size={15} /> Registrar venda
+                  </button>
+                )}
+                {can("vendas") && (
+                  <button onClick={criarAgendamento} className="btn-primary" style={{ ...SX.btnPrimarySm, background: "linear-gradient(120deg,#0EA5A5 0%,#0C8787 100%)" }}>
+                    <CalendarClock size={15} /> Agendar
                   </button>
                 )}
                 <button onClick={exportarConversa} title="Exportar conversa (.txt)" type="button"
@@ -2355,8 +2383,36 @@ function WhatsAppConfig({ cfg, onBack }) {
   );
 }
 
-// ============================================================= VENDAS
-function Vendas({ me, isAdmin, users, vendas, can, refresh, prefill, onPrefillConsumed }) {
+// ============================================================= VENDAS (orquestrador)
+function Vendas({ me, isAdmin, users, vendas, agendamentos, can, refresh, prefill, onPrefillConsumed, agendaPrefill, onAgendaPrefillConsumed }) {
+  const [sub, setSub] = useState(() => (agendaPrefill ? "agendamentos" : "vendas"));
+
+  // se chegar um prefill de agendamento vindo do WhatsApp enquanto já está na tela, troca de aba
+  useEffect(() => { if (agendaPrefill) setSub("agendamentos"); }, [agendaPrefill]);
+  useEffect(() => { if (prefill) setSub("vendas"); }, [prefill]);
+
+  return (
+    <div>
+      <Header title="Vendas" subtitle={isAdmin ? "Vendas e agendamentos do time" : "Suas vendas e agendamentos"} />
+
+      <div style={SX.vendasTabs}>
+        <button onClick={() => setSub("vendas")} style={{ ...SX.vendasTab, ...(sub === "vendas" ? SX.vendasTabOn : {}) }}>
+          <DollarSign size={15} /> Vendas
+        </button>
+        <button onClick={() => setSub("agendamentos")} style={{ ...SX.vendasTab, ...(sub === "agendamentos" ? SX.vendasTabOn : {}) }}>
+          <CalendarClock size={15} /> Agendamentos
+        </button>
+      </div>
+
+      {sub === "vendas"
+        ? <VendasPainel me={me} isAdmin={isAdmin} users={users} vendas={vendas} can={can} refresh={refresh} prefill={prefill} onPrefillConsumed={onPrefillConsumed} />
+        : <AgendamentosPainel me={me} isAdmin={isAdmin} users={users} agendamentos={agendamentos} can={can} refresh={refresh} prefill={agendaPrefill} onPrefillConsumed={onAgendaPrefillConsumed} />}
+    </div>
+  );
+}
+
+// ============================================================= VENDAS (painel)
+function VendasPainel({ me, isAdmin, users, vendas, can, refresh, prefill, onPrefillConsumed }) {
   const hoje = new Date().toISOString().slice(0, 10);
   const [periodo, setPeriodo] = useState("mes");
   const [dataIni, setDataIni] = useState(hoje);
@@ -2443,9 +2499,12 @@ function Vendas({ me, isAdmin, users, vendas, can, refresh, prefill, onPrefillCo
 
   return (
     <div>
-      <Header title="Vendas" subtitle={isAdmin ? "Painel geral de vendas do time" : "Suas vendas registradas"}>
-        <button onClick={novaVenda} className="btn-primary" style={SX.btnPrimary}><PlusCircle size={16} /> Registrar venda</button>
-      </Header>
+      <div style={SX.header}>
+        <div />
+        <div style={SX.headerActions}>
+          <button onClick={novaVenda} className="btn-primary" style={SX.btnPrimary}><PlusCircle size={16} /> Registrar venda</button>
+        </div>
+      </div>
 
       {/* FILTRO DE PERÍODO */}
       <div style={SX.periodoBar}>
@@ -2539,6 +2598,217 @@ function Vendas({ me, isAdmin, users, vendas, can, refresh, prefill, onPrefillCo
             </tbody>
           </table>
         </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================= AGENDAMENTOS (painel)
+function AgendamentosPainel({ me, isAdmin, users, agendamentos, can, refresh, prefill, onPrefillConsumed }) {
+  const hoje = new Date().toISOString().slice(0, 10);
+  const [showForm, setShowForm] = useState(false);
+  const [editId, setEditId] = useState(null);
+  const [form, setForm] = useState(() => emptyAgendamento());
+  const [saving, setSaving] = useState(false);
+  const [q, setQ] = useState("");
+  const [fStatus, setFStatus] = useState("ativos"); // ativos | todos | <status>
+
+  // pré-preenche o formulário quando vem do WhatsApp ("Agendar")
+  useEffect(() => {
+    if (prefill) {
+      setForm({ ...emptyAgendamento(), telefone: prefill.telefone || "", nome: prefill.nome || "" });
+      setEditId(null);
+      setShowForm(true);
+      onPrefillConsumed && onPrefillConsumed();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill]);
+
+  const especialistas = users.filter((u) => u.ativo);
+
+  const filtered = useMemo(() => agendamentos.filter((a) => {
+    if (fStatus === "ativos" && ["cancelado", "realizado", "nao_compareceu"].includes(a.status)) return false;
+    if (fStatus !== "ativos" && fStatus !== "todos" && a.status !== fStatus) return false;
+    if (q) { const h = `${a.nome} ${a.telefone}`.toLowerCase(); if (!h.includes(q.toLowerCase())) return false; }
+    return true;
+  }), [agendamentos, fStatus, q]);
+
+  const stats = useMemo(() => {
+    const hojeCount = agendamentos.filter((a) => a.data === hoje && a.status !== "cancelado").length;
+    const inicioSemana = new Date(); inicioSemana.setHours(0, 0, 0, 0);
+    const fimSemana = new Date(inicioSemana); fimSemana.setDate(fimSemana.getDate() + 7);
+    const semana = agendamentos.filter((a) => {
+      if (!a.data) return false;
+      const d = new Date(a.data + "T12:00:00");
+      return d >= inicioSemana && d <= fimSemana && a.status !== "cancelado";
+    }).length;
+    const realizados = agendamentos.filter((a) => a.status === "realizado").length;
+    const totalConcluidos = agendamentos.filter((a) => a.status === "realizado" || a.status === "nao_compareceu").length;
+    const taxa = totalConcluidos ? Math.round((realizados / totalConcluidos) * 100) : 0;
+    return { hojeCount, semana, realizados, taxa };
+  }, [agendamentos, hoje]);
+
+  function novoAgendamento() {
+    setForm(emptyAgendamento());
+    setEditId(null);
+    setShowForm(true);
+  }
+  function editar(a) {
+    setForm({ ...a });
+    setEditId(a.id);
+    setShowForm(true);
+  }
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  const valid = form.nome?.trim() && form.data;
+
+  async function salvar() {
+    if (!valid || saving) return;
+    setSaving(true);
+    try {
+      if (editId) await api.updateAgendamento(editId, form);
+      else await api.createAgendamento(form);
+      await refresh();
+      setShowForm(false);
+      setEditId(null);
+    } catch (e) { alert(e.message); }
+    setSaving(false);
+  }
+  async function excluir(id) {
+    if (!confirm("Excluir este agendamento?")) return;
+    try { await api.deleteAgendamento(id); await refresh(); } catch (e) { alert(e.message); }
+  }
+  async function mudarStatus(a, status) {
+    try { await api.updateAgendamento(a.id, { status }); await refresh(); } catch (e) { alert(e.message); }
+  }
+
+  // agrupa por data, em ordem cronológica
+  const grupos = useMemo(() => {
+    const g = {};
+    filtered.forEach((a) => { (g[a.data] ||= []).push(a); });
+    Object.values(g).forEach((lista) => lista.sort((a, b) => (a.hora || "").localeCompare(b.hora || "")));
+    return Object.entries(g).sort(([a], [b]) => a.localeCompare(b));
+  }, [filtered]);
+
+  function diaLabel(d) {
+    if (!d) return "—";
+    const amanhaD = new Date(); amanhaD.setDate(amanhaD.getDate() + 1);
+    const amanha = amanhaD.toISOString().slice(0, 10);
+    if (d === hoje) return "Hoje";
+    if (d === amanha) return "Amanhã";
+    const dias = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
+    const dt = new Date(d + "T12:00:00");
+    return `${dias[dt.getDay()]}, ${fmtDate(d)}`;
+  }
+
+  return (
+    <div>
+      <div style={SX.header}>
+        <div />
+        <div style={SX.headerActions}>
+          <button onClick={novoAgendamento} className="btn-primary" style={{ ...SX.btnPrimary, background: "linear-gradient(120deg,#0EA5A5 0%,#0C8787 100%)" }}>
+            <PlusCircle size={16} /> Agendar reunião
+          </button>
+        </div>
+      </div>
+
+      <div style={SX.kpiGrid}>
+        <Kpi i={CalendarClock} c="#0EA5A5" v={stats.hojeCount} l="Agendamentos hoje" d={0} />
+        <Kpi i={Clock} c="#6366F1" v={stats.semana} l="Próximos 7 dias" d={1} />
+        <Kpi i={Award} c="#12A150" v={stats.realizados} l="Reuniões realizadas" d={2} />
+        <Kpi i={Target} c="#6E7073" v={`${stats.taxa}%`} l="Taxa de comparecimento" d={3} />
+      </div>
+
+      {/* FORMULÁRIO (agendar/editar) */}
+      {showForm && (
+        <div style={{ ...SX.formCard, marginTop: 24 }} className="rise panel">
+          <div style={SX.newUserTitle}><CalendarClock size={17} color="#0EA5A5" /> {editId ? "Editar agendamento" : "Agendar reunião com o lead"}</div>
+          <div style={SX.formGrid}>
+            <F label="Data" req><input type="date" value={form.data} onChange={set("data")} style={SX.input} /></F>
+            <F label="Hora"><input type="time" value={form.hora} onChange={set("hora")} style={SX.input} /></F>
+            <F label="Nome do lead" req><input value={form.nome} onChange={set("nome")} placeholder="Nome completo" style={SX.input} /></F>
+            <F label="Telefone"><input value={form.telefone} onChange={set("telefone")} placeholder="(00) 00000-0000" style={SX.input} /></F>
+            <F label="Especialista">
+              <select value={form.especialistaId} onChange={set("especialistaId")} style={SX.input}>
+                <option value="">— a definir —</option>
+                {especialistas.map((u) => <option key={u.id} value={u.id}>{u.nome}{u.id === me.id ? " (você)" : ""}</option>)}
+              </select>
+            </F>
+            <F label="Status" req>
+              <select value={form.status} onChange={set("status")} style={SX.input}>
+                {Object.entries(STATUS_AGENDA).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+              </select>
+            </F>
+            <F label="Observações" full><textarea value={form.obs} onChange={set("obs")} placeholder="Detalhes do agendamento…" style={{ ...SX.input, minHeight: 70, resize: "vertical", paddingTop: 11 }} /></F>
+          </div>
+          <div style={SX.formActions}>
+            <button onClick={() => { setShowForm(false); setEditId(null); }} className="btn-ghost" style={SX.btnGhost}>Cancelar</button>
+            <button onClick={salvar} disabled={!valid || saving} className="btn-primary" style={{ ...SX.btnPrimary, opacity: valid ? 1 : 0.45, cursor: valid ? "pointer" : "not-allowed" }}>
+              <CheckCircle2 size={16} /> {editId ? "Salvar alterações" : "Confirmar agendamento"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* BUSCA + FILTRO DE STATUS */}
+      <div style={{ ...SX.filterBar, marginTop: 24 }}>
+        <div style={SX.searchWrap}>
+          <Search size={16} color="#A0A2A6" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar lead ou telefone…" style={SX.searchInput} />
+          {q && <X size={15} color="#A0A2A6" style={{ cursor: "pointer" }} onClick={() => setQ("")} />}
+        </div>
+        <Sel value={fStatus} onChange={setFStatus} opts={[["ativos", "Agendados e confirmados"], ["todos", "Todos os status"], ...Object.entries(STATUS_AGENDA).map(([k, v]) => [k, v.label])]} />
+      </div>
+
+      {/* LISTA EM TIMELINE, AGRUPADA POR DIA */}
+      {grupos.length === 0 ? (
+        <div style={SX.noRes}><CalendarClock size={26} color="#C9CACE" /><p style={{ margin: "10px 0 0", color: "#A0A2A6" }}>Nenhum agendamento por aqui.</p></div>
+      ) : (
+        grupos.map(([data, lista]) => (
+          <div key={data} style={SX.agendaGroup}>
+            <div style={{ ...SX.agendaGroupHeader, ...(data === hoje ? SX.agendaGroupHeaderToday : {}) }}>
+              {data === hoje && <span style={SX.agendaGroupBadge}>HOJE</span>}
+              {diaLabel(data)}
+              <span style={SX.agendaGroupCount}>· {lista.length} agendamento{lista.length !== 1 ? "s" : ""}</span>
+            </div>
+            <div style={SX.agendaList}>
+              {lista.map((a) => {
+                const st = STATUS_AGENDA[a.status] || STATUS_AGENDA.agendado;
+                const StIcon = st.icon;
+                return (
+                  <div key={a.id} style={SX.agendaCard} className="card-hover panel">
+                    <div style={SX.agendaTime}>
+                      {a.hora || "--:--"}
+                      <span style={SX.agendaTimeSub}>{a.hora ? "hs" : "sem hora"}</span>
+                    </div>
+                    <div style={SX.agendaInfo}>
+                      <div style={SX.agendaName}>{a.nome}</div>
+                      <div style={SX.agendaMeta}>
+                        {a.telefone && <span style={SX.agendaMetaItem}><Phone size={12} /> {a.telefone}</span>}
+                        <span style={SX.agendaMetaItem}><Users size={12} /> {a.especialistaId ? nameOf(users, a.especialistaId) : "A definir"}</span>
+                      </div>
+                    </div>
+                    <select
+                      value={a.status}
+                      onChange={(e) => mudarStatus(a, e.target.value)}
+                      style={{ ...SX.agendaStatusSelect, background: st.bg, color: st.color }}
+                      title="Clique para mudar o status"
+                    >
+                      {Object.entries(STATUS_AGENDA).map(([k, v]) => (
+                        <option key={k} value={k} style={{ background: "var(--card)", color: "var(--text)" }}>{v.label}</option>
+                      ))}
+                    </select>
+                    <div style={SX.agendaActions}>
+                      <button onClick={() => editar(a)} className="btn-ghost" style={SX.miniBtn} title="Editar"><Settings size={14} /></button>
+                      {(can("excluir") || a.criadoPor === me.id) && (
+                        <button onClick={() => excluir(a.id)} className="btn-del" style={SX.btnDel} title="Excluir"><Trash2 size={15} /></button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))
       )}
     </div>
   );
@@ -2870,6 +3140,28 @@ const SX = {
   qrLoading: { width: 260, height: 260, borderRadius: 12, background: "var(--bg)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", margin: "0 auto", color: "var(--muted)" },
   qrSuccessIcon: { width: 72, height: 72, borderRadius: "50%", background: "rgba(18,161,80,0.12)", color: "#12A150", display: "grid", placeItems: "center", margin: "0 auto" },
   waNoInst: { display: "flex", alignItems: "center", gap: 10, padding: "14px 18px", background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.2)", borderRadius: 12, fontSize: 13.5, color: "var(--text)", marginBottom: 16 },
+
+  // ---- Vendas: tabs Vendas/Agendamentos ----
+  vendasTabs: { display: "inline-flex", gap: 4, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 13, padding: 4, marginBottom: 22 },
+  vendasTab: { display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 18px", borderRadius: 10, border: "none", background: "transparent", color: "var(--text-soft)", fontSize: 13.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", transition: "all .15s" },
+  vendasTabOn: { background: "linear-gradient(120deg,#6366F1 0%,#7C5CF0 55%,#4F46E5 100%)", color: "#fff", boxShadow: "0 3px 10px rgba(99,102,241,0.3)" },
+
+  // ---- Agendamentos: timeline por dia ----
+  agendaGroup: { marginBottom: 24 },
+  agendaGroupHeader: { display: "flex", alignItems: "center", gap: 9, fontSize: 13, fontWeight: 800, color: "var(--text-soft)", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.4 },
+  agendaGroupHeaderToday: { color: "#0EA5A5" },
+  agendaGroupBadge: { background: "#0EA5A5", color: "#fff", fontSize: 10.5, fontWeight: 800, padding: "2px 8px", borderRadius: 20, letterSpacing: 0.2 },
+  agendaGroupCount: { color: "var(--muted)", fontWeight: 600, textTransform: "none", letterSpacing: 0 },
+  agendaList: { display: "flex", flexDirection: "column", gap: 10 },
+  agendaCard: { display: "flex", alignItems: "center", gap: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: 15, padding: "14px 18px", boxShadow: "0 1px 3px rgba(60,55,45,0.04)", transition: "all .2s" },
+  agendaTime: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minWidth: 58, height: 58, borderRadius: 13, background: "rgba(14,165,165,0.1)", color: "#0EA5A5", fontWeight: 800, fontSize: 15, flexShrink: 0, lineHeight: 1.1 },
+  agendaTimeSub: { fontSize: 9.5, fontWeight: 700, opacity: 0.75, marginTop: 2, letterSpacing: 0.3 },
+  agendaInfo: { flex: 1, minWidth: 0 },
+  agendaName: { fontSize: 15, fontWeight: 700, color: "var(--text)" },
+  agendaMeta: { display: "flex", alignItems: "center", gap: 14, marginTop: 5, flexWrap: "wrap" },
+  agendaMetaItem: { display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12.5, color: "var(--text-soft)", fontWeight: 500 },
+  agendaStatusSelect: { border: "none", borderRadius: 20, fontSize: 12, fontWeight: 700, padding: "7px 14px", cursor: "pointer", fontFamily: "inherit", flexShrink: 0 },
+  agendaActions: { display: "flex", gap: 6, flexShrink: 0 },
 };
 
 const CSS = `
